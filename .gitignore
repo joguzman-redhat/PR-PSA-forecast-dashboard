@@ -1,0 +1,13 @@
+# Secretos / credenciales de desarrollo
+infra/.env
+
+# Dato real de negocio: no va a GitHub. Se consigue aparte (Drive) y se deja
+# en esta carpeta para levantar el stack localmente.
+*.xlsx
+
+# Dependencias (se instalan con npm install / se construyen en el Dockerfile)
+node_modules/
+
+# SO / editor
+.DS_Store
+*.swp

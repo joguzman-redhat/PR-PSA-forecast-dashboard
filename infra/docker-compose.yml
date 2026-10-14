@@ -1,0 +1,99 @@
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    container_name: forecast-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-forecast}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forecast}
+      POSTGRES_DB: ${POSTGRES_DB:-forecast}
+    ports:
+      # Solo en loopback: la BD no se expone a la red de la maquina.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - forecast_pgdata:/var/lib/postgresql/data
+      # Los scripts de ./db/init solo corren la PRIMERA vez, cuando el volumen
+      # esta vacio. Para re-aplicar el esquema hay que borrar el volumen.
+      - ./db/init:/docker-entrypoint-initdb.d:ro,z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forecast} -d ${POSTGRES_DB:-forecast}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+    image: localhost/forecast-api:latest
+    container_name: forecast-api
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-forecast}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-forecast}
+      PGDATABASE: ${POSTGRES_DB:-forecast}
+      PORT: 3000
+      # El dashboard se sirve desde la misma app: un solo origen, sin CORS.
+      PUBLIC_DIR: /app/public
+    ports:
+      - "${API_PORT:-3000}:3000"
+    volumes:
+      # infra/ ahora vive DENTRO de PoC/, asi que el dashboard (index.html,
+      # app.js, styles.css, vendor/) es el directorio padre de este compose.
+      - ..:/app/public:ro,z
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # n8n: mismo contenedor/datos que ya corre hoy fuera de este compose (ver
+  # infra/setup.sh, legacy). Se declara aqui para que un `forecast.sh up` en
+  # una maquina nueva lo levante tambien, sin ngrok y sin la red de LiteLLM.
+  # El volumen "n8n-data" NO es external: si ya existe (tu maquina) lo
+  # reutiliza tal cual -mismos workflows y credenciales-; si no existe
+  # (la maquina de un companero) lo crea vacio. No pisa nada.
+  n8n:
+    image: docker.io/n8nio/n8n:latest
+    container_name: forecast-n8n
+    environment:
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      # Apuntan al puerto de nginx (abajo), que es la puerta de entrada.
+      N8N_EDITOR_BASE_URL: http://${N8N_HOST:-localhost}:${N8N_NGINX_PORT:-8080}/
+      WEBHOOK_URL: http://${N8N_HOST:-localhost}:${N8N_NGINX_PORT:-8080}/
+      N8N_PUSH_BACKEND: websocket
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Mexico_City}
+      N8N_LOG_LEVEL: info
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "true"
+      N8N_METRICS: "true"
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Nginx delante de n8n. No reemplaza a ngrok (eso sigue siendo lo unico que
+  # expone n8n a internet para los webhooks de Drive/OAuth, ver setup.sh):
+  # esto es solo una puerta de entrada local/LAN estable, lista para sumarle
+  # despues TLS o basic auth sin tocar el contenedor de n8n.
+  nginx:
+    image: docker.io/library/nginx:alpine
+    container_name: forecast-nginx
+    volumes:
+      - ./nginx/n8n.conf:/etc/nginx/conf.d/default.conf:ro,z
+    ports:
+      - "${N8N_NGINX_PORT:-8080}:80"
+    depends_on:
+      - n8n
+    restart: unless-stopped
+
+volumes:
+  forecast_pgdata:
+  n8n_data:
+    name: n8n-data

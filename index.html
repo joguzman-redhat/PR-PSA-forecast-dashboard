@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard de Proyectos - Red Hat LATAM</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23EE0000' d='M341.52 285.56c33.65 0 82.34-6.94 82.34-47 .22-6.74.86-1.82-20.88-96.24-4.62-19.15-8.68-27.84-42.31-44.65-26.09-13.34-82.92-35.37-99.73-35.37-15.66 0-20.2 20.17-38.87 20.17-18 0-31.31-15.06-48.12-15.06-16.14 0-26.66 11-34.78 33.62-27.5 77.55-26.28 74.27-26.12 78.27 0 24.8 97.64 106.11 228.47 106.11M429 254.84c4.65 22 4.65 24.35 4.65 27.25 0 37.66-42.33 58.56-98 58.56-125.74.08-235.91-73.65-235.91-122.33a49.55 49.55 0 0 1 4.06-19.72C58.56 200.86 0 208.93 0 260.63c0 84.67 200.63 189 359.49 189 121.79 0 152.51-55.08 152.51-98.58 0-34.21-29.59-73.05-82.93-96.24'/%3E%3C/svg%3E">
+  <!-- CSS real y compilado de PatternFly v6 (vendorizado en vendor/, sin CDN) -->
+  <link rel="stylesheet" href="vendor/patternfly.css">
+  <link rel="stylesheet" href="styles.css?v=7">
+</head>
+<body>
+  <!-- Masthead: estructura real de PatternFly (pf-v6-c-masthead) con la marca Red Hat -->
+  <header class="rh-masthead pf-v6-c-masthead">
+    <div class="pf-v6-c-masthead__main">
+      <div class="pf-v6-c-masthead__brand rh-masthead-marca">
+        <svg class="rh-logo" width="24" height="24" viewBox="0 0 512 512"
+             style="width:24px;height:24px;flex-shrink:0;display:block"
+             aria-hidden="true" focusable="false">
+          <path fill="#EE0000" d="M341.52 285.56c33.65 0 82.34-6.94 82.34-47 .22-6.74.86-1.82-20.88-96.24-4.62-19.15-8.68-27.84-42.31-44.65-26.09-13.34-82.92-35.37-99.73-35.37-15.66 0-20.2 20.17-38.87 20.17-18 0-31.31-15.06-48.12-15.06-16.14 0-26.66 11-34.78 33.62-27.5 77.55-26.28 74.27-26.12 78.27 0 24.8 97.64 106.11 228.47 106.11M429 254.84c4.65 22 4.65 24.35 4.65 27.25 0 37.66-42.33 58.56-98 58.56-125.74.08-235.91-73.65-235.91-122.33a49.55 49.55 0 0 1 4.06-19.72C58.56 200.86 0 208.93 0 260.63c0 84.67 200.63 189 359.49 189 121.79 0 152.51-55.08 152.51-98.58 0-34.21-29.59-73.05-82.93-96.24"/>
+        </svg>
+        <span class="rh-wordmark">Red Hat</span>
+      </div>
+    </div>
+    <div class="pf-v6-c-masthead__content">
+      <span class="rh-masthead-producto">LATAM Projects</span>
+    </div>
+  </header>
+
+  <div class="contenedor-principal">
+    <!-- Encabezado -->
+    <header class="encabezado">
+      <h1 class="pf-v6-c-title pf-m-2xl">Dashboard de Proyectos</h1>
+      <p class="subtitulo">Red Hat LATAM - Visualización de Portfolio</p>
+    </header>
+
+    <!-- Pestañas de navegación: estructura real de PatternFly (pf-v6-c-tabs) -->
+    <div class="pf-v6-c-tabs">
+      <ul class="pf-v6-c-tabs__list" role="tablist" aria-label="Secciones del dashboard">
+        <li class="pf-v6-c-tabs__item pf-m-current" role="presentation">
+          <button class="pf-v6-c-tabs__link pestana-btn activa" type="button" role="tab"
+                  aria-selected="true" aria-controls="pestana-listado" data-pestana="listado">
+            <span class="pf-v6-c-tabs__item-text">Listado de Proyectos</span>
+          </button>
+        </li>
+        <li class="pf-v6-c-tabs__item" role="presentation">
+          <button class="pf-v6-c-tabs__link pestana-btn" type="button" role="tab"
+                  aria-selected="false" aria-controls="pestana-detalle" data-pestana="detalle">
+            <span class="pf-v6-c-tabs__item-text">Detalle del Proyecto</span>
+          </button>
+        </li>
+        <li class="pf-v6-c-tabs__item" role="presentation">
+          <button class="pf-v6-c-tabs__link pestana-btn" type="button" role="tab"
+                  aria-selected="false" aria-controls="pestana-trazabilidad" data-pestana="trazabilidad">
+            <span class="pf-v6-c-tabs__item-text">Trazabilidad Global</span>
+          </button>
+        </li>
+      </ul>
+    </div>
+
+    <!-- PESTAÑA 1: Listado de Proyectos -->
+    <section class="pestana-contenido activa" id="pestana-listado">
+      <!-- Fila de KPIs -->
+      <div class="fila-kpis">
+        <div class="kpi-tile pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <div class="kpi-valor" id="kpi-total-proyectos">—</div>
+            <div class="kpi-etiqueta">Total Proyectos</div>
+          </div>
+        </div>
+        <div class="kpi-tile pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <div class="kpi-valor" id="kpi-valor-of-total">—</div>
+            <div class="kpi-etiqueta">Valor OF Total</div>
+          </div>
+        </div>
+        <div class="kpi-tile pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <div class="kpi-valor" id="kpi-acumulado-hoy">—</div>
+            <div class="kpi-etiqueta">Acumulado a Hoy</div>
+          </div>
+        </div>
+        <div class="kpi-tile pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <div class="kpi-valor" id="kpi-backlog-2026">—</div>
+            <div class="kpi-etiqueta">Backlog 2026</div>
+          </div>
+        </div>
+        <div class="kpi-tile pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <div class="kpi-valor" id="kpi-pct-ejecucion">—</div>
+            <div class="kpi-etiqueta">% Ejecución Global</div>
+          </div>
+        </div>
+        <div class="kpi-tile kpi-periodo pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <div class="kpi-valor" id="kpi-revenue-periodo">—</div>
+            <div class="kpi-etiqueta" id="kpi-revenue-periodo-etq">Revenue fijo</div>
+          </div>
+        </div>
+      </div>
+      <div id="periodo-listado"></div>
+      <p class="nota-periodo">
+        El periodo aplica al revenue, que es lo único con desglose mensual.
+        Los demás indicadores y columnas son totales anuales de Info Proyectos,
+        que no tiene apertura por mes.
+      </p>
+
+      <!-- Barra de filtros -->
+      <div class="panel-filtros pf-v6-c-card">
+        <div class="pf-v6-c-card__body">
+        <div class="fila-dropdowns" id="fila-dropdowns"></div>
+        <div class="fila-acciones">
+          <input type="text" id="filtro-texto" class="filtro-input"
+                 placeholder="Buscar cliente, proyecto, PA o Project ID...">
+          <button id="btn-limpiar-filtros" class="btn-limpiar pf-v6-c-button pf-m-secondary">Limpiar filtros</button>
+          <label class="check-inline">
+            <input type="checkbox" id="incluir-cancelados">
+            Incluir cancelados
+          </label>
+          <span class="indicador-filtros" id="indicador-proyectos">304 de 304 proyectos</span>
+        </div>
+        <div class="chips-activos" id="chips-activos"></div>
+        </div>
+      </div>
+
+      <!-- Gráficas -->
+      <div class="panel-graficas">
+        <div class="grafica-contenedor pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+          <h3 class="pf-v6-c-title pf-m-md">Proyectos por Estado</h3>
+          <svg id="grafica-estado" class="grafica-svg"></svg>
+          </div>
+        </div>
+        <div class="grafica-contenedor pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+          <h3 class="pf-v6-c-title pf-m-md">Valor OF por Zona</h3>
+          <svg id="grafica-zona" class="grafica-svg"></svg>
+          </div>
+        </div>
+        <div class="grafica-contenedor ancho-completo pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+          <h3 class="pf-v6-c-title pf-m-md">Top 10 Países por Valor OF</h3>
+          <svg id="grafica-paises" class="grafica-svg"></svg>
+          </div>
+        </div>
+        <div class="grafica-contenedor ancho-completo pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+          <h3 class="pf-v6-c-title pf-m-md">Ejecución por PM/Líder (Top 10)</h3>
+          <svg id="grafica-pm" class="grafica-svg"></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla de proyectos -->
+      <div class="panel-tabla pf-v6-c-card">
+        <div class="pf-v6-c-card__body">
+        <h3 class="pf-v6-c-title pf-m-md">Proyectos</h3>
+        <div class="contenedor-tabla-scroll">
+          <table id="tabla-proyectos" class="tabla-proyectos pf-v6-c-table">
+            <thead>
+              <tr>
+                <!-- Encabezados dinamicos -->
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Filas dinamicas -->
+            </tbody>
+          </table>
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PESTAÑA 2: Detalle del Proyecto -->
+    <section class="pestana-contenido" id="pestana-detalle">
+      <div class="panel-detalle pf-v6-c-card">
+        <div class="pf-v6-c-card__body">
+        <button id="btn-volver-listado" class="btn-volver pf-v6-c-button pf-m-secondary">← Volver al Listado</button>
+
+        <div class="detalle-contenedor" id="detalle-contenedor">
+          <!-- Poblado dinámicamente -->
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PESTAÑA 3: Trazabilidad Global -->
+    <section class="pestana-contenido" id="pestana-trazabilidad">
+      <div class="panel-trazabilidad pf-v6-c-card">
+        <div class="pf-v6-c-card__body">
+        <h2 class="pf-v6-c-title pf-m-xl">Trazabilidad Global de Revenue</h2>
+        <div id="periodo-trazabilidad"></div>
+
+        <div class="grafica-contenedor ancho-completo pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+          <h3 id="titulo-revenue-tiempo" class="pf-v6-c-title pf-m-md">Revenue total en el tiempo</h3>
+          <svg id="grafica-revenue-tiempo" class="grafica-svg"></svg>
+          </div>
+        </div>
+
+        <div class="grafica-contenedor ancho-completo pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+          <h3 id="titulo-desglose" class="pf-v6-c-title pf-m-md">Revenue fijo por quarter</h3>
+          <svg id="grafica-quarterly" class="grafica-svg"></svg>
+          </div>
+        </div>
+
+        <h3 class="pf-v6-c-title pf-m-lg">¿Qué cambió entre dos fechas?</h3>
+        <div class="selector-snapshot">
+          <label for="select-snap-a">Desde</label>
+          <select id="select-snap-a"></select>
+          <label for="select-snap-b">hasta</label>
+          <select id="select-snap-b"></select>
+          <span class="atajos-rango">
+            <button type="button" class="atajo-rango pf-v6-c-button pf-m-secondary pf-m-small" data-rango="ultimo">Último movimiento</button>
+            <button type="button" class="atajo-rango pf-v6-c-button pf-m-secondary pf-m-small" data-rango="mes">Último mes</button>
+            <button type="button" class="atajo-rango pf-v6-c-button pf-m-secondary pf-m-small" data-rango="semana">Semana del 14-20 sep</button>
+            <button type="button" class="atajo-rango pf-v6-c-button pf-m-secondary pf-m-small" data-rango="todo">Todo el histórico</button>
+          </span>
+        </div>
+
+        <div class="kpis-rango" id="kpis-rango"></div>
+
+        <div class="grafica-contenedor ancho-completo pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+          <h4 id="titulo-que-cambio" class="pf-v6-c-title pf-m-md">Proyectos que se movieron</h4>
+          <svg id="grafica-que-cambio" class="grafica-svg"></svg>
+          <p class="nota-grafica" id="nota-que-cambio"></p>
+          </div>
+        </div>
+
+        <div class="barra-tabla-cambios">
+          <p class="nota-tabla" id="nota-tabla-cambios"></p>
+          <label class="interruptor-inline">
+            <input type="checkbox" id="chk-solo-cambios" checked>
+            Mostrar solo los que cambiaron
+          </label>
+        </div>
+        <div class="contenedor-tabla">
+          <table id="tabla-resumen-proyectos" class="tabla-eventos-tabla pf-v6-c-table pf-m-compact">
+            <thead>
+              <tr>
+                <th>Proyecto</th><th>PM/Líder</th>
+                <th>Commit antes</th><th>Commit después</th><th>&Delta; Commit</th>
+                <th>&Delta; Upside</th><th>Qué pasó</th><th>Movimientos</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="tabla-eventos">
+          <h3 class="pf-v6-c-title pf-m-md">Movimientos registrados</h3>
+          <div class="filtro-eventos">
+            <label for="filtro-tipo-evento">Tipo:</label>
+            <select id="filtro-tipo-evento"></select>
+            <input type="text" id="buscar-evento-proyecto" class="filtro-input"
+                   placeholder="Filtrar por proyecto o PA...">
+            <label class="check-inline">
+              <input type="checkbox" id="limitar-por-proyecto" checked>
+              Máximo 2 por proyecto
+            </label>
+          </div>
+          <div class="contenedor-tabla">
+            <table id="tabla-eventos-cambio" class="tabla-eventos-tabla pf-v6-c-table pf-m-compact">
+              <thead>
+                <tr>
+                  <th>Fecha</th><th>Proyecto</th><th>Tipo</th>
+                  <th>Mes</th><th>Anterior</th><th>Nuevo</th><th>Delta</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js?v=7"></script>
+</body>
+</html>

@@ -1,0 +1,2509 @@
+{
+  "id": "nola-etl-y-agente",
+  "name": "NOLA - ETL + Agente (Vertex AI)",
+  "nodes": [
+    {
+      "id": "trigger1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "drive1",
+      "name": "Descargar data.xlsx de Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "1_NNst0wIKXAlCa7fu8RRiBFAahcXzvuGEEt5IAhm-co",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "sheetsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "PENDIENTE",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "id": "sheet1",
+      "name": "Extraer Info Proyectos",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "fileFormat": "xlsx",
+        "options": {
+          "sheetName": "Info Proyectos"
+        }
+      }
+    },
+    {
+      "id": "sheet2",
+      "name": "Extraer BackLog NOLA",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [
+        440,
+        420
+      ],
+      "parameters": {
+        "fileFormat": "xlsx",
+        "options": {
+          "sheetName": "BackLog NOLA"
+        }
+      }
+    },
+    {
+      "id": "tag1",
+      "name": "Tag Info Proyectos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tag-cc-1",
+              "name": "_sheet",
+              "value": "InfoProyectos",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "tag2",
+      "name": "Tag Backlog",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        660,
+        420
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tag-backlog-1",
+              "name": "_sheet",
+              "value": "Backlog",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "merge1",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "mode": "append"
+      }
+    },
+    {
+      "id": "code1",
+      "name": "Combinar JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nconst infoProyectos = items.filter(i => i.json._sheet === 'InfoProyectos').map(i => { const { _sheet, ...rest } = i.json; return rest; });\nconst backlog = items.filter(i => i.json._sheet === 'Backlog').map(i => { const { _sheet, ...rest } = i.json; return rest; });\nreturn [{ json: { InfoProyectos: infoProyectos, Backlog: backlog } }];"
+      }
+    },
+    {
+      "id": "save1",
+      "name": "Guardar en memoria",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.latestDashboardData = $input.first().json;\nstaticData.lastUpdated = new Date().toISOString();\nreturn [{ json: { saved: true, lastUpdated: staticData.lastUpdated } }];"
+      }
+    },
+    {
+      "id": "tablecreate1",
+      "name": "Crear Tabla InfoProyectos_Actual",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "InfoProyectos_Actual",
+        "columns": {
+          "column": [
+            {
+              "name": "pa",
+              "type": "string"
+            },
+            {
+              "name": "estado",
+              "type": "string"
+            },
+            {
+              "name": "opp",
+              "type": "string"
+            },
+            {
+              "name": "project_id",
+              "type": "string"
+            },
+            {
+              "name": "cliente",
+              "type": "string"
+            },
+            {
+              "name": "nombre_del_proyecto",
+              "type": "string"
+            },
+            {
+              "name": "pm_lider",
+              "type": "string"
+            },
+            {
+              "name": "zona",
+              "type": "string"
+            },
+            {
+              "name": "pais",
+              "type": "string"
+            },
+            {
+              "name": "vendedor",
+              "type": "string"
+            },
+            {
+              "name": "tsm",
+              "type": "string"
+            },
+            {
+              "name": "billing_type",
+              "type": "string"
+            },
+            {
+              "name": "valor_of",
+              "type": "number"
+            },
+            {
+              "name": "finalizacion",
+              "type": "string"
+            },
+            {
+              "name": "dias_para_vencimiento",
+              "type": "number"
+            },
+            {
+              "name": "estado_contrato",
+              "type": "string"
+            },
+            {
+              "name": "estatus",
+              "type": "string"
+            },
+            {
+              "name": "consumido_2025",
+              "type": "number"
+            },
+            {
+              "name": "backlog_2026",
+              "type": "number"
+            },
+            {
+              "name": "valor_of_anterior",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "tablecreate2",
+      "name": "Crear Tabla Backlog_Actual",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "Backlog_Actual",
+        "columns": {
+          "column": [
+            {
+              "name": "pa",
+              "type": "string"
+            },
+            {
+              "name": "estado",
+              "type": "string"
+            },
+            {
+              "name": "opp",
+              "type": "string"
+            },
+            {
+              "name": "nombre_del_proyecto",
+              "type": "string"
+            },
+            {
+              "name": "pm_lider",
+              "type": "string"
+            },
+            {
+              "name": "billing_type",
+              "type": "string"
+            },
+            {
+              "name": "finalizacion",
+              "type": "string"
+            },
+            {
+              "name": "dias_para_vencimiento",
+              "type": "number"
+            },
+            {
+              "name": "valor_of",
+              "type": "number"
+            },
+            {
+              "name": "acum_2025",
+              "type": "number"
+            },
+            {
+              "name": "backlog",
+              "type": "number"
+            },
+            {
+              "name": "enero",
+              "type": "number"
+            },
+            {
+              "name": "enero_upside",
+              "type": "number"
+            },
+            {
+              "name": "febrero",
+              "type": "number"
+            },
+            {
+              "name": "febrero_upside",
+              "type": "number"
+            },
+            {
+              "name": "marzo",
+              "type": "number"
+            },
+            {
+              "name": "marzo_upside",
+              "type": "number"
+            },
+            {
+              "name": "q1",
+              "type": "number"
+            },
+            {
+              "name": "abril",
+              "type": "number"
+            },
+            {
+              "name": "abril_upside",
+              "type": "number"
+            },
+            {
+              "name": "mayo",
+              "type": "number"
+            },
+            {
+              "name": "mayo_upside",
+              "type": "number"
+            },
+            {
+              "name": "junio",
+              "type": "number"
+            },
+            {
+              "name": "junio_upside",
+              "type": "number"
+            },
+            {
+              "name": "q2",
+              "type": "number"
+            },
+            {
+              "name": "julio",
+              "type": "number"
+            },
+            {
+              "name": "julio_upside",
+              "type": "number"
+            },
+            {
+              "name": "agosto",
+              "type": "number"
+            },
+            {
+              "name": "agosto_upside",
+              "type": "number"
+            },
+            {
+              "name": "septiembre",
+              "type": "number"
+            },
+            {
+              "name": "septiembre_upside",
+              "type": "number"
+            },
+            {
+              "name": "q3",
+              "type": "number"
+            },
+            {
+              "name": "octubre",
+              "type": "number"
+            },
+            {
+              "name": "octubre_upside",
+              "type": "number"
+            },
+            {
+              "name": "noviembre",
+              "type": "number"
+            },
+            {
+              "name": "noviembre_upside",
+              "type": "number"
+            },
+            {
+              "name": "diciembre",
+              "type": "number"
+            },
+            {
+              "name": "diciembre_upside",
+              "type": "number"
+            },
+            {
+              "name": "q4",
+              "type": "number"
+            },
+            {
+              "name": "total_ejecutado_acumulado",
+              "type": "number"
+            },
+            {
+              "name": "actions",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "filterinfo1",
+      "name": "Filtrar PA válido (Info Proyectos)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        560
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nreturn items.filter(i => {\n  const pa = i.json[\"# PA\"];\n  return pa !== null && pa !== undefined && pa !== '' && pa !== '#N/A';\n});"
+      }
+    },
+    {
+      "id": "filterbacklog1",
+      "name": "Filtrar PA válido (Backlog)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        760
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nreturn items.filter(i => {\n  const pa = i.json[\"# PA\"];\n  return pa !== null && pa !== undefined && pa !== '' && pa !== '#N/A';\n});"
+      }
+    },
+    {
+      "id": "upsert1",
+      "name": "Guardar Info Proyectos (Data table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1080,
+        560
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "InfoProyectos_Actual"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pa",
+              "condition": "eq",
+              "keyValue": "={{ String($json[\"# PA\"]) }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "pa": "={{ String($json[\"# PA\"]) }}",
+            "estado": "={{ $json[\"Estado\"] }}",
+            "opp": "={{ $json[\"# Opp.\"] }}",
+            "project_id": "={{ $json[\"Project ID\"] }}",
+            "cliente": "={{ $json[\"Cliente\"] }}",
+            "nombre_del_proyecto": "={{ $json[\"Nombre del Proyecto\"] }}",
+            "pm_lider": "={{ $json[\"PM/Líder\"] }}",
+            "zona": "={{ $json[\"Zona\"] }}",
+            "pais": "={{ $json[\"Pais\"] }}",
+            "vendedor": "={{ $json[\"Vendedor\"] }}",
+            "tsm": "={{ $json[\"TSM\"] }}",
+            "billing_type": "={{ $json[\"Billing Type\"] }}",
+            "valor_of": "={{ $json[\"Valor OF\"] === null || $json[\"Valor OF\"] === undefined || $json[\"Valor OF\"] === '' || isNaN(Number($json[\"Valor OF\"])) ? null : Number($json[\"Valor OF\"]) }}",
+            "finalizacion": "={{ $json[\"Finalizacion\"] }}",
+            "dias_para_vencimiento": "={{ $json[\"Días para vencimiento\"] === null || $json[\"Días para vencimiento\"] === undefined || $json[\"Días para vencimiento\"] === '' || isNaN(Number($json[\"Días para vencimiento\"])) ? null : Number($json[\"Días para vencimiento\"]) }}",
+            "estado_contrato": "={{ $json[\"Estado contrato\"] }}",
+            "estatus": "={{ $json[\"ESTATUS\"] }}",
+            "consumido_2025": "={{ $json[\"Consumido 2025\"] === null || $json[\"Consumido 2025\"] === undefined || $json[\"Consumido 2025\"] === '' || isNaN(Number($json[\"Consumido 2025\"])) ? null : Number($json[\"Consumido 2025\"]) }}",
+            "backlog_2026": "={{ $json[\"Backlog 2026\"] === null || $json[\"Backlog 2026\"] === undefined || $json[\"Backlog 2026\"] === '' || isNaN(Number($json[\"Backlog 2026\"])) ? null : Number($json[\"Backlog 2026\"]) }}",
+            "valor_of_anterior": "={{ $json[\"Valor OF Anterior\"] === null || $json[\"Valor OF Anterior\"] === undefined || $json[\"Valor OF Anterior\"] === '' || isNaN(Number($json[\"Valor OF Anterior\"])) ? null : Number($json[\"Valor OF Anterior\"]) }}"
+          },
+          "schema": [
+            {
+              "id": "pa",
+              "displayName": "pa",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "opp",
+              "displayName": "opp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "project_id",
+              "displayName": "project_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cliente",
+              "displayName": "cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre_del_proyecto",
+              "displayName": "nombre_del_proyecto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pm_lider",
+              "displayName": "pm_lider",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zona",
+              "displayName": "zona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pais",
+              "displayName": "pais",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendedor",
+              "displayName": "vendedor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tsm",
+              "displayName": "tsm",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "billing_type",
+              "displayName": "billing_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "valor_of",
+              "displayName": "valor_of",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "finalizacion",
+              "displayName": "finalizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "dias_para_vencimiento",
+              "displayName": "dias_para_vencimiento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_contrato",
+              "displayName": "estado_contrato",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estatus",
+              "displayName": "estatus",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "consumido_2025",
+              "displayName": "consumido_2025",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "backlog_2026",
+              "displayName": "backlog_2026",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "valor_of_anterior",
+              "displayName": "valor_of_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "upsert2",
+      "name": "Guardar Backlog (Data table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1080,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Backlog_Actual"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pa",
+              "condition": "eq",
+              "keyValue": "={{ String($json[\"# PA\"]) }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "pa": "={{ String($json[\"# PA\"]) }}",
+            "estado": "={{ $json[\"Estado\"] }}",
+            "opp": "={{ $json[\"# Opp.\"] }}",
+            "nombre_del_proyecto": "={{ $json[\"Nombre del Proyecto\"] }}",
+            "pm_lider": "={{ $json[\"PM/Líder\"] }}",
+            "billing_type": "={{ $json[\"Billing Type\"] }}",
+            "finalizacion": "={{ $json[\"Finalizacion\"] }}",
+            "dias_para_vencimiento": "={{ $json[\"Días para vencimiento\"] === null || $json[\"Días para vencimiento\"] === undefined || $json[\"Días para vencimiento\"] === '' || isNaN(Number($json[\"Días para vencimiento\"])) ? null : Number($json[\"Días para vencimiento\"]) }}",
+            "valor_of": "={{ $json[\"Valor OF\"] === null || $json[\"Valor OF\"] === undefined || $json[\"Valor OF\"] === '' || isNaN(Number($json[\"Valor OF\"])) ? null : Number($json[\"Valor OF\"]) }}",
+            "acum_2025": "={{ $json[\"Acum 2025\"] === null || $json[\"Acum 2025\"] === undefined || $json[\"Acum 2025\"] === '' || isNaN(Number($json[\"Acum 2025\"])) ? null : Number($json[\"Acum 2025\"]) }}",
+            "backlog": "={{ $json[\"Backlog \"] === null || $json[\"Backlog \"] === undefined || $json[\"Backlog \"] === '' || isNaN(Number($json[\"Backlog \"])) ? null : Number($json[\"Backlog \"]) }}",
+            "enero": "={{ $json[\"Enero\"] === null || $json[\"Enero\"] === undefined || $json[\"Enero\"] === '' || isNaN(Number($json[\"Enero\"])) ? null : Number($json[\"Enero\"]) }}",
+            "enero_upside": "={{ $json[\"Upside\"] === null || $json[\"Upside\"] === undefined || $json[\"Upside\"] === '' || isNaN(Number($json[\"Upside\"])) ? null : Number($json[\"Upside\"]) }}",
+            "febrero": "={{ $json[\"Febrero\"] === null || $json[\"Febrero\"] === undefined || $json[\"Febrero\"] === '' || isNaN(Number($json[\"Febrero\"])) ? null : Number($json[\"Febrero\"]) }}",
+            "febrero_upside": "={{ $json[\"Upside_1\"] === null || $json[\"Upside_1\"] === undefined || $json[\"Upside_1\"] === '' || isNaN(Number($json[\"Upside_1\"])) ? null : Number($json[\"Upside_1\"]) }}",
+            "marzo": "={{ $json[\"Marzo\"] === null || $json[\"Marzo\"] === undefined || $json[\"Marzo\"] === '' || isNaN(Number($json[\"Marzo\"])) ? null : Number($json[\"Marzo\"]) }}",
+            "marzo_upside": "={{ $json[\"Upside_2\"] === null || $json[\"Upside_2\"] === undefined || $json[\"Upside_2\"] === '' || isNaN(Number($json[\"Upside_2\"])) ? null : Number($json[\"Upside_2\"]) }}",
+            "q1": "={{ $json[\"Q1\"] === null || $json[\"Q1\"] === undefined || $json[\"Q1\"] === '' || isNaN(Number($json[\"Q1\"])) ? null : Number($json[\"Q1\"]) }}",
+            "abril": "={{ $json[\"Abril\"] === null || $json[\"Abril\"] === undefined || $json[\"Abril\"] === '' || isNaN(Number($json[\"Abril\"])) ? null : Number($json[\"Abril\"]) }}",
+            "abril_upside": "={{ $json[\"Upside_3\"] === null || $json[\"Upside_3\"] === undefined || $json[\"Upside_3\"] === '' || isNaN(Number($json[\"Upside_3\"])) ? null : Number($json[\"Upside_3\"]) }}",
+            "mayo": "={{ $json[\"Mayo\"] === null || $json[\"Mayo\"] === undefined || $json[\"Mayo\"] === '' || isNaN(Number($json[\"Mayo\"])) ? null : Number($json[\"Mayo\"]) }}",
+            "mayo_upside": "={{ $json[\"Upside_4\"] === null || $json[\"Upside_4\"] === undefined || $json[\"Upside_4\"] === '' || isNaN(Number($json[\"Upside_4\"])) ? null : Number($json[\"Upside_4\"]) }}",
+            "junio": "={{ $json[\"Junio\"] === null || $json[\"Junio\"] === undefined || $json[\"Junio\"] === '' || isNaN(Number($json[\"Junio\"])) ? null : Number($json[\"Junio\"]) }}",
+            "junio_upside": "={{ $json[\"Upside_5\"] === null || $json[\"Upside_5\"] === undefined || $json[\"Upside_5\"] === '' || isNaN(Number($json[\"Upside_5\"])) ? null : Number($json[\"Upside_5\"]) }}",
+            "q2": "={{ $json[\"Q2\"] === null || $json[\"Q2\"] === undefined || $json[\"Q2\"] === '' || isNaN(Number($json[\"Q2\"])) ? null : Number($json[\"Q2\"]) }}",
+            "julio": "={{ $json[\"Julio\"] === null || $json[\"Julio\"] === undefined || $json[\"Julio\"] === '' || isNaN(Number($json[\"Julio\"])) ? null : Number($json[\"Julio\"]) }}",
+            "julio_upside": "={{ $json[\"Upside_6\"] === null || $json[\"Upside_6\"] === undefined || $json[\"Upside_6\"] === '' || isNaN(Number($json[\"Upside_6\"])) ? null : Number($json[\"Upside_6\"]) }}",
+            "agosto": "={{ $json[\"Agosto\"] === null || $json[\"Agosto\"] === undefined || $json[\"Agosto\"] === '' || isNaN(Number($json[\"Agosto\"])) ? null : Number($json[\"Agosto\"]) }}",
+            "agosto_upside": "={{ $json[\"Upside_7\"] === null || $json[\"Upside_7\"] === undefined || $json[\"Upside_7\"] === '' || isNaN(Number($json[\"Upside_7\"])) ? null : Number($json[\"Upside_7\"]) }}",
+            "septiembre": "={{ $json[\"Septiembre\"] === null || $json[\"Septiembre\"] === undefined || $json[\"Septiembre\"] === '' || isNaN(Number($json[\"Septiembre\"])) ? null : Number($json[\"Septiembre\"]) }}",
+            "septiembre_upside": "={{ $json[\"Upside_8\"] === null || $json[\"Upside_8\"] === undefined || $json[\"Upside_8\"] === '' || isNaN(Number($json[\"Upside_8\"])) ? null : Number($json[\"Upside_8\"]) }}",
+            "q3": "={{ $json[\"Q3\"] === null || $json[\"Q3\"] === undefined || $json[\"Q3\"] === '' || isNaN(Number($json[\"Q3\"])) ? null : Number($json[\"Q3\"]) }}",
+            "octubre": "={{ $json[\"Octubre\"] === null || $json[\"Octubre\"] === undefined || $json[\"Octubre\"] === '' || isNaN(Number($json[\"Octubre\"])) ? null : Number($json[\"Octubre\"]) }}",
+            "octubre_upside": "={{ $json[\"Upside_9\"] === null || $json[\"Upside_9\"] === undefined || $json[\"Upside_9\"] === '' || isNaN(Number($json[\"Upside_9\"])) ? null : Number($json[\"Upside_9\"]) }}",
+            "noviembre": "={{ $json[\"Noviembre\"] === null || $json[\"Noviembre\"] === undefined || $json[\"Noviembre\"] === '' || isNaN(Number($json[\"Noviembre\"])) ? null : Number($json[\"Noviembre\"]) }}",
+            "noviembre_upside": "={{ $json[\"Upside_10\"] === null || $json[\"Upside_10\"] === undefined || $json[\"Upside_10\"] === '' || isNaN(Number($json[\"Upside_10\"])) ? null : Number($json[\"Upside_10\"]) }}",
+            "diciembre": "={{ $json[\"Diciembre\"] === null || $json[\"Diciembre\"] === undefined || $json[\"Diciembre\"] === '' || isNaN(Number($json[\"Diciembre\"])) ? null : Number($json[\"Diciembre\"]) }}",
+            "diciembre_upside": "={{ $json[\"Upside_11\"] === null || $json[\"Upside_11\"] === undefined || $json[\"Upside_11\"] === '' || isNaN(Number($json[\"Upside_11\"])) ? null : Number($json[\"Upside_11\"]) }}",
+            "q4": "={{ $json[\"Q4\"] === null || $json[\"Q4\"] === undefined || $json[\"Q4\"] === '' || isNaN(Number($json[\"Q4\"])) ? null : Number($json[\"Q4\"]) }}",
+            "total_ejecutado_acumulado": "={{ $json[\"TOTAL EJECUTADO ACUMULADO\"] === null || $json[\"TOTAL EJECUTADO ACUMULADO\"] === undefined || $json[\"TOTAL EJECUTADO ACUMULADO\"] === '' || isNaN(Number($json[\"TOTAL EJECUTADO ACUMULADO\"])) ? null : Number($json[\"TOTAL EJECUTADO ACUMULADO\"]) }}",
+            "actions": "={{ $json[\"Actions\"] }}"
+          },
+          "schema": [
+            {
+              "id": "pa",
+              "displayName": "pa",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "opp",
+              "displayName": "opp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre_del_proyecto",
+              "displayName": "nombre_del_proyecto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pm_lider",
+              "displayName": "pm_lider",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "billing_type",
+              "displayName": "billing_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "finalizacion",
+              "displayName": "finalizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "dias_para_vencimiento",
+              "displayName": "dias_para_vencimiento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "valor_of",
+              "displayName": "valor_of",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "acum_2025",
+              "displayName": "acum_2025",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "backlog",
+              "displayName": "backlog",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "enero",
+              "displayName": "enero",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "enero_upside",
+              "displayName": "enero_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "febrero",
+              "displayName": "febrero",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "febrero_upside",
+              "displayName": "febrero_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "marzo",
+              "displayName": "marzo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "marzo_upside",
+              "displayName": "marzo_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "q1",
+              "displayName": "q1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "abril",
+              "displayName": "abril",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "abril_upside",
+              "displayName": "abril_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "mayo",
+              "displayName": "mayo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "mayo_upside",
+              "displayName": "mayo_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "junio",
+              "displayName": "junio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "junio_upside",
+              "displayName": "junio_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "q2",
+              "displayName": "q2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "julio",
+              "displayName": "julio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "julio_upside",
+              "displayName": "julio_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agosto",
+              "displayName": "agosto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agosto_upside",
+              "displayName": "agosto_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "septiembre",
+              "displayName": "septiembre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "septiembre_upside",
+              "displayName": "septiembre_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "q3",
+              "displayName": "q3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "octubre",
+              "displayName": "octubre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "octubre_upside",
+              "displayName": "octubre_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "noviembre",
+              "displayName": "noviembre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "noviembre_upside",
+              "displayName": "noviembre_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "diciembre",
+              "displayName": "diciembre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "diciembre_upside",
+              "displayName": "diciembre_upside",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "q4",
+              "displayName": "q4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_ejecutado_acumulado",
+              "displayName": "total_ejecutado_acumulado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actions",
+              "displayName": "actions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tablecreate3",
+      "name": "Crear Tabla Backlog_Historial",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "Backlog_Historial",
+        "columns": {
+          "column": [
+            {
+              "name": "timestamp",
+              "type": "string"
+            },
+            {
+              "name": "pa",
+              "type": "string"
+            },
+            {
+              "name": "nombre_del_proyecto",
+              "type": "string"
+            },
+            {
+              "name": "campo",
+              "type": "string"
+            },
+            {
+              "name": "valor_anterior",
+              "type": "number"
+            },
+            {
+              "name": "valor_nuevo",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "getsnapshot1",
+      "name": "Obtener snapshot Backlog_Actual (antes)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        -180
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Backlog_Actual"
+        },
+        "matchType": "anyCondition",
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true,
+        "orderBy": false
+      }
+    },
+    {
+      "id": "tagant1",
+      "name": "Tag Snapshot Anterior",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        660,
+        -180
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tag-ant-1",
+              "name": "_origen",
+              "value": "anterior",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "tagnuevo1",
+      "name": "Tag Backlog Nuevo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1080,
+        900
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tag-nuevo-1",
+              "name": "_origen",
+              "value": "nuevo",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "mergecambios1",
+      "name": "Merge Cambios",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1280,
+        400
+      ],
+      "parameters": {
+        "mode": "append"
+      }
+    },
+    {
+      "id": "detectcambios1",
+      "name": "Detectar Cambios Backlog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        400
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const RAW_MAP = {\"backlog\": \"Backlog \", \"valor_of\": \"Valor OF\", \"acum_2025\": \"Acum 2025\", \"enero\": \"Enero\", \"enero_upside\": \"Upside\", \"febrero\": \"Febrero\", \"febrero_upside\": \"Upside_1\", \"marzo\": \"Marzo\", \"marzo_upside\": \"Upside_2\", \"q1\": \"Q1\", \"abril\": \"Abril\", \"abril_upside\": \"Upside_3\", \"mayo\": \"Mayo\", \"mayo_upside\": \"Upside_4\", \"junio\": \"Junio\", \"junio_upside\": \"Upside_5\", \"q2\": \"Q2\", \"julio\": \"Julio\", \"julio_upside\": \"Upside_6\", \"agosto\": \"Agosto\", \"agosto_upside\": \"Upside_7\", \"septiembre\": \"Septiembre\", \"septiembre_upside\": \"Upside_8\", \"q3\": \"Q3\", \"octubre\": \"Octubre\", \"octubre_upside\": \"Upside_9\", \"noviembre\": \"Noviembre\", \"noviembre_upside\": \"Upside_10\", \"diciembre\": \"Diciembre\", \"diciembre_upside\": \"Upside_11\", \"q4\": \"Q4\", \"total_ejecutado_acumulado\": \"TOTAL EJECUTADO ACUMULADO\"};\n\nfunction toNumberOrNull(v) {\n  if (v === null || v === undefined || v === '') return null;\n  const n = Number(v);\n  return isNaN(n) ? null : n;\n}\n\nconst items = $input.all();\nconst anterior = {};\nconst nuevoRaw = {};\n\nfor (const item of items) {\n  if (item.json._origen === 'anterior') {\n    anterior[String(item.json.pa)] = item.json;\n  } else if (item.json._origen === 'nuevo') {\n    nuevoRaw[String(item.json[\"# PA\"])] = item.json;\n  }\n}\n\nconst timestamp = new Date().toISOString();\nconst cambios = [];\n\nfor (const pa in nuevoRaw) {\n  const filaVieja = anterior[pa];\n  if (!filaVieja) continue; // proyecto nuevo, no hay valor anterior que comparar\n\n  const filaNuevaRaw = nuevoRaw[pa];\n  const nombreProyecto = filaNuevaRaw[\"Nombre del Proyecto\"];\n\n  for (const campo in RAW_MAP) {\n    const rawHeader = RAW_MAP[campo];\n    const valorNuevo = toNumberOrNull(filaNuevaRaw[rawHeader]);\n    const valorViejo = toNumberOrNull(filaVieja[campo]);\n    if (valorNuevo !== valorViejo) {\n      cambios.push({\n        json: {\n          timestamp,\n          pa,\n          nombre_del_proyecto: nombreProyecto,\n          campo,\n          valor_anterior: valorViejo,\n          valor_nuevo: valorNuevo,\n        }\n      });\n    }\n  }\n}\n\nreturn cambios;"
+      }
+    },
+    {
+      "id": "inserthist1",
+      "name": "Guardar Historial Backlog (Data table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        400
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Backlog_Historial"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.timestamp }}",
+            "pa": "={{ $json.pa }}",
+            "nombre_del_proyecto": "={{ $json.nombre_del_proyecto }}",
+            "campo": "={{ $json.campo }}",
+            "valor_anterior": "={{ $json.valor_anterior }}",
+            "valor_nuevo": "={{ $json.valor_nuevo }}"
+          },
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pa",
+              "displayName": "pa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre_del_proyecto",
+              "displayName": "nombre_del_proyecto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "campo",
+              "displayName": "campo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "valor_anterior",
+              "displayName": "valor_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "valor_nuevo",
+              "displayName": "valor_nuevo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "tablecreate4",
+      "name": "Crear Tabla Dashboard_Metricas",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "Dashboard_Metricas",
+        "columns": {
+          "column": [
+            {
+              "name": "snapshot_id",
+              "type": "string"
+            },
+            {
+              "name": "timestamp",
+              "type": "string"
+            },
+            {
+              "name": "total_valor_of_info_proyectos",
+              "type": "number"
+            },
+            {
+              "name": "total_backlog_2026_info_proyectos",
+              "type": "number"
+            },
+            {
+              "name": "pct_contratos_vigentes",
+              "type": "number"
+            },
+            {
+              "name": "contratos_vencidos",
+              "type": "number"
+            },
+            {
+              "name": "total_backlog",
+              "type": "number"
+            },
+            {
+              "name": "total_valor_of_backlog",
+              "type": "number"
+            },
+            {
+              "name": "pct_proyectos_vencidos",
+              "type": "number"
+            },
+            {
+              "name": "backlog_por_pm_json",
+              "type": "string"
+            },
+            {
+              "name": "distribucion_zona_json",
+              "type": "string"
+            },
+            {
+              "name": "distribucion_estado_json",
+              "type": "string"
+            },
+            {
+              "name": "valor_of_por_pais_json",
+              "type": "string"
+            },
+            {
+              "name": "serie_mensual_json",
+              "type": "string"
+            },
+            {
+              "name": "serie_trimestral_json",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "calcmetrics1",
+      "name": "Calcular Metricas Dashboard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        150
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function toNum(v) {\n  if (v === null || v === undefined || v === '') return 0;\n  const n = Number(v);\n  return isNaN(n) ? 0 : n;\n}\n\nconst data = $json;\nconst info = data.InfoProyectos || [];\nconst backlog = data.Backlog || [];\n\nconst totalValorOfInfo = info.reduce((s, r) => s + toNum(r['Valor OF']), 0);\nconst totalBacklog2026 = info.reduce((s, r) => s + toNum(r['Backlog 2026']), 0);\nconst infoConEstadoContrato = info.filter(r => r['Estado contrato']);\nconst contratosVigentes = infoConEstadoContrato.filter(r => r['Estado contrato'] === 'Contrato vigente').length;\nconst contratosVencidos = infoConEstadoContrato.filter(r => r['Estado contrato'] === 'Contrato vencido').length;\nconst pctContratosVigentes = infoConEstadoContrato.length\n  ? Math.round((contratosVigentes / infoConEstadoContrato.length) * 1000) / 10\n  : null;\n\nconst porZona = {};\nfor (const r of info) {\n  const z = r['Zona'] || 'Sin zona';\n  porZona[z] = (porZona[z] || 0) + 1;\n}\n\nconst valorOfPorPais = {};\nfor (const r of info) {\n  const p = r['Pais'];\n  if (!p) continue;\n  valorOfPorPais[p] = (valorOfPorPais[p] || 0) + toNum(r['Valor OF']);\n}\nconst valorOfPorPaisTop10 = Object.entries(valorOfPorPais)\n  .sort((a, b) => b[1] - a[1]).slice(0, 10)\n  .map(([pais, valor_of]) => ({ pais, valor_of }));\n\nconst totalBacklog = backlog.reduce((s, r) => s + toNum(r['Backlog ']), 0);\nconst totalValorOfBacklog = backlog.reduce((s, r) => s + toNum(r['Valor OF']), 0);\nconst backlogConVencimiento = backlog.filter(r =>\n  r['Días para vencimiento'] !== undefined && r['Días para vencimiento'] !== '#N/A' && r['Días para vencimiento'] !== null\n);\nconst proyectosVencidos = backlogConVencimiento.filter(r => toNum(r['Días para vencimiento']) < 0).length;\nconst pctProyectosVencidos = backlogConVencimiento.length\n  ? Math.round((proyectosVencidos / backlogConVencimiento.length) * 1000) / 10\n  : null;\n\nconst porEstado = {};\nfor (const r of backlog) {\n  const e = r['Estado'] || 'Sin estado';\n  porEstado[e] = (porEstado[e] || 0) + 1;\n}\n\nconst backlogPorPm = {};\nfor (const r of backlog) {\n  const pm = r['PM/Líder'];\n  if (!pm) continue;\n  backlogPorPm[pm] = (backlogPorPm[pm] || 0) + toNum(r['Backlog ']);\n}\nconst backlogPorPmTop10 = Object.entries(backlogPorPm)\n  .sort((a, b) => b[1] - a[1]).slice(0, 10)\n  .map(([pm_lider, backlog]) => ({ pm_lider, backlog }));\n\nconst MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];\nconst UPSIDE_POR_MES = { Enero: 'Upside', Febrero: 'Upside_1', Marzo: 'Upside_2', Abril: 'Upside_3', Mayo: 'Upside_4', Junio: 'Upside_5', Julio: 'Upside_6', Agosto: 'Upside_7', Septiembre: 'Upside_8', Octubre: 'Upside_9', Noviembre: 'Upside_10', Diciembre: 'Upside_11' };\nconst TRIMESTRES = { Q1: ['Enero','Febrero','Marzo'], Q2: ['Abril','Mayo','Junio'], Q3: ['Julio','Agosto','Septiembre'], Q4: ['Octubre','Noviembre','Diciembre'] };\n\nconst serieMensual = MESES.map(mes => ({\n  mes,\n  commit: backlog.reduce((s, r) => s + toNum(r[mes]), 0),\n  upside: backlog.reduce((s, r) => s + toNum(r[UPSIDE_POR_MES[mes]]), 0),\n}));\nconst mensualPorMes = Object.fromEntries(serieMensual.map(m => [m.mes, m]));\n\nconst serieTrimestral = Object.entries(TRIMESTRES).map(([q, meses]) => ({\n  trimestre: q,\n  commit: meses.reduce((s, m) => s + mensualPorMes[m].commit, 0),\n  upside: meses.reduce((s, m) => s + mensualPorMes[m].upside, 0),\n}));\n\nreturn [{\n  json: {\n    snapshot_id: 'current',\n    timestamp: new Date().toISOString(),\n    total_valor_of_info_proyectos: totalValorOfInfo,\n    total_backlog_2026_info_proyectos: totalBacklog2026,\n    pct_contratos_vigentes: pctContratosVigentes,\n    contratos_vencidos: contratosVencidos,\n    total_backlog: totalBacklog,\n    total_valor_of_backlog: totalValorOfBacklog,\n    pct_proyectos_vencidos: pctProyectosVencidos,\n    serie_mensual_json: JSON.stringify(serieMensual),\n    serie_trimestral_json: JSON.stringify(serieTrimestral),\n    backlog_por_pm_json: JSON.stringify(backlogPorPmTop10),\n    distribucion_zona_json: JSON.stringify(porZona),\n    distribucion_estado_json: JSON.stringify(porEstado),\n    valor_of_por_pais_json: JSON.stringify(valorOfPorPaisTop10),\n  }\n}];"
+      }
+    },
+    {
+      "id": "upsertmetrics1",
+      "name": "Guardar Metricas Dashboard (Data table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        150
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Dashboard_Metricas"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "snapshot_id",
+              "condition": "eq",
+              "keyValue": "current"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "snapshot_id": "={{ $json.snapshot_id }}",
+            "timestamp": "={{ $json.timestamp }}",
+            "total_valor_of_info_proyectos": "={{ $json.total_valor_of_info_proyectos }}",
+            "total_backlog_2026_info_proyectos": "={{ $json.total_backlog_2026_info_proyectos }}",
+            "pct_contratos_vigentes": "={{ $json.pct_contratos_vigentes }}",
+            "contratos_vencidos": "={{ $json.contratos_vencidos }}",
+            "total_backlog": "={{ $json.total_backlog }}",
+            "total_valor_of_backlog": "={{ $json.total_valor_of_backlog }}",
+            "pct_proyectos_vencidos": "={{ $json.pct_proyectos_vencidos }}",
+            "backlog_por_pm_json": "={{ $json.backlog_por_pm_json }}",
+            "distribucion_zona_json": "={{ $json.distribucion_zona_json }}",
+            "distribucion_estado_json": "={{ $json.distribucion_estado_json }}",
+            "valor_of_por_pais_json": "={{ $json.valor_of_por_pais_json }}",
+            "serie_mensual_json": "={{ $json.serie_mensual_json }}",
+            "serie_trimestral_json": "={{ $json.serie_trimestral_json }}"
+          },
+          "schema": [
+            {
+              "id": "snapshot_id",
+              "displayName": "snapshot_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_valor_of_info_proyectos",
+              "displayName": "total_valor_of_info_proyectos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_backlog_2026_info_proyectos",
+              "displayName": "total_backlog_2026_info_proyectos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pct_contratos_vigentes",
+              "displayName": "pct_contratos_vigentes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "contratos_vencidos",
+              "displayName": "contratos_vencidos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_backlog",
+              "displayName": "total_backlog",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_valor_of_backlog",
+              "displayName": "total_valor_of_backlog",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pct_proyectos_vencidos",
+              "displayName": "pct_proyectos_vencidos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "backlog_por_pm_json",
+              "displayName": "backlog_por_pm_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "distribucion_zona_json",
+              "displayName": "distribucion_zona_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "distribucion_estado_json",
+              "displayName": "distribucion_estado_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "valor_of_por_pais_json",
+              "displayName": "valor_of_por_pais_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "serie_mensual_json",
+              "displayName": "serie_mensual_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "serie_trimestral_json",
+              "displayName": "serie_trimestral_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "chattrigger1",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "public": false
+      }
+    },
+    {
+      "id": "agent1",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        320,
+        300
+      ],
+      "parameters": {
+        "promptType": "auto",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "Eres un asistente de datos para el equipo de Servicios de Red Hat en NOLA. Tienes acceso a herramientas que consultan datos reales y actualizados del portafolio de proyectos (hoja Info Proyectos) y del backlog de ingresos (hoja BackLog NOLA), incluyendo su historial de cambios y metricas ya calculadas. Responde siempre en espanol, de forma clara y con numeros concretos, citando la fuente (ej. 'segun Info Proyectos...'). Si no tienes suficiente informacion en las herramientas para responder con certeza, dilo explicitamente en vez de inventar datos. IMPORTANTE sobre herramientas: cuando necesites datos de una herramienta, EJECUTALA de verdad usando function calling - NUNCA escribas el nombre de la herramienta ni su sintaxis como texto plano en tu respuesta (ej. nunca escribas algo como 'Invocando la herramienta: Tool_X(...)'). Si una pregunta requiere datos, tu ÚNICA salida debe ser la llamada real a la función; espera el resultado y luego responde con los datos reales obtenidos, nunca con una simulación. IMPORTANTE sobre repetir herramientas: nunca llames la misma herramienta dos veces seguidas con argumentos iguales o muy similares. Si ya recibiste datos de una herramienta, USA esos datos para responder de inmediato, no la vuelvas a consultar 'para confirmar'. Si necesitas datos de un proyecto especifico, siempre pasa el parametro 'pa' para traer solo ese proyecto en vez de la tabla completa. Para preguntas de CONTEO o distribucion por categoria (cuantos proyectos en tal estado, zona, pais, etc.), usa SIEMPRE Tool_Metricas_Dashboard primero (ya trae distribucion_zona_json y distribucion_estado_json precalculados) en vez de Tool_Info_Proyectos o Tool_Backlog_Actual. Solo usa Tool_Info_Proyectos o Tool_Backlog_Actual con el parametro 'pa' cuando la pregunta sea sobre UN proyecto especifico identificado por su numero de PA. Ahora tambien tienes 3 herramientas que consultan PostgreSQL directamente (Tool_Postgres_Proyectos, Tool_Postgres_Movimientos, Tool_Postgres_Metricas) con los mismos datos pero desde la base de datos relacional en vez de las Data tables. Usa las herramientas de Postgres cuando el usuario pida explicitamente datos 'de Postgres', 'de la base de datos', o quiera comparar contra las otras herramientas. Para preguntas normales, sigue usando las herramientas de Data table como hasta ahora.",
+          "maxIterations": 4
+        }
+      }
+    },
+    {
+      "id": "maasmodel1",
+      "name": "OpenAI Chat Model (MaaS)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        160,
+        700
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "qwen38-27b"
+        },
+        "options": {
+          "temperature": 0.2,
+          "timeout": 180000
+        },
+        "responsesApiEnabled": false
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "PENDIENTE",
+          "name": "MaaS Red Hat account"
+        }
+      }
+    },
+    {
+      "id": "tool1",
+      "name": "Tool_Info_Proyectos",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        420,
+        520
+      ],
+      "parameters": {
+        "name": "Tool_Info_Proyectos",
+        "description": "Devuelve el listado completo y actualizado de todos los proyectos de Info Proyectos: estado, cliente, PM/Lider, zona, pais, vendedor, TSM, tipo de facturacion, valor OF, dias para vencimiento, estado del contrato y backlog 2026. Usa esta herramienta para responder preguntas sobre proyectos individuales, clientes, zonas, paises o contratos. Parametro opcional 'pa': numero de PA EXACTO del proyecto (no nombre) para traer solo ese proyecto (mucho mas rapido); si lo dejas vacio ('') trae todos los proyectos.",
+        "source": "parameter",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"ifnode\", \"name\": \"Hay filtro?\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2, \"position\": [220, 0], \"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"strict\"}, \"conditions\": [{\"leftValue\": \"={{ String($json.query.pa ?? '') }}\", \"rightValue\": \"\", \"operator\": {\"type\": \"string\", \"operation\": \"notEquals\"}}], \"combinator\": \"and\"}}}, {\"id\": \"getfiltered\", \"name\": \"Get Rows (filtradas)\", \"type\": \"n8n-nodes-base.dataTable\", \"typeVersion\": 1.1, \"position\": [440, -100], \"parameters\": {\"resource\": \"row\", \"operation\": \"get\", \"dataTableId\": {\"__rl\": true, \"mode\": \"name\", \"value\": \"InfoProyectos_Actual\"}, \"matchType\": \"anyCondition\", \"filters\": {\"conditions\": [{\"keyName\": \"pa\", \"condition\": \"eq\", \"keyValue\": \"={{ String($json.query.pa) }}\"}]}, \"returnAll\": true, \"orderBy\": false}}, {\"id\": \"getall\", \"name\": \"Get Rows (todas)\", \"type\": \"n8n-nodes-base.dataTable\", \"typeVersion\": 1.1, \"position\": [440, 100], \"parameters\": {\"resource\": \"row\", \"operation\": \"get\", \"dataTableId\": {\"__rl\": true, \"mode\": \"name\", \"value\": \"InfoProyectos_Actual\"}, \"matchType\": \"anyCondition\", \"filters\": {\"conditions\": []}, \"returnAll\": true, \"orderBy\": false}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [660, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Hay filtro?\", \"type\": \"main\", \"index\": 0}]]}, \"Hay filtro?\": {\"main\": [[{\"node\": \"Get Rows (filtradas)\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Get Rows (todas)\", \"type\": \"main\", \"index\": 0}]]}, \"Get Rows (filtradas)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}, \"Get Rows (todas)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\": \"object\", \"properties\": {\"pa\": {\"type\": [\"string\", \"number\"], \"description\": \"Numero de PA o parte del nombre del proyecto a buscar. Dejar vacio ('') para traer todos los proyectos.\"}}}"
+      }
+    },
+    {
+      "id": "tool2",
+      "name": "Tool_Backlog_Actual",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        620,
+        520
+      ],
+      "parameters": {
+        "name": "Tool_Backlog_Actual",
+        "description": "Devuelve el estado actual del backlog mensual de cada proyecto: Commit y Upside por cada mes del ano, totales trimestrales (Q1-Q4), backlog pendiente y valor OF. Usa esta herramienta para responder preguntas sobre forecast, Commit, Upside o backlog mensual. Parametro opcional 'pa': numero de PA EXACTO del proyecto (no nombre) para traer solo ese proyecto (mucho mas rapido); si lo dejas vacio ('') trae todos los proyectos.",
+        "source": "parameter",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"ifnode\", \"name\": \"Hay filtro?\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2, \"position\": [220, 0], \"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"strict\"}, \"conditions\": [{\"leftValue\": \"={{ String($json.query.pa ?? '') }}\", \"rightValue\": \"\", \"operator\": {\"type\": \"string\", \"operation\": \"notEquals\"}}], \"combinator\": \"and\"}}}, {\"id\": \"getfiltered\", \"name\": \"Get Rows (filtradas)\", \"type\": \"n8n-nodes-base.dataTable\", \"typeVersion\": 1.1, \"position\": [440, -100], \"parameters\": {\"resource\": \"row\", \"operation\": \"get\", \"dataTableId\": {\"__rl\": true, \"mode\": \"name\", \"value\": \"Backlog_Actual\"}, \"matchType\": \"anyCondition\", \"filters\": {\"conditions\": [{\"keyName\": \"pa\", \"condition\": \"eq\", \"keyValue\": \"={{ String($json.query.pa) }}\"}]}, \"returnAll\": true, \"orderBy\": false}}, {\"id\": \"getall\", \"name\": \"Get Rows (todas)\", \"type\": \"n8n-nodes-base.dataTable\", \"typeVersion\": 1.1, \"position\": [440, 100], \"parameters\": {\"resource\": \"row\", \"operation\": \"get\", \"dataTableId\": {\"__rl\": true, \"mode\": \"name\", \"value\": \"Backlog_Actual\"}, \"matchType\": \"anyCondition\", \"filters\": {\"conditions\": []}, \"returnAll\": true, \"orderBy\": false}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [660, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Hay filtro?\", \"type\": \"main\", \"index\": 0}]]}, \"Hay filtro?\": {\"main\": [[{\"node\": \"Get Rows (filtradas)\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Get Rows (todas)\", \"type\": \"main\", \"index\": 0}]]}, \"Get Rows (filtradas)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}, \"Get Rows (todas)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\": \"object\", \"properties\": {\"pa\": {\"type\": [\"string\", \"number\"], \"description\": \"Numero de PA o parte del nombre del proyecto a buscar. Dejar vacio ('') para traer todos los proyectos.\"}}}"
+      }
+    },
+    {
+      "id": "tool3",
+      "name": "Tool_Historial_Backlog",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        820,
+        520
+      ],
+      "parameters": {
+        "name": "Tool_Historial_Backlog",
+        "description": "Devuelve el historial de cambios detectados en los valores de backlog (Commit/Upside) entre ejecuciones del pipeline: fecha del cambio, proyecto, campo que cambio, valor anterior y valor nuevo. Usa esta herramienta para responder preguntas sobre que cambio, cuando cambio, o la evolucion de un proyecto en el tiempo.",
+        "source": "parameter",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"get\", \"name\": \"Get Rows\", \"type\": \"n8n-nodes-base.dataTable\", \"typeVersion\": 1.1, \"position\": [220, 0], \"parameters\": {\"resource\": \"row\", \"operation\": \"get\", \"dataTableId\": {\"__rl\": true, \"mode\": \"name\", \"value\": \"Backlog_Historial\"}, \"matchType\": \"anyCondition\", \"filters\": {\"conditions\": []}, \"returnAll\": true, \"orderBy\": true, \"orderByColumn\": \"createdAt\", \"orderByDirection\": \"DESC\"}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [440, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Get Rows\", \"type\": \"main\", \"index\": 0}]]}, \"Get Rows\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
+        "specifyInputSchema": false
+      }
+    },
+    {
+      "id": "tool4",
+      "name": "Tool_Metricas_Dashboard",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1020,
+        520
+      ],
+      "parameters": {
+        "name": "Tool_Metricas_Dashboard",
+        "description": "Devuelve metricas agregadas del portafolio completo ya calculadas. Campos clave y su significado exacto (no los confundas): 'total_valor_of_info_proyectos' = valor OF total de TODOS los proyectos (hoja Info Proyectos). 'total_backlog_2026_info_proyectos' = PROYECCION de backlog para el anio 2026 (hoja Info Proyectos, campo 'Backlog 2026'), NO es el backlog actual. 'total_backlog' = backlog ACTUAL/PENDIENTE real (hoja BackLog NOLA, campo 'Backlog'), este es el que se debe usar cuando pregunten por 'el backlog total' o 'backlog actual' sin mas contexto. 'total_valor_of_backlog' = valor OF total segun la hoja BackLog NOLA. 'pct_contratos_vigentes' / 'contratos_vencidos' = de Info Proyectos. 'pct_proyectos_vencidos' = de BackLog NOLA. 'distribucion_zona_json' / 'distribucion_estado_json' = conteos de proyectos. 'backlog_por_pm_json' = top 10 PM/Lider por backlog. 'serie_mensual_json' = Commit y Upside por cada uno de los 12 meses. 'serie_trimestral_json' = Commit y Upside sumados por Q1-Q4. Usa esta herramienta para responder preguntas resumen o KPIs generales sin necesidad de sumar tu mismo los datos crudos, y presta atencion a cual de los dos campos de backlog corresponde a la pregunta.",
+        "source": "parameter",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"get\", \"name\": \"Get Rows\", \"type\": \"n8n-nodes-base.dataTable\", \"typeVersion\": 1.1, \"position\": [220, 0], \"parameters\": {\"resource\": \"row\", \"operation\": \"get\", \"dataTableId\": {\"__rl\": true, \"mode\": \"name\", \"value\": \"Dashboard_Metricas\"}, \"matchType\": \"anyCondition\", \"filters\": {\"conditions\": []}, \"returnAll\": true, \"orderBy\": false}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [440, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Get Rows\", \"type\": \"main\", \"index\": 0}]]}, \"Get Rows\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
+        "specifyInputSchema": false
+      }
+    },
+    {
+      "id": "pgnode1",
+      "name": "Recalcular Columnas Rotas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        900
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function normalizarNombre(nombre) {\n  return String(nombre || '')\n    .normalize('NFD').replace(/\\p{Diacritic}/gu, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]/g, '');\n}\n\nfunction calcularClave(row) {\n  const pa = row['# PA'];\n  if (pa !== null && pa !== undefined && String(pa).trim() !== '' && String(pa) !== '#N/A') {\n    return 'pa:' + String(pa).trim();\n  }\n  return 'nombre:' + normalizarNombre(row['Nombre del Proyecto']);\n}\n\nfunction excelSerialToDate(serial) {\n  return new Date(Date.UTC(1899, 11, 30) + serial * 86400000);\n}\n\nfunction parseFechaFin(v) {\n  if (v instanceof Date) return v;\n  if (typeof v === 'number') return excelSerialToDate(v);\n  if (typeof v === 'string') {\n    // 'Fecha fin' viene en formato MM/DD/YYYY (americano), confirmado con datos reales\n    // (ej. '12/14/2026' solo es valido como mes/dia, nunca dia/mes).\n    const m = v.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n    if (m) return new Date(Date.UTC(+m[3], +m[1] - 1, +m[2]));\n  }\n  return null;\n}\n\nfunction calcularEstadoYDias(fechaFinRaw, hoyStr) {\n  const fechaFin = parseFechaFin(fechaFinRaw);\n  if (!fechaFin) return { dias: null, estado: null };\n  const hoy = new Date(hoyStr + 'T00:00:00Z');\n  const dias = Math.round((fechaFin - hoy) / 86400000);\n  let estado;\n  if (dias <= 0) estado = 'Contrato vencido';\n  else if (dias <= 30) estado = 'Contrato vence en menos de 30dias';\n  else if (dias < 60) estado = 'Contrato finaliza en menos de 60dias';\n  else estado = 'Contrato vigente';\n  return { dias, estado };\n}\n\nfunction esVacia(row) {\n  const pa = row['# PA'];\n  const nombre = row['Nombre del Proyecto'];\n  const paVacio = pa === null || pa === undefined || String(pa).trim() === '' || String(pa) === '#N/A';\n  const nombreTexto = nombre === null || nombre === undefined ? '' : String(nombre).trim().toLowerCase();\n  const nombreVacio = nombreTexto === '' || nombreTexto === 'n/a' || nombreTexto === '#n/a' || nombreTexto === 'na';\n  return paVacio && nombreVacio;\n}\n\nconst data = $json;\nconst infoSinVacias = (data.InfoProyectos || []).filter(row => !esVacia(row));\nconst backlogSinVacias = (data.Backlog || []).filter(row => !esVacia(row));\nconst filasVaciasDescartadas = (data.InfoProyectos || []).length - infoSinVacias.length\n  + (data.Backlog || []).length - backlogSinVacias.length;\nconst fechaReferencia = new Date().toISOString().slice(0, 10);\n\nfunction formatearFechaISO(fecha) {\n  if (!fecha) return null;\n  return fecha.toISOString().slice(0, 10);\n}\n\nconst infoEnriquecido = infoSinVacias.map(row => {\n  const { dias, estado } = calcularEstadoYDias(row['Fecha fin'], fechaReferencia);\n  const fechaFinParsed = parseFechaFin(row['Fecha fin']);\n  return {\n    ...row,\n    _clave: calcularClave(row),\n    _dias_para_vencimiento: dias,\n    _estado_contrato: estado,\n    _fecha_fin_iso: formatearFechaISO(fechaFinParsed),\n  };\n});\n\nconst backlogEnriquecido = backlogSinVacias.map(row => ({ ...row, _clave: calcularClave(row) }));\n\nreturn [{ json: { InfoProyectos: infoEnriquecido, Backlog: backlogEnriquecido, fechaReferencia, filasVaciasDescartadas } }];"
+      }
+    },
+    {
+      "id": "pgnode2",
+      "name": "Validar Calidad de Datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        900
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function esNumero(v) {\n  if (v === null || v === undefined || v === '' || v === '#N/A') return false;\n  return !isNaN(Number(v));\n}\n\nconst data = $json;\nconst info = data.InfoProyectos || [];\nconst backlog = data.Backlog || [];\nconst errores = [];\n\nif (info.length < 10) errores.push(`Muy pocos proyectos en Info Proyectos: ${info.length}`);\nif (backlog.length < 10) errores.push(`Muy pocos proyectos en Backlog: ${backlog.length}`);\n\nconst clavesInfo = new Set(info.map(r => r._clave));\nconst sinCruce = backlog.filter(r => !clavesInfo.has(r._clave));\nconst cruzan = backlog.length - sinCruce.length;\nconst pctCruce = backlog.length ? cruzan / backlog.length : 0;\nif (pctCruce < 0.95) {\n  const ejemplos = sinCruce.slice(0, 15).map(r => `${r._clave} (${r['Nombre del Proyecto'] || 'sin nombre'})`).join('; ');\n  errores.push(`Cruce entre hojas muy bajo: ${(pctCruce * 100).toFixed(1)}% (minimo 95%). Sin cruce (${sinCruce.length} de ${backlog.length}): ${ejemplos}`);\n}\n\nconst conValorOf = info.filter(r => esNumero(r['Valor OF'])).length;\nconst pctValorOf = info.length ? conValorOf / info.length : 0;\nif (pctValorOf < 0.5) errores.push(`Muy pocos Valor OF numericos: ${(pctValorOf * 100).toFixed(1)}% (minimo 50%)`);\n\nreturn [{ json: { ...data, _validacion: { valido: errores.length === 0, errores } } }];"
+      }
+    },
+    {
+      "id": "pgnode2b",
+      "name": "Datos Validos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        900
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ String($json._validacion.valido) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "pgnode2c",
+      "name": "Abortar Carga (datos invalidos)",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1880,
+        1020
+      ],
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "={{ 'Carga abortada, datos invalidos: ' + $json._validacion.errores.join(' | ') }}"
+      }
+    },
+    {
+      "id": "pgnode3",
+      "name": "Calcular Hash",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        780
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function cyrb53(str, seed = 0) {\n  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;\n  for (let i = 0, ch; i < str.length; i++) {\n    ch = str.charCodeAt(i);\n    h1 = Math.imul(h1 ^ ch, 2654435761);\n    h2 = Math.imul(h2 ^ ch, 1597334677);\n  }\n  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);\n  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);\n  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);\n  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);\n  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);\n}\n\nfunction ordenarClaves(obj) {\n  if (Array.isArray(obj)) return obj.map(ordenarClaves);\n  if (obj && typeof obj === 'object') {\n    return Object.keys(obj).sort().reduce((acc, k) => {\n      acc[k] = ordenarClaves(obj[k]);\n      return acc;\n    }, {});\n  }\n  return obj;\n}\n\nconst data = $json;\nconst payload = { InfoProyectos: data.InfoProyectos, Backlog: data.Backlog };\nconst canonical = JSON.stringify(ordenarClaves(payload));\nconst hash = cyrb53(canonical);\n\nreturn [{ json: { ...data, _hash: hash } }];"
+      }
+    },
+    {
+      "id": "pgnode4",
+      "name": "Obtener Ultimo Hash",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1880,
+        780
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (SELECT datos_hash FROM carga ORDER BY id DESC LIMIT 1) AS datos_hash;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "cSsw67wkMHZDJ5FB",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "pgnode5",
+      "name": "Hay Cambios Reales?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        780
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Calcular Hash').item.json._hash }}",
+              "rightValue": "={{ $json.datos_hash }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "pgnode5b",
+      "name": "Sin Cambios (fin)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2280,
+        900
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "pgnode6",
+      "name": "Construir SQL de Carga",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2280,
+        700
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function sqlStr(v) {\n  if (v === null || v === undefined || v === '' || v === '#N/A') return 'NULL';\n  return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";\n}\nfunction sqlNum(v) {\n  if (v === null || v === undefined || v === '' || v === '#N/A') return 'NULL';\n  const n = Number(v);\n  return isNaN(n) ? 'NULL' : String(n);\n}\nfunction sqlInt(v) {\n  if (v === null || v === undefined) return 'NULL';\n  return String(Math.round(v));\n}\nfunction sqlDate(v) {\n  if (v === null || v === undefined || v === '') return 'NULL';\n  return \"'\" + v + \"'::date\";\n}\n\nconst data = $('Calcular Hash').item.json;\nconst info = data.InfoProyectos || [];\nconst backlog = data.Backlog || [];\nconst hash = data._hash;\nconst fechaReferencia = data.fechaReferencia;\n\nconst proyectosPorClave = new Map();\nfor (const row of info) proyectosPorClave.set(row._clave, row);\nfor (const row of backlog) if (!proyectosPorClave.has(row._clave)) proyectosPorClave.set(row._clave, row);\n\nconst backlogPorClave = new Map();\nfor (const row of backlog) if (!backlogPorClave.has(row._clave)) backlogPorClave.set(row._clave, row);\nconst backlogSinDuplicados = Array.from(backlogPorClave.values());\n\nconst proyectoValues = [];\nfor (const [clave, row] of proyectosPorClave) {\n  proyectoValues.push(`(${sqlStr(clave)}, ${sqlStr(row['# PA'])}, ${sqlStr(row['Project ID'])}, ${sqlStr(row['# Opp.'])}, `\n    + `${sqlStr(row['Nombre del Proyecto'])}, ${sqlStr(row['Cliente'])}, ${sqlStr(row['PM/Líder'])}, ${sqlStr(row['PM/Líder PSA'])}, `\n    + `${sqlStr(row['Zona'])}, ${sqlStr(row['Pais'])}, ${sqlStr(row['Vendedor'])}, ${sqlStr(row['TSM'])}, `\n    + `${sqlStr(row['Billing Type'])}, ${sqlStr(row['Billing Arrengement'])}, ${sqlStr(row['Estado'])}, `\n    + `${sqlNum(row['Valor OF'])}, ${sqlNum(row['Valor OF Anterior'])}, ${sqlNum(row['ACUMULADO A HOY'])}, `\n    + `${sqlNum(row['Consumido 2025'])}, ${sqlNum(row['Backlog 2026'])}, ${sqlDate(row._fecha_fin_iso)}, `\n    + `${sqlInt(row._dias_para_vencimiento)}, ${sqlStr(row._estado_contrato)}, ${sqlStr(row['ESTATUS'])})`);\n}\n\nconst sqlProyectosUpsert = `proyectos_upsert AS (\n  INSERT INTO proyecto (\n    clave, num_pa, project_id, num_opp, nombre, cliente, pm_lider, pm_lider_psa,\n    zona, pais, vendedor, tsm, billing_type, billing_arrangement, estado,\n    valor_of, valor_of_anterior, acumulado_a_hoy, consumido_2025, backlog_2026, fecha_fin,\n    dias_para_vencimiento, estado_contrato, estatus, primera_carga_id, ultima_carga_id\n  )\n  SELECT v.*, (SELECT id FROM nueva_carga), (SELECT id FROM nueva_carga)\n  FROM (VALUES\n${proyectoValues.join(',\\n')}\n  ) AS v(\n    clave, num_pa, project_id, num_opp, nombre, cliente, pm_lider, pm_lider_psa,\n    zona, pais, vendedor, tsm, billing_type, billing_arrangement, estado,\n    valor_of, valor_of_anterior, acumulado_a_hoy, consumido_2025, backlog_2026, fecha_fin,\n    dias_para_vencimiento, estado_contrato, estatus\n  )\n  ON CONFLICT (clave) DO UPDATE SET\n    num_pa = EXCLUDED.num_pa, project_id = EXCLUDED.project_id, num_opp = EXCLUDED.num_opp,\n    nombre = EXCLUDED.nombre, cliente = EXCLUDED.cliente, pm_lider = EXCLUDED.pm_lider, pm_lider_psa = EXCLUDED.pm_lider_psa,\n    zona = EXCLUDED.zona, pais = EXCLUDED.pais, vendedor = EXCLUDED.vendedor, tsm = EXCLUDED.tsm,\n    billing_type = EXCLUDED.billing_type, billing_arrangement = EXCLUDED.billing_arrangement, estado = EXCLUDED.estado,\n    valor_of = EXCLUDED.valor_of, valor_of_anterior = EXCLUDED.valor_of_anterior, acumulado_a_hoy = EXCLUDED.acumulado_a_hoy,\n    consumido_2025 = EXCLUDED.consumido_2025, backlog_2026 = EXCLUDED.backlog_2026, fecha_fin = EXCLUDED.fecha_fin,\n    dias_para_vencimiento = EXCLUDED.dias_para_vencimiento, estado_contrato = EXCLUDED.estado_contrato, estatus = EXCLUDED.estatus,\n    ultima_carga_id = (SELECT id FROM nueva_carga), actualizado_en = now()\n  RETURNING id, clave\n)`;\n\nconst MESES = [\n  ['Enero', 1, 'Upside'], ['Febrero', 2, 'Upside_1'], ['Marzo', 3, 'Upside_2'],\n  ['Abril', 4, 'Upside_3'], ['Mayo', 5, 'Upside_4'], ['Junio', 6, 'Upside_5'],\n  ['Julio', 7, 'Upside_6'], ['Agosto', 8, 'Upside_7'], ['Septiembre', 9, 'Upside_8'],\n  ['Octubre', 10, 'Upside_9'], ['Noviembre', 11, 'Upside_10'], ['Diciembre', 12, 'Upside_11'],\n];\n\nconst revenueMesValues = [];\nfor (const row of backlogSinDuplicados) {\n  for (const [mesNombre, mesNum, upsideCol] of MESES) {\n    const commit = sqlNum(row[mesNombre]);\n    const upside = sqlNum(row[upsideCol]);\n    revenueMesValues.push(`(${sqlStr(row._clave)}, ${mesNum}, ${commit === 'NULL' ? 0 : commit}, ${upside === 'NULL' ? 0 : upside})`);\n  }\n}\n\nconst sqlRevenueMes = `revenue_mes_insert AS (\n  INSERT INTO revenue_mes (carga_id, proyecto_id, mes, commit_usd, upside_usd)\n  SELECT (SELECT id FROM nueva_carga), pu.id, v.mes, v.commit_usd, v.upside_usd\n  FROM (VALUES\n${revenueMesValues.join(',\\n')}\n  ) AS v(clave, mes, commit_usd, upside_usd)\n  JOIN proyectos_upsert pu ON pu.clave = v.clave\n  RETURNING proyecto_id, mes, commit_usd, upside_usd\n)`;\n\nconst revenueAnualValues = backlogSinDuplicados.map(row =>\n  `(${sqlStr(row._clave)}, ${sqlNum(row['Acum 2025'])}, ${sqlNum(row['Backlog '])}, ${sqlNum(row['TOTAL EJECUTADO ACUMULADO'])})`\n);\n\nconst sqlRevenueAnual = `revenue_anual_insert AS (\n  INSERT INTO revenue_anual (carga_id, proyecto_id, acum_2025, backlog, total_ejecutado_acumulado)\n  SELECT (SELECT id FROM nueva_carga), pu.id, v.acum_2025, v.backlog, v.total_ejecutado\n  FROM (VALUES\n${revenueAnualValues.join(',\\n')}\n  ) AS v(clave, acum_2025, backlog, total_ejecutado)\n  JOIN proyectos_upsert pu ON pu.clave = v.clave\n  RETURNING 1\n)`;\n\nconst sqlMovimiento = `movimiento_insert AS (\n  INSERT INTO movimiento (carga_id, carga_previa_id, proyecto_id, mes, tipo, monto, commit_anterior, commit_nuevo, upside_anterior, upside_nuevo)\n  SELECT\n    (SELECT id FROM nueva_carga), (SELECT id FROM carga_previa),\n    n.proyecto_id, n.mes,\n    CASE WHEN n.commit_usd > COALESCE(a.commit_usd, 0) THEN 'upside_a_commit' ELSE 'commit_a_upside' END,\n    abs(n.commit_usd - COALESCE(a.commit_usd, 0)),\n    a.commit_usd, n.commit_usd, a.upside_usd, n.upside_usd\n  FROM revenue_mes_insert n\n  LEFT JOIN revenue_mes a\n    ON a.carga_id = (SELECT id FROM carga_previa) AND a.proyecto_id = n.proyecto_id AND a.mes = n.mes\n  WHERE (SELECT id FROM carga_previa) IS NOT NULL\n    AND abs(n.commit_usd - COALESCE(a.commit_usd, 0)) >= 1.0\n  RETURNING 1\n)`;\n\nconst sql = `BEGIN;\nWITH\nnueva_carga AS (\n  INSERT INTO carga (archivo_nombre, datos_hash, fecha_referencia, filas_info, filas_backlog)\n  VALUES ('CLOUD FORECAST GENERAL - NOLA FY26', ${sqlStr(hash)}, ${sqlStr(fechaReferencia)}, ${info.length}, ${backlog.length})\n  RETURNING id\n),\ncarga_previa AS (\n  SELECT id FROM carga WHERE id < (SELECT id FROM nueva_carga) ORDER BY id DESC LIMIT 1\n),\n${sqlProyectosUpsert},\n${sqlRevenueMes},\n${sqlRevenueAnual},\n${sqlMovimiento}\nSELECT\n  (SELECT id FROM nueva_carga) AS carga_id,\n  (SELECT count(*) FROM proyectos_upsert) AS proyectos,\n  (SELECT count(*) FROM revenue_mes_insert) AS filas_revenue,\n  (SELECT count(*) FROM movimiento_insert) AS movimientos;\nCOMMIT;`;\n\nreturn [{ json: { sql } }];"
+      }
+    },
+    {
+      "id": "pgnode7",
+      "name": "Ejecutar Carga en Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2480,
+        700
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "cSsw67wkMHZDJ5FB",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "pgtool1",
+      "name": "Tool_Postgres_Proyectos",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1420,
+        520
+      ],
+      "parameters": {
+        "name": "Tool_Postgres_Proyectos",
+        "description": "Consulta la tabla de proyectos directo en PostgreSQL (fuente: tabla carga/proyecto, la misma que usa el pipeline de snapshots). Devuelve clave, num_pa, nombre, cliente, pm_lider, zona, pais, estado, valor_of, fecha_fin, dias_para_vencimiento, estado_contrato, acum_2025, backlog, total_ejecutado_acumulado. Parametro opcional 'pa': numero de PA exacto para traer solo ese proyecto; vacio ('') para traer todos (maximo 500).",
+        "source": "parameter",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"ifnode\", \"name\": \"Hay filtro?\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2, \"position\": [220, 0], \"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"strict\"}, \"conditions\": [{\"leftValue\": \"={{ String($json.query.pa ?? '') }}\", \"rightValue\": \"\", \"operator\": {\"type\": \"string\", \"operation\": \"notEquals\"}}], \"combinator\": \"and\"}}}, {\"id\": \"qfiltrada\", \"name\": \"Query (filtrada)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, -100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"SELECT clave, num_pa, nombre, cliente, pm_lider, zona, pais, estado, valor_of, fecha_fin, dias_para_vencimiento, estado_contrato, acum_2025, backlog, total_ejecutado_acumulado FROM v_proyecto_actual WHERE num_pa = $1 OR clave = $1 LIMIT 10;\", \"options\": {\"queryReplacement\": \"={{ $json.query.pa }}\"}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"qtodas\", \"name\": \"Query (todas)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, 100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"SELECT clave, num_pa, nombre, cliente, pm_lider, zona, pais, estado, valor_of, fecha_fin, dias_para_vencimiento, estado_contrato, acum_2025, backlog, total_ejecutado_acumulado FROM v_proyecto_actual LIMIT 20;\", \"options\": {}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [660, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Hay filtro?\", \"type\": \"main\", \"index\": 0}]]}, \"Hay filtro?\": {\"main\": [[{\"node\": \"Query (filtrada)\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Query (todas)\", \"type\": \"main\", \"index\": 0}]]}, \"Query (filtrada)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}, \"Query (todas)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\": \"object\", \"properties\": {\"pa\": {\"type\": [\"string\", \"number\"], \"description\": \"Numero de PA a buscar. Dejar vacio para traer todos.\"}}}"
+      }
+    },
+    {
+      "id": "pgtool2",
+      "name": "Tool_Postgres_Movimientos",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1620,
+        520
+      ],
+      "parameters": {
+        "name": "Tool_Postgres_Movimientos",
+        "description": "Consulta el historial de cambios REAL calculado en PostgreSQL (tabla movimiento), comparando cada carga contra la anterior con umbral de $1. Devuelve num_pa, nombre, mes, tipo (upside_a_commit/commit_a_upside/alta_proyecto), monto, valores antes/despues, y fecha de la carga. Parametro opcional 'pa': numero de PA exacto para filtrar un proyecto; vacio ('') para traer los ultimos 100 movimientos de todos los proyectos.",
+        "source": "parameter",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"ifnode\", \"name\": \"Hay filtro?\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2, \"position\": [220, 0], \"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"strict\"}, \"conditions\": [{\"leftValue\": \"={{ String($json.query.pa ?? '') }}\", \"rightValue\": \"\", \"operator\": {\"type\": \"string\", \"operation\": \"notEquals\"}}], \"combinator\": \"and\"}}}, {\"id\": \"qfiltrada\", \"name\": \"Query (filtrada)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, -100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"SELECT p.num_pa, p.nombre, m.mes, m.tipo, m.monto, m.commit_anterior, m.commit_nuevo, m.upside_anterior, m.upside_nuevo, c.ejecutada_en FROM movimiento m JOIN proyecto p ON p.id = m.proyecto_id JOIN carga c ON c.id = m.carga_id WHERE p.num_pa = $1 OR p.clave = $1 ORDER BY m.id DESC LIMIT 10;\", \"options\": {\"queryReplacement\": \"={{ $json.query.pa }}\"}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"qtodas\", \"name\": \"Query (todas)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, 100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"SELECT p.num_pa, p.nombre, m.mes, m.tipo, m.monto, m.commit_anterior, m.commit_nuevo, m.upside_anterior, m.upside_nuevo, c.ejecutada_en FROM movimiento m JOIN proyecto p ON p.id = m.proyecto_id JOIN carga c ON c.id = m.carga_id ORDER BY m.id DESC LIMIT 10;\", \"options\": {}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [660, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Hay filtro?\", \"type\": \"main\", \"index\": 0}]]}, \"Hay filtro?\": {\"main\": [[{\"node\": \"Query (filtrada)\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Query (todas)\", \"type\": \"main\", \"index\": 0}]]}, \"Query (filtrada)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}, \"Query (todas)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\": \"object\", \"properties\": {\"pa\": {\"type\": [\"string\", \"number\"], \"description\": \"Numero de PA a buscar. Dejar vacio para traer todos.\"}}}"
+      }
+    },
+    {
+      "id": "pgtool3",
+      "name": "Tool_Postgres_Metricas",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1820,
+        520
+      ],
+      "parameters": {
+        "name": "Tool_Postgres_Metricas",
+        "description": "Devuelve metricas agregadas del portafolio calculadas EN VIVO desde PostgreSQL (no desde Data tables): total de proyectos, valor OF total, backlog total, acum_2025 total, conteo de contratos vencidos/vigentes, y fecha de la ultima carga. Usa esta herramienta para preguntas de totales/conteos cuando se pida explicitamente el dato 'de Postgres' o 'de la base de datos'.",
+        "source": "parameter",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"q\", \"name\": \"Query\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [220, 0], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"SELECT\\n  (SELECT COUNT(*) FROM v_proyecto_actual) AS total_proyectos,\\n  (SELECT SUM(valor_of) FROM v_proyecto_actual) AS valor_of_total,\\n  (SELECT SUM(backlog) FROM v_proyecto_actual) AS backlog_total,\\n  (SELECT SUM(acum_2025) FROM v_proyecto_actual) AS acum_2025_total,\\n  (SELECT COUNT(*) FROM v_proyecto_actual WHERE estado_contrato = 'Contrato vencido') AS contratos_vencidos,\\n  (SELECT COUNT(*) FROM v_proyecto_actual WHERE estado_contrato = 'Contrato vigente') AS contratos_vigentes,\\n  (SELECT ejecutada_en FROM v_carga_actual) AS ultima_carga_en;\", \"options\": {}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [440, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Query\", \"type\": \"main\", \"index\": 0}]]}, \"Query\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
+        "specifyInputSchema": false
+      }
+    }
+  ],
+  "connections": {
+    "Descargar data.xlsx de Drive": {
+      "main": [
+        [
+          {
+            "node": "Extraer Info Proyectos",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extraer BackLog NOLA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Info Proyectos": {
+      "main": [
+        [
+          {
+            "node": "Tag Info Proyectos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer BackLog NOLA": {
+      "main": [
+        [
+          {
+            "node": "Tag Backlog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Info Proyectos": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filtrar PA válido (Info Proyectos)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Backlog": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Filtrar PA válido (Backlog)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Combinar JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combinar JSON": {
+      "main": [
+        [
+          {
+            "node": "Guardar en memoria",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Calcular Metricas Dashboard",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Recalcular Columnas Rotas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Crear Tabla InfoProyectos_Actual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Tabla InfoProyectos_Actual": {
+      "main": [
+        [
+          {
+            "node": "Crear Tabla Backlog_Actual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Tabla Backlog_Actual": {
+      "main": [
+        [
+          {
+            "node": "Crear Tabla Backlog_Historial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar PA válido (Info Proyectos)": {
+      "main": [
+        [
+          {
+            "node": "Guardar Info Proyectos (Data table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar PA válido (Backlog)": {
+      "main": [
+        [
+          {
+            "node": "Guardar Backlog (Data table)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Tag Backlog Nuevo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Tabla Backlog_Historial": {
+      "main": [
+        [
+          {
+            "node": "Crear Tabla Dashboard_Metricas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Obtener snapshot Backlog_Actual (antes)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener snapshot Backlog_Actual (antes)": {
+      "main": [
+        [
+          {
+            "node": "Tag Snapshot Anterior",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Snapshot Anterior": {
+      "main": [
+        [
+          {
+            "node": "Merge Cambios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Backlog Nuevo": {
+      "main": [
+        [
+          {
+            "node": "Merge Cambios",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Cambios": {
+      "main": [
+        [
+          {
+            "node": "Detectar Cambios Backlog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detectar Cambios Backlog": {
+      "main": [
+        [
+          {
+            "node": "Guardar Historial Backlog (Data table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Tabla Dashboard_Metricas": {
+      "main": [
+        [
+          {
+            "node": "Descargar data.xlsx de Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Metricas Dashboard": {
+      "main": [
+        [
+          {
+            "node": "Guardar Metricas Dashboard (Data table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Historial Backlog (Data table)": {
+      "main": [
+        []
+      ]
+    },
+    "Guardar Metricas Dashboard (Data table)": {
+      "main": [
+        []
+      ]
+    },
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Info_Proyectos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Backlog_Actual": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Historial_Backlog": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Metricas_Dashboard": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (MaaS)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recalcular Columnas Rotas": {
+      "main": [
+        [
+          {
+            "node": "Validar Calidad de Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Calidad de Datos": {
+      "main": [
+        [
+          {
+            "node": "Datos Validos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos Validos?": {
+      "main": [
+        [
+          {
+            "node": "Calcular Hash",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Abortar Carga (datos invalidos)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Hash": {
+      "main": [
+        [
+          {
+            "node": "Obtener Ultimo Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Ultimo Hash": {
+      "main": [
+        [
+          {
+            "node": "Hay Cambios Reales?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay Cambios Reales?": {
+      "main": [
+        [
+          {
+            "node": "Construir SQL de Carga",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sin Cambios (fin)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir SQL de Carga": {
+      "main": [
+        [
+          {
+            "node": "Ejecutar Carga en Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Postgres_Proyectos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Postgres_Movimientos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Postgres_Metricas": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

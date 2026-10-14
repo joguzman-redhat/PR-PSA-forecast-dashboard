@@ -1,0 +1,494 @@
+openapi: 3.0.3
+
+info:
+  title: Cloud Forecast API
+  version: "1.0.0"
+  description: |
+    Lee el portafolio de proyectos desde Postgres y lo entrega con **la misma
+    forma** que tenían los archivos `data/*.json` del PoC, para que el
+    dashboard no se reescriba.
+
+    ### Por qué las filas son objetos abiertos
+    Cada fila de proyecto trae ~40 claves que salen del Excel (36 columnas de
+    `Info Proyectos`, 45 de `BackLog NOLA`) y cuyos nombres son los del
+    negocio, en español. Aquí se documentan las que el dashboard usa; el resto
+    viaja igual. Por eso los esquemas son `additionalProperties: true`.
+
+    ### Dos cosas que sorprenden y son a propósito
+    - **`num_pa` cambia de tipo**: llega como número en 310 filas y como texto
+      en 24 (los `PR-xxxxx`), y es `null` en 15. Se conserva tal cual venía del
+      Excel en vez de normalizarse, porque el dashboard ya hace `String(num_pa)`
+      y cambiarlo rompería la comparación contra las claves de la historia.
+    - **Hay revenue negativo**: nueve proyectos traen notas de crédito. No
+      filtrar `> 0`.
+
+    ### De dónde sale cada número
+    `revenue_mes` y `revenue_anual` son la única fuente de verdad del dinero.
+    Los quarters (`q1..q4`) y `total_ejecutado_acumulado` **se recalculan al
+    leer**, no se guardan: así no pueden divergir de los meses.
+
+servers:
+  - url: http://localhost:3000
+    description: Local (el mismo origen sirve el dashboard)
+
+tags:
+  - name: datos
+    description: Lo que consume el dashboard
+  - name: operacion
+    description: Salud e invalidación de caché
+
+paths:
+  /api/proyectos:
+    get:
+      tags: [datos]
+      summary: Estado actual de cada proyecto
+      description: |
+        Reemplaza a `data/proyectos.json`. Devuelve las filas de la hoja
+        `Info Proyectos` de la carga más reciente, tal cual las dejó el ETL.
+
+        Incluye los proyectos **cancelados** (26, todos con `valor_of = 0`). El
+        dashboard los esconde por defecto; si se cuentan, el total pasa de 323
+        a 349.
+      responses:
+        "200":
+          description: Carga actual
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [meta, proyectos]
+                properties:
+                  meta: { $ref: "#/components/schemas/MetaProyectos" }
+                  proyectos:
+                    type: array
+                    items: { $ref: "#/components/schemas/Proyecto" }
+        "503": { $ref: "#/components/responses/SinCarga" }
+        "500": { $ref: "#/components/responses/ErrorInterno" }
+
+  /api/backlog:
+    get:
+      tags: [datos]
+      summary: Revenue mes a mes de la carga actual
+      description: |
+        Reemplaza a `data/backlog_nola.json`. Una fila por proyecto con las 24
+        columnas de mes (`<mes>_fijo` y `<mes>_upside`) más los agregados.
+
+        Ojo con el vocabulario: en el Excel la columna se llama **fijo** y en
+        la BD la columna es `commit_usd`. Es lo mismo. El negocio dice *commit*.
+      responses:
+        "200":
+          description: Carga actual
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [meta, backlog]
+                properties:
+                  meta: { $ref: "#/components/schemas/MetaCarga" }
+                  backlog:
+                    type: array
+                    items: { $ref: "#/components/schemas/FilaBacklog" }
+        "503": { $ref: "#/components/responses/SinCarga" }
+        "500": { $ref: "#/components/responses/ErrorInterno" }
+
+  /api/historia:
+    get:
+      tags: [datos]
+      summary: Todos los snapshots, las series por proyecto y los movimientos
+      description: |
+        Reemplaza a `data/historia_revenue.json`. Es la respuesta pesada
+        (~2,3 MB con 32 snapshots) porque trae, para **cada** proyecto, en
+        **cada** snapshot, el revenue de **cada** mes separado en commit y
+        upside: 349 x 32 x 12 x 2 valores.
+
+        Se cachea en memoria y se invalida con `POST /api/reload`.
+
+        **Cuándo va a hacer falta paginar**: con snapshots diarios, un año son
+        ~365 cargas y la respuesta se va a ~30 MB. Pasadas las ~60 cargas hay
+        que aceptar `?desde=&hasta=` y devolver solo ese rango. Todavía no está
+        implementado.
+      responses:
+        "200":
+          description: Historia completa
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Historia" }
+        "503": { $ref: "#/components/responses/SinCarga" }
+        "500": { $ref: "#/components/responses/ErrorInterno" }
+
+  /api/reload:
+    post:
+      tags: [operacion]
+      summary: Invalida la caché de /api/historia
+      description: |
+        Lo llama n8n después de cada carga del ETL. Sin esto, el dashboard
+        seguiría viendo la historia anterior hasta que se reinicie la API.
+      responses:
+        "200":
+          description: Caché invalidada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+
+  /health:
+    get:
+      tags: [operacion]
+      summary: Estado de la API y de su conexión a Postgres
+      responses:
+        "200":
+          description: Viva y con BD
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:     { type: boolean, example: true }
+                  cargas: { type: integer, example: 32, description: Snapshots en la BD }
+        "503":
+          description: No hay conexión a Postgres
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:    { type: boolean, example: false }
+                  error: { type: string }
+
+components:
+  responses:
+    SinCarga:
+      description: La base de datos está vacía. Falta correr `./forecast.sh seed`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ErrorInterno:
+      description: Error no controlado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+    MetaCarga:
+      type: object
+      description: Datos de la carga que se está sirviendo.
+      properties:
+        carga_id:       { type: integer, example: 32 }
+        carga_etiqueta: { type: string,  example: "Hoy (6 oct 2026)" }
+        origen:         { type: string,  example: postgres }
+      additionalProperties: true
+
+    MetaProyectos:
+      allOf:
+        - $ref: "#/components/schemas/MetaCarga"
+        - type: object
+          description: |
+            Además trae el bloque `meta` que produjo el ETL. El dashboard usa
+            dos campos de aquí: `columnas` (para saber qué mostrar en la tabla)
+            y `orden_estado`.
+          properties:
+            hoja:             { type: string, example: "Info Proyectos" }
+            fecha_referencia:
+              type: string
+              format: date
+              example: "2026-10-06"
+              description: |
+                Reemplaza al `TODAY()` del Excel. Se congela para que una carga
+                vieja se pueda reproducir igual.
+            total_filas:   { type: integer, example: 349 }
+            orden_estado:
+              type: array
+              description: Orden del flujo del negocio, no alfabético.
+              items: { type: string }
+              example: [Planned, In Progress, On Hold, Completed, Canceled]
+            columnas:
+              type: array
+              description: Define las columnas de la tabla del dashboard.
+              items:
+                type: object
+                properties:
+                  key:          { type: string, example: cliente }
+                  label:        { type: string, example: Cliente }
+                  excel_col:    { type: string, example: E }
+                  verde:
+                    type: boolean
+                    description: |
+                      El negocio marca en verde las columnas que le importan.
+                      Se detectan por el color de relleno del encabezado.
+                  recalculado: { type: boolean }
+
+    Proyecto:
+      type: object
+      description: |
+        Una fila de `Info Proyectos`. Se listan las claves que usa el
+        dashboard; vienen todas las del Excel.
+      additionalProperties: true
+      properties:
+        num_pa:
+          description: |
+            Número de PA. **Tipo variable**: número, texto (`PR-xxxxx`) o
+            `null`. 22 proyectos sin PA se identifican por el PR.
+          nullable: true
+          oneOf:
+            - type: integer
+            - type: string
+          example: 64779
+        nombre_del_proyecto: { type: string }
+        cliente:             { type: string, nullable: true }
+        estado:
+          type: string
+          nullable: true
+          enum: [Planned, In Progress, On Hold, Completed, Canceled, null]
+          description: |
+            "outgoing" no existe como estado: eso que el negocio llama así son
+            los **On Hold** (22 proyectos).
+        pm_lider:    { type: string, nullable: true }
+        zona:        { type: string, nullable: true }
+        pais:        { type: string, nullable: true }
+        vendedor:    { type: string, nullable: true }
+        tsm:         { type: string, nullable: true }
+        billing_type:
+          type: string
+          nullable: true
+          example: Fixed Price
+        billing_arrangement:
+          type: string
+          nullable: true
+          description: |
+            En el Excel la columna está escrita `Billing Arrengement`, con la
+            errata. Es nueva en el libro FY26: en los anteriores no existe.
+          example: Multi Deliverable
+        valor_of:        { type: number, nullable: true, example: 21665.8 }
+        acumulado_a_hoy: { type: number, nullable: true }
+        consumido_2025:  { type: number, nullable: true }
+        backlog_2026:    { type: number, nullable: true }
+        fecha_fin:
+          type: string
+          nullable: true
+          description: Formato `MM/DD/YYYY`, como viene del Excel.
+          example: "12/22/2025"
+        estado_contrato:
+          type: string
+          nullable: true
+          description: |
+            **Recalculado por el ETL.** En el Excel esta columna está rota.
+            Se deriva de `fecha_fin` contra `meta.fecha_referencia`.
+          enum:
+            - Contrato vigente
+            - Contrato vencido
+            - Contrato vence en menos de 30dias
+            - Contrato finaliza en menos de 60dias
+        dias_para_vencimiento:
+          type: integer
+          nullable: true
+          description: Recalculado. Negativo si ya venció.
+          example: -288
+        start_at_risk:
+          type: boolean
+          nullable: true
+          description: |
+            **DATO SIMULADO.** No existe en ninguna de las 37 hojas del libro
+            (se buscó). Está generado con un hash del `project_id` al 15% solo
+            para poder enseñar el filtro. Hay que pedírselo a la fuente antes
+            de producción, y advertirlo en cualquier respuesta que lo use.
+        estatus:
+          type: string
+          nullable: true
+          description: Texto libre, bitácora del PM. Trae saltos de línea.
+        _fila_excel:
+          type: integer
+          description: Fila de origen en la hoja. Es la trazabilidad al Excel.
+        _errores:
+          type: object
+          additionalProperties: true
+          description: |
+            Valor **original** de las celdas que el Excel tenía en `#VALUE!` o
+            `#N/A`, por clave. Así la corrección del ETL queda auditable.
+          example: { dias_para_vencimiento: "#VALUE!" }
+        _recalculado:
+          type: object
+          additionalProperties: true
+          description: Valor con el que el ETL reemplazó cada campo roto.
+        _tipo_fila:
+          type: string
+          enum: [proyecto, ajuste]
+          description: |
+            El dashboard filtra a `proyecto`. Las filas `ajuste` son los plugs
+            que el Excel suma en su propia fila de total.
+
+    FilaBacklog:
+      type: object
+      description: |
+        Una fila de `BackLog NOLA`. Se cruza con `Proyecto` por `num_pa` y, si
+        falta, por nombre normalizado — **nunca por posición**: en el libro FY26
+        299 de 349 filas están desalineadas entre las dos hojas, y cruzarlas por
+        número de fila le asigna a cada proyecto el revenue de otro sin fallar.
+      additionalProperties: true
+      properties:
+        num_pa:
+          nullable: true
+          oneOf: [{ type: integer }, { type: string }]
+        nombre_del_proyecto: { type: string }
+        valor_of:  { type: number, nullable: true }
+        acum_2025:
+          type: number
+          nullable: true
+          description: Lo consumido en 2025. Entra en el TOTAL EJECUTADO.
+        backlog:   { type: number, nullable: true }
+        enero_fijo:
+          type: number
+          description: Commit de enero. Puede ser negativo (notas de crédito).
+        enero_upside:
+          type: number
+          description: |
+            Upside de enero. Hoy el upside solo existe de agosto a diciembre:
+            los meses anteriores ya se cerraron.
+        q1:
+          type: number
+          description: |
+            **Recalculado**: `enero_fijo + febrero_fijo + marzo_fijo`. El
+            quarter suma **solo commit**; el upside no entra. Verificado en
+            1396 de 1396 casos contra el Excel.
+        total_ejecutado_acumulado:
+          type: number
+          nullable: true
+          description: |
+            **Recalculado**: `Q1+Q2+Q3+Q4 + acum_2025`. Verificado en 348 de
+            348 filas.
+        _fila_excel: { type: integer }
+        _tipo_fila:  { type: string, enum: [proyecto, ajuste] }
+
+    Historia:
+      type: object
+      required: [meta, snapshots, series_por_proyecto, eventos]
+      properties:
+        meta:
+          type: object
+          additionalProperties: true
+          properties:
+            total_snapshots: { type: integer, example: 32 }
+            total_proyectos: { type: integer, example: 349 }
+            total_eventos:   { type: integer, example: 782 }
+        snapshots:
+          type: array
+          items: { $ref: "#/components/schemas/Snapshot" }
+        series_por_proyecto:
+          type: object
+          description: |
+            Diccionario `clave -> lista de snapshots`. La clave es
+            `String(num_pa)` y, para los proyectos sin PA, `fila-<n>` con el
+            número de fila **de BackLog NOLA** (no el de Info Proyectos: son
+            distintos).
+
+            Las listas **no** tienen todas el mismo largo: un proyecto que
+            entró al portafolio en marzo solo tiene entradas desde ahí.
+          additionalProperties:
+            type: array
+            items: { $ref: "#/components/schemas/EntradaSerie" }
+          example:
+            "64779": [{ snapshot_id: s01, fijo: 4531.47, upside: 1528.04, total: 4721.98, backlog: 8650.02, meses: [[188.5, 53.29]] }]
+        eventos:
+          type: array
+          items: { $ref: "#/components/schemas/Evento" }
+
+    Snapshot:
+      type: object
+      description: Una carga. El eje del histórico.
+      properties:
+        id:        { type: string, example: s01 }
+        timestamp:
+          type: string
+          description: |
+            ISO **sin zona horaria**, a propósito: es la hora de corte tal como
+            la ve el negocio.
+          example: "2025-11-03T06:30:00"
+        etiqueta:  { type: string, example: "Nov 2025" }
+        tipo:
+          type: string
+          enum: [mensual, intradia, etl]
+        proyectos_activos:
+          type: integer
+          description: Proyectos presentes en este snapshot, tengan o no revenue.
+          example: 335
+        totales:
+          type: object
+          properties:
+            fijo:      { type: number }
+            upside:    { type: number }
+            acum_2025: { type: number }
+            total:     { type: number, description: "`fijo + acum_2025`" }
+            backlog:   { type: number }
+            q1:        { type: number }
+            q2:        { type: number }
+            q3:        { type: number }
+            q4:        { type: number }
+        por_mes:
+          type: object
+          description: Agregado del portafolio por mes, en minúsculas y sin tilde.
+          additionalProperties:
+            type: object
+            properties:
+              fijo:   { type: number }
+              upside: { type: number }
+
+    EntradaSerie:
+      type: object
+      properties:
+        snapshot_id: { type: string, example: s01 }
+        fijo:        { type: number, description: Suma del commit de los 12 meses }
+        upside:      { type: number }
+        total:       { type: number, description: "`fijo + acum_2025`" }
+        backlog:
+          type: number
+          nullable: true
+          description: |
+            `null` en los 30 proyectos sin Valor OF. No es cero: es "sin dato".
+        meses:
+          type: array
+          description: |
+            12 pares `[commit, upside]`, en orden enero..diciembre. Es el dato
+            fino; los campos `fijo`/`total` de arriba son derivados de aquí.
+          minItems: 12
+          maxItems: 12
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items: { type: number }
+
+    Evento:
+      type: object
+      description: |
+        Un movimiento, calculado comparando una carga con la anterior. **No
+        viene del Excel.** Umbral: 1 USD — por debajo de eso es redondeo, no
+        una decisión de negocio.
+      properties:
+        snapshot_id: { type: string }
+        timestamp:   { type: string, example: "2025-12-01T06:30:00" }
+        num_pa:      { type: string }
+        nombre:      { type: string }
+        tipo:
+          type: string
+          enum: [upside_a_commit, commit_a_upside, alta_proyecto, baja_proyecto]
+          description: |
+            Se nombra por la dirección del **commit**: si sube, la plata se
+            confirmó; si baja, se desconfirmó. En el 99% de los casos el upside
+            se mueve en espejo exacto, pero no hay que asumirlo: pueden cambiar
+            los dos si el negocio ajusta el monto total del mes.
+        campo:
+          type: string
+          nullable: true
+          description: Mes afectado. `null` en `alta_proyecto`.
+          example: julio
+        valor_anterior: { type: number, description: Commit antes }
+        valor_nuevo:    { type: number, description: Commit después }
+        delta:          { type: number, description: "`valor_nuevo - valor_anterior`" }
+        upside_anterior: { type: number, nullable: true }
+        upside_nuevo:    { type: number, nullable: true }
