@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Manejo del stack de Cloud Forecast: Postgres + API/dashboard + n8n + nginx.
+# Todo vive en el mismo docker-compose.yml, un solo comando.
 #
-#   ./forecast.sh up       levanta todo (postgres, api, n8n, nginx)
+#   ./forecast.sh up       levanta postgres, api, n8n, nginx
+#   ./forecast.sh public   lo mismo + ngrok (tunel publico para n8n)
 #   ./forecast.sh seed     carga los JSON del PoC a Postgres
 #   ./forecast.sh rebuild  reconstruye la imagen de la API y recrea el contenedor
 #   ./forecast.sh logs     sigue los logs de la API
@@ -24,6 +26,18 @@ case "${1:-up}" in
     echo "           http://localhost:${N8N_PORT:-5678}/  (directo, sin nginx)"
     ;;
 
+  public)
+    podman-compose --profile public up -d
+    echo
+    echo "Dashboard -> http://localhost:${API_PORT:-3000}/"
+    echo "n8n       -> http://localhost:${N8N_NGINX_PORT:-8080}/  (local)"
+    if [ -n "${NGROK_DOMAIN:-}" ]; then
+      echo "n8n       -> https://${NGROK_DOMAIN}/  (publico, ngrok)"
+    else
+      echo "n8n (publico) -> revisa la URL asignada en http://localhost:4040/"
+    fi
+    ;;
+
   rebuild)
     podman-compose build api
     # `podman-compose up --build` reusa el contenedor viejo aunque la imagen
@@ -41,7 +55,8 @@ case "${1:-up}" in
 
   logs)    podman-compose logs -f api ;;
   psql)    podman exec -it forecast-postgres psql -U "${POSTGRES_USER:-forecast}" -d "${POSTGRES_DB:-forecast}" ;;
-  down)    podman-compose down ;;
-  destroy) podman-compose down -v ;;   # borra tambien el historico
-  *)       echo "uso: $0 {up|rebuild|seed|logs|psql|down|destroy}" >&2; exit 1 ;;
+  # --profile public para que tambien apague/borre ngrok si estaba arriba.
+  down)    podman-compose --profile public down ;;
+  destroy) podman-compose --profile public down -v ;;   # borra tambien el historico
+  *)       echo "uso: $0 {up|public|rebuild|seed|logs|psql|down|destroy}" >&2; exit 1 ;;
 esac

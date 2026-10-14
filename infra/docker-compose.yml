@@ -46,9 +46,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # n8n: mismo contenedor/datos que ya corre hoy fuera de este compose (ver
-  # infra/setup.sh, legacy). Se declara aqui para que un `forecast.sh up` en
-  # una maquina nueva lo levante tambien, sin ngrok y sin la red de LiteLLM.
+  # n8n: mismo contenedor/datos que usabas antes con un `podman run` suelto.
   # El volumen "n8n-data" NO es external: si ya existe (tu maquina) lo
   # reutiliza tal cual -mismos workflows y credenciales-; si no existe
   # (la maquina de un companero) lo crea vacio. No pisa nada.
@@ -59,9 +57,11 @@ services:
       N8N_HOST: ${N8N_HOST:-localhost}
       N8N_PORT: 5678
       N8N_PROTOCOL: http
-      # Apuntan al puerto de nginx (abajo), que es la puerta de entrada.
-      N8N_EDITOR_BASE_URL: http://${N8N_HOST:-localhost}:${N8N_NGINX_PORT:-8080}/
-      WEBHOOK_URL: http://${N8N_HOST:-localhost}:${N8N_NGINX_PORT:-8080}/
+      # URL publica de n8n. Por defecto, nginx local. Si levantas el perfil
+      # "public" (ngrok), pon aqui la URL de ngrok (dominio fijo) para que
+      # los webhooks de Drive/OAuth se registren contra esa URL.
+      N8N_EDITOR_BASE_URL: ${N8N_PUBLIC_URL:-http://${N8N_HOST:-localhost}:${N8N_NGINX_PORT:-8080}/}
+      WEBHOOK_URL: ${N8N_PUBLIC_URL:-http://${N8N_HOST:-localhost}:${N8N_NGINX_PORT:-8080}/}
       N8N_PUSH_BACKEND: websocket
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Mexico_City}
       N8N_LOG_LEVEL: info
@@ -78,10 +78,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # Nginx delante de n8n. No reemplaza a ngrok (eso sigue siendo lo unico que
-  # expone n8n a internet para los webhooks de Drive/OAuth, ver setup.sh):
-  # esto es solo una puerta de entrada local/LAN estable, lista para sumarle
-  # despues TLS o basic auth sin tocar el contenedor de n8n.
+  # Nginx delante de n8n: puerta de entrada local/LAN estable.
   nginx:
     image: docker.io/library/nginx:alpine
     container_name: forecast-nginx
@@ -89,6 +86,30 @@ services:
       - ./nginx/n8n.conf:/etc/nginx/conf.d/default.conf:ro,z
     ports:
       - "${N8N_NGINX_PORT:-8080}:80"
+    depends_on:
+      - n8n
+    restart: unless-stopped
+
+  # Tunel publico para n8n (webhooks de Drive/OAuth). Opcional: solo se
+  # levanta con `./forecast.sh public` (perfil "public"), para no exigirle
+  # un token de ngrok a quien solo quiere correr el stack en local.
+  ngrok:
+    image: docker.io/ngrok/ngrok:latest
+    container_name: forecast-ngrok
+    profiles: ["public"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?Falta NGROK_AUTHTOKEN en infra/.env (ver .env.example)}
+      NGROK_DOMAIN: ${NGROK_DOMAIN:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -n "$$NGROK_DOMAIN" ]; then
+          exec ngrok http n8n:5678 --domain="$$NGROK_DOMAIN"
+        else
+          exec ngrok http n8n:5678
+        fi
+    ports:
+      - "4040:4040"   # UI de ngrok: ahi se ve la URL publica si no fijaste NGROK_DOMAIN
     depends_on:
       - n8n
     restart: unless-stopped

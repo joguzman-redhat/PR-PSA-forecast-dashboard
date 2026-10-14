@@ -1,42 +1,49 @@
 # Stack de Cloud Forecast
 
-Un `docker-compose.yml`, un comando. Levanta 4 contenedores:
+Un `docker-compose.yml`, un comando. Levanta 4 contenedores (5 si pides
+exposición pública):
 
 | Contenedor | Qué hace |
 |---|---|
 | `forecast-postgres` | El dato. Única fuente de verdad del revenue. |
 | `forecast-api` | Sirve el dashboard y los endpoints (mismo origen). |
-| `forecast-n8n` | El mismo n8n que ya usabas fuera del compose (`setup.sh`, legacy) — mismo volumen `n8n-data`, mismos workflows y credenciales. Ya hace el ETL completo (Drive → Postgres), ver `n8n/n8n_nola_completo.json`. |
-| `forecast-nginx` | Puerta de entrada delante de n8n. |
+| `forecast-n8n` | Mismo volumen `n8n-data` que ya usabas con el n8n suelto — mismos workflows y credenciales. Ya hace el ETL completo (Drive → Postgres), ver `n8n/n8n_nola_completo.json`. |
+| `forecast-nginx` | Puerta de entrada delante de n8n (local/LAN). |
+| `forecast-ngrok` | *Opcional* (perfil `public`): túnel público a n8n, para webhooks de Drive/OAuth. |
 
 ## Arrancar
 
 ```bash
-./forecast.sh up
+./forecast.sh up        # postgres + api + n8n + nginx
+./forecast.sh public    # lo mismo + ngrok
 ```
 
 - Dashboard: <http://localhost:3000/>
 - n8n: <http://localhost:8080/> (vía nginx) o <http://localhost:5678/> (directo)
+- n8n público (solo con `public`): la URL que fijes en `NGROK_DOMAIN`, o la
+  que ngrok asigne al azar — se ve en <http://localhost:4040/>.
 
-**Si ya tenías n8n corriendo manual (`setup.sh`):** mismo nombre de puerto
-(5678), así que corre uno u otro, no los dos (`podman stop n8n` antes de
-`up`). Comparten el volumen `n8n-data`, no se pierde nada al cambiar.
+`public` necesita `NGROK_AUTHTOKEN` en `.env` (copia `.env.example`;
+conseguilo en <https://dashboard.ngrok.com/get-started/your-authtoken>).
+`NGROK_DOMAIN` es opcional (un dominio fijo gratis por cuenta en
+<https://dashboard.ngrok.com/domains>) — sin él, la URL pública cambia cada
+vez que se reinicia el contenedor.
+
+**Si ya tenías n8n corriendo suelto (`podman run`, fuera de este compose):**
+mismo puerto (5678), así que corre uno u otro (`podman stop n8n` antes de
+`up`/`public`). Comparten el volumen `n8n-data`, no se pierde nada al cambiar.
 
 **Máquina nueva (sin el volumen `n8n-data`):** se crea vacío solo; hay que
 crear el usuario admin en n8n, cargar los flujos a mano, y crear ahí la
 credencial Postgres (host `postgres`, puerto `5432`, mismas credenciales de
 `.env` — n8n y Postgres ya están en la misma red del compose).
 
-**`infra/setup.sh`** (n8n + ngrok, para exponer n8n a internet — webhooks de
-Drive) necesita `NGROK_AUTHTOKEN` en `infra/.env` (copia `.env.example`;
-consíguelo en <https://dashboard.ngrok.com/get-started/your-authtoken>). No
-hace falta para `./forecast.sh up`.
-
 ## Comandos
 
 | Comando | Qué hace |
 |---|---|
-| `up` | Levanta el stack completo |
+| `up` | Levanta postgres + api + n8n + nginx |
+| `public` | Lo mismo + ngrok (perfil `public`) |
 | `seed` | Carga datos a Postgres e invalida caché — ver aviso abajo |
 | `rebuild` | Reconstruye la imagen de la API y recrea el contenedor |
 | `logs` / `psql` | Logs de la API / consola SQL |

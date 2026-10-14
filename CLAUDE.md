@@ -17,7 +17,8 @@ dato — no es solo el ETL.
 ## Comandos
 
 ```bash
-cd infra && ./forecast.sh up      # postgres + api + n8n + nginx
+cd infra && ./forecast.sh up       # postgres + api + n8n + nginx
+cd infra && ./forecast.sh public   # lo mismo + ngrok (tunel publico para n8n)
 ```
 
 Detalle de comandos, puertos, credenciales y contrato de la API:
