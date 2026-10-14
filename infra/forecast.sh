@@ -34,7 +34,22 @@ case "${1:-up}" in
     if [ -n "${NGROK_DOMAIN:-}" ]; then
       echo "n8n       -> https://${NGROK_DOMAIN}/  (publico, ngrok)"
     else
-      echo "n8n (publico) -> revisa la URL asignada en http://localhost:4040/"
+      echo "n8n (publico) -> esperando URL de ngrok..."
+      # La API web de ngrok dentro del contenedor solo escucha en loopback
+      # interno (no hay como mapearla al host), asi que la URL se lee del
+      # log de arranque en vez de pegarle a :4040.
+      NGROK_URL=""
+      for i in $(seq 1 15); do
+        NGROK_URL=$(podman logs forecast-ngrok 2>&1 | grep '"started tunnel"' | tail -1 \
+          | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['url'])" 2>/dev/null || true)
+        [ -n "${NGROK_URL}" ] && break
+        sleep 1
+      done
+      if [ -n "${NGROK_URL}" ]; then
+        echo "n8n (publico) -> ${NGROK_URL}/"
+      else
+        echo -e "\rn8n (publico) -> no respondio a tiempo, revisa: podman logs forecast-ngrok"
+      fi
     fi
     ;;
 

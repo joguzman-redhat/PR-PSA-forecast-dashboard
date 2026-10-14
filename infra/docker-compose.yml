@@ -101,15 +101,17 @@ services:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?Falta NGROK_AUTHTOKEN en infra/.env (ver .env.example)}
       NGROK_DOMAIN: ${NGROK_DOMAIN:-}
     entrypoint: ["/bin/sh", "-c"]
+    # --log=stdout: la API web de ngrok dentro del contenedor solo escucha en
+    # 127.0.0.1 (no hay flag para cambiarlo en ngrok v3), asi que el mapeo de
+    # puerto 4040 del host no sirve de nada. La URL publica sale en el log de
+    # arranque ("started tunnel"); forecast.sh la lee de ahi con `podman logs`.
     command:
       - |
         if [ -n "$$NGROK_DOMAIN" ]; then
-          exec ngrok http n8n:5678 --domain="$$NGROK_DOMAIN"
+          exec ngrok http n8n:5678 --domain="$$NGROK_DOMAIN" --log=stdout --log-format=json
         else
-          exec ngrok http n8n:5678
+          exec ngrok http n8n:5678 --log=stdout --log-format=json
         fi
-    ports:
-      - "4040:4040"   # UI de ngrok: ahi se ve la URL publica si no fijaste NGROK_DOMAIN
     depends_on:
       - n8n
     restart: unless-stopped

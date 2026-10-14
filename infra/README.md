@@ -20,8 +20,9 @@ exposición pública):
 
 - Dashboard: <http://localhost:3000/>
 - n8n: <http://localhost:8080/> (vía nginx) o <http://localhost:5678/> (directo)
-- n8n público (solo con `public`): la URL que fijes en `NGROK_DOMAIN`, o la
-  que ngrok asigne al azar — se ve en <http://localhost:4040/>.
+- n8n público (solo con `public`): `./forecast.sh public` la imprime en la
+  terminal — fija (`NGROK_DOMAIN`) o la que ngrok asignó al azar (leída de
+  `podman logs forecast-ngrok` si hace falta revisarla despues).
 
 `public` necesita `NGROK_AUTHTOKEN` en `.env` (copia `.env.example`;
 conseguilo en <https://dashboard.ngrok.com/get-started/your-authtoken>).
