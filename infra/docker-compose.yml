@@ -2,6 +2,9 @@ services:
   postgres:
     image: docker.io/library/postgres:16-alpine
     container_name: forecast-postgres
+    # -c timezone=...: fuerza la zona horaria de las sesiones (afecta now(),
+    # los DEFAULT now() de las tablas, etc). No requiere recrear el volumen.
+    command: ["postgres", "-c", "timezone=America/Bogota"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-forecast}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forecast}
