@@ -5,6 +5,7 @@
 #   ./forecast.sh up       levanta postgres, api, n8n, nginx
 #   ./forecast.sh public   lo mismo + ngrok (tunel publico para n8n)
 #   ./forecast.sh seed     carga los JSON del PoC a Postgres
+#   ./forecast.sh clean    borra todos los registros (schema y volumen intactos)
 #   ./forecast.sh rebuild  reconstruye la imagen de la API y recrea el contenedor
 #   ./forecast.sh logs     sigue los logs de la API
 #   ./forecast.sh psql     abre una consola SQL
@@ -68,10 +69,19 @@ case "${1:-up}" in
       && echo "cache de historia invalidada"
     ;;
 
+  clean)
+    # Borra todos los registros pero mantiene el schema y el volumen.
+    podman exec forecast-postgres psql -U "${POSTGRES_USER:-forecast}" -d "${POSTGRES_DB:-forecast}" \
+      -c "TRUNCATE movimiento, revenue_anual, revenue_mes, proyecto, carga CASCADE;"
+    echo "✓ Registros eliminados (schema y volumen intactos)"
+    curl -fsS -X POST "http://localhost:${API_PORT:-3000}/api/reload" >/dev/null 2>&1 || true
+    echo "✓ Cache de historia invalidada"
+    ;;
+
   logs)    podman-compose logs -f api ;;
   psql)    podman exec -it forecast-postgres psql -U "${POSTGRES_USER:-forecast}" -d "${POSTGRES_DB:-forecast}" ;;
   # --profile public para que tambien apague/borre ngrok si estaba arriba.
   down)    podman-compose --profile public down ;;
   destroy) podman-compose --profile public down -v ;;   # borra tambien el historico
-  *)       echo "uso: $0 {up|public|rebuild|seed|logs|psql|down|destroy}" >&2; exit 1 ;;
+  *)       echo "uso: $0 {up|public|rebuild|seed|logs|psql|down|destroy|clean}" >&2; exit 1 ;;
 esac
