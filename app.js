@@ -214,6 +214,59 @@ function revenuePeriodo(proyecto) {
   }, 0);
 }
 
+/** Upside de un proyecto en el periodo elegido. Hermano de revenuePeriodo. */
+function upsidePeriodo(proyecto) {
+  const fila = backlogDe(proyecto);
+  if (!fila) return null;
+  return mesesActivos().reduce((acc, i) => {
+    const v = fila[MESES_ES[i] + '_upside'];
+    return acc + (typeof v === 'number' ? v : 0);
+  }, 0);
+}
+
+/**
+ * Backlog vs Revenue, mes a mes, del estado actual (no de los snapshots
+ * históricos). El Backlog no es un dato aparte: en cada mes es lo que queda
+ * por ejecutar del contrato, así que se recalcula en cada punto como
+ * Valor OF − Acum 2025 − Commit acumulado hasta ese mes. En diciembre da
+ * exactamente el Backlog que ya está guardado en BackLog NOLA, porque es la
+ * misma cuenta (Valor OF − Acum 2025 − Q1..Q4).
+ *
+ * El Valor OF de BackLog NOLA (`fila.valor_of`) llega null en null en las 291
+ * filas de la carga actual — el ETL de n8n no lo está escribiendo todavía.
+ * Se reconstruye con los dos números que sí llegan siempre y que son,
+ * literalmente, cómo se calculó el Backlog en origen: Valor OF = Backlog +
+ * Total Ejecutado Acumulado (Total Ejecutado = Acum 2025 + Q1..Q4).
+ * Verificado contra las 278 filas con dato completo: coincide exacto.
+ */
+function serieBacklogRevenuePorMes(proyectos) {
+  let valorOf = 0;
+  let acum2025 = 0;
+  const commitPorMes = new Array(12).fill(0);
+  proyectos.forEach(p => {
+    const fila = backlogDe(p);
+    if (!fila) return;
+    const backlogFinal = typeof fila.backlog === 'number' ? fila.backlog : 0;
+    const totalEjecutado = typeof fila.total_ejecutado_acumulado === 'number'
+      ? fila.total_ejecutado_acumulado : 0;
+    valorOf += typeof fila.valor_of === 'number' ? fila.valor_of : backlogFinal + totalEjecutado;
+    acum2025 += typeof fila.acum_2025 === 'number' ? fila.acum_2025 : 0;
+    MESES_ES.forEach((m, i) => {
+      const v = fila[m + '_fijo'];
+      commitPorMes[i] += typeof v === 'number' ? v : 0;
+    });
+  });
+
+  const datos = {};
+  let acumulado = 0;
+  MESES_ES.forEach((m, i) => {
+    acumulado += commitPorMes[i];
+    const etiqueta = m.charAt(0).toUpperCase() + m.slice(1);
+    datos[etiqueta] = { Commit: acumulado, Backlog: valorOf - acum2025 - acumulado };
+  });
+  return datos;
+}
+
 function calcularKPIs() {
   const proyectos = estado.proyectosFiltrados;
   const suma = campo => proyectos.reduce(
@@ -1799,6 +1852,28 @@ function renderizarTrazabilidadProyecto(contenedor, proyecto) {
   h4.textContent = `Trazabilidad de Revenue · ${periodoActual().etiqueta}`;
   div.appendChild(h4);
 
+  // --- Backlog vs. Revenue, mes a mes del año actual. Va antes del resto a
+  // propósito: solo necesita el estado actual (BackLog NOLA), no el
+  // histórico de snapshots, así que se ve aunque el proyecto no tenga
+  // histórico todavía.
+  if (backlogDe(proyecto)) {
+    const divBVR = document.createElement('div');
+    divBVR.className = 'detalle-revenue';
+    const h4bvr = document.createElement('h4');
+    h4bvr.textContent = 'Backlog vs. Revenue · mes a mes';
+    divBVR.appendChild(h4bvr);
+    const notaBVR = document.createElement('p');
+    notaBVR.className = 'nota-grafica';
+    notaBVR.textContent = 'El Commit es acumulado (enero, enero+febrero, …) y el Backlog es ' +
+      'lo que queda de Valor OF en ese punto del año: Valor OF − Acum 2025 − Commit acumulado.';
+    divBVR.appendChild(notaBVR);
+    const svgBVR = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgBVR.setAttribute('class', 'grafica-svg');
+    divBVR.appendChild(svgBVR);
+    crearGraficaLinea(svgBVR, serieBacklogRevenuePorMes([proyecto]));
+    div.appendChild(divBVR);
+  }
+
   if (!serie || serie.length < 2) {
     const p = document.createElement('p');
     p.className = 'aviso-sin-datos';
@@ -1813,7 +1888,7 @@ function renderizarTrazabilidadProyecto(contenedor, proyecto) {
     return s ? s.etiqueta : id;
   };
 
-  // --- 1. evolución del total ---
+  // --- 1. evolución del total (el movimiento: Commit vs Upside) ---
   const evolucion = {};
   serie.forEach(s => {
     const t = sumarMeses(s.meses);          // solo los meses del periodo
@@ -2051,6 +2126,31 @@ function renderizarTrazabilidad() {
   });
   crearGraficaLinea(document.getElementById('grafica-quarterly'), serieDesglose);
 
+  // --- gráfica 3: Backlog vs Revenue, global o de un PM ---
+  const selectorBVR = document.getElementById('selector-backlog-vs-revenue');
+  if (selectorBVR && !selectorBVR.children.length) {
+    const lbl = document.createElement('label');
+    lbl.textContent = 'Ver: ';
+    lbl.className = 'comparador-texto';
+    const sel = document.createElement('select');
+    sel.id = 'select-pm-backlog-revenue';
+    const optTodos = document.createElement('option');
+    optTodos.value = '';
+    optTodos.textContent = 'Todos los proyectos (global)';
+    sel.appendChild(optTodos);
+    [...new Set(estado.proyectos.map(p => p.pm_lider).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'es'))
+      .forEach(pm => {
+        const o = document.createElement('option');
+        o.value = pm;
+        o.textContent = pm;
+        sel.appendChild(o);
+      });
+    sel.addEventListener('change', renderizarTrazabilidad);
+    selectorBVR.append(lbl, sel);
+  }
+  renderizarGraficaBacklogVsRevenue();
+
   const tituloDesglose = document.getElementById('titulo-desglose');
   if (tituloDesglose) {
     tituloDesglose.textContent = periodo.id === 'anio'
@@ -2103,7 +2203,7 @@ function renderizarTrazabilidad() {
     [...new Set(estado.historia.eventos.map(e => e.tipo))].forEach(tipo => {
       const opt = document.createElement('option');
       opt.value = tipo || '';
-      opt.textContent = (tipo || 'sin tipo').replace(/_/g, ' ');
+      opt.textContent = (TIPO_MOVIMIENTO[tipo] || { texto: tipo || 'sin tipo' }).texto;
       filtroTipoEvento.appendChild(opt);
     });
     filtroTipoEvento.addEventListener('change', actualizarTablaEventos);
@@ -2111,7 +2211,46 @@ function renderizarTrazabilidad() {
       .addEventListener('input', actualizarTablaEventos);
     document.getElementById('limitar-por-proyecto')
       .addEventListener('change', actualizarTablaEventos);
+    document.querySelectorAll('#tabla-eventos-cambio thead th[data-columna]').forEach(th => {
+      th.addEventListener('click', () => ordenarTablaEventos(th.dataset.columna));
+      th.style.cursor = 'pointer';
+    });
   }
+  actualizarTablaEventos();
+}
+
+/**
+ * Backlog vs Revenue, mes a mes del año actual (no por snapshot/movimiento:
+ * eso ya lo muestran las otras gráficas de esta pestaña). Global por
+ * defecto; si se elige un PM, solo entre sus proyectos. Ver
+ * serieBacklogRevenuePorMes() para la cuenta exacta.
+ */
+function renderizarGraficaBacklogVsRevenue() {
+  const svg = document.getElementById('grafica-backlog-vs-revenue');
+  if (!svg) return;
+  const sel = document.getElementById('select-pm-backlog-revenue');
+  const pmElegido = sel ? sel.value : '';
+
+  const proyectos = pmElegido
+    ? estado.proyectos.filter(p => p.pm_lider === pmElegido)
+    : estado.proyectos;
+  crearGraficaLinea(svg, serieBacklogRevenuePorMes(proyectos));
+
+  const titulo = document.getElementById('titulo-backlog-vs-revenue');
+  if (titulo) {
+    titulo.textContent = pmElegido
+      ? `Backlog vs. Revenue · ${pmElegido}`
+      : 'Backlog vs. Revenue · todo el portafolio';
+  }
+}
+
+/** Clic en una columna de "Movimientos registrados" ordena por ella; un
+ * segundo clic en la misma invierte el orden. Por defecto se ordena por el
+ * delta más grande, que es como se leía antes de que esto existiera. */
+function ordenarTablaEventos(columna) {
+  const orden = estado.ordenEventos || {};
+  const desc = orden.columna === columna ? !orden.desc : true;
+  estado.ordenEventos = { columna, desc };
   actualizarTablaEventos();
 }
 
@@ -2172,20 +2311,20 @@ function calcularCambios() {
   const porProyecto = new Map(estado.proyectos.map(p => [claveProyecto(p), p]));
   const mesesOk = new Set(mesesActivos().map(i => MESES_ES[i]));
 
-  // Eventos del rango, agrupados por proyecto y por dirección.
+  // Eventos del rango, agrupados por proyecto. Commit y Upside se tratan
+  // independientes: la magnitud real de cada uno sale de dFijo/dUpside (la
+  // resta entre snapshots), no de sumar montos de eventos por "dirección".
   const porPA = new Map();
   hist.eventos.forEach(e => {
     if (e.campo && !mesesOk.has(e.campo)) return;
     const i = snaps.findIndex(s => s.id === e.snapshot_id);
     if (i <= iA || i > iB) return;
     const k = String(e.num_pa);
-    if (!porPA.has(k)) porPA.set(k, { n: 0, aCommit: 0, aUpside: 0, nuevo: false, lista: [] });
+    if (!porPA.has(k)) porPA.set(k, { n: 0, nuevo: false, lista: [] });
     const acc = porPA.get(k);
     acc.n += 1;
     acc.lista.push({ ev: e, snapshot: snaps[i] });
-    if (e.tipo === 'upside_a_commit') acc.aCommit += Math.abs(e.delta || 0);
-    else if (e.tipo === 'commit_a_upside') acc.aUpside += Math.abs(e.delta || 0);
-    else if (e.tipo === 'alta_proyecto') acc.nuevo = true;
+    if (e.tipo === 'alta_proyecto') acc.nuevo = true;
   });
 
   const filas = [];
@@ -2196,7 +2335,7 @@ function calcularCambios() {
     const proy = porProyecto.get(pa);
     const sa = a ? sumarMeses(a.meses) : { fijo: 0, upside: 0 };
     const sb = sumarMeses(b.meses);
-    const ev = porPA.get(pa) || { n: 0, aCommit: 0, aUpside: 0, nuevo: false, lista: [] };
+    const ev = porPA.get(pa) || { n: 0, nuevo: false, lista: [] };
     const dFijo = sb.fijo - sa.fijo;
     filas.push({
       pa,
@@ -2206,7 +2345,6 @@ function calcularCambios() {
       fijoA: sa.fijo, fijoB: sb.fijo,
       dFijo, dUpside: sb.upside - sa.upside,
       nuevo: !a || ev.nuevo,
-      aCommit: ev.aCommit, aUpside: ev.aUpside,
       eventos: ev.n,
       lista: ev.lista,
       cambio: Math.abs(dFijo) >= MINIMO_CAMBIO || ev.n > 0,
@@ -2217,20 +2355,35 @@ function calcularCambios() {
   return { filas, iA, iB, snaps };
 }
 
+// Commit y Upside son dos datos independientes: un proyecto puede subir en
+// los dos, bajar en los dos, o moverse distinto en cada uno. No se asume que
+// lo que baja de un lado "se fue" al otro.
 function direccionDe(f) {
   if (f.nuevo) return { texto: 'Entró al backlog', clase: 'mov-nuevo' };
-  if (f.aCommit > 0 && f.aUpside > 0) return { texto: 'Movimiento mixto', clase: 'mov-mixto' };
-  if (f.aCommit > 0) return { texto: 'Upside → Commit', clase: 'mov-confirma' };
-  if (f.aUpside > 0) return { texto: 'Commit → Upside', clase: 'mov-desconfirma' };
-  return { texto: 'Sin movimiento', clase: 'mov-nada' };
+  const subeFijo = f.dFijo > MINIMO_CAMBIO;
+  const bajaFijo = f.dFijo < -MINIMO_CAMBIO;
+  const subeUpside = f.dUpside > MINIMO_CAMBIO;
+  const bajaUpside = f.dUpside < -MINIMO_CAMBIO;
+  const partes = [];
+  if (subeFijo) partes.push('Commit subió');
+  if (bajaFijo) partes.push('Commit bajó');
+  if (subeUpside) partes.push('Upside subió');
+  if (bajaUpside) partes.push('Upside bajó');
+  if (!partes.length) return { texto: 'Sin movimiento', clase: 'mov-nada' };
+  const clase = subeFijo && !bajaFijo ? 'mov-confirma'
+    : bajaFijo && !subeFijo ? 'mov-desconfirma'
+    : 'mov-mixto';
+  return { texto: partes.join(' · '), clase };
 }
 
 function renderizarKpisRango(filas, snaps, iA, iB) {
   const cont = document.getElementById('kpis-rango');
   if (!cont) return;
   const movidos = filas.filter(f => f.cambio);
-  const aCommit = filas.reduce((a, f) => a + f.aCommit, 0);
-  const aUpside = filas.reduce((a, f) => a + f.aUpside, 0);
+  // Commit que subió y Commit que bajó se miran por separado: no se asume
+  // que lo uno explica lo otro (ver direccionDe más arriba).
+  const subioCommit = filas.reduce((a, f) => a + (f.dFijo > 0 ? f.dFijo : 0), 0);
+  const bajoCommit = filas.reduce((a, f) => a + (f.dFijo < 0 ? -f.dFijo : 0), 0);
   const neto = filas.reduce((a, f) => a + f.dFijo, 0);
   const nuevos = filas.filter(f => f.nuevo).length;
   const pct = filas.length ? Math.round(movidos.length / filas.length * 100) : 0;
@@ -2312,18 +2465,18 @@ function renderizarKpisRango(filas, snaps, iA, iB) {
 
   tarjeta({
     icono: '↑', tono: 'bueno',
-    valor: formatearDinero(aCommit),
-    etiqueta: 'Upside → Commit',
-    detalle: 'revenue que se confirmó',
+    valor: formatearDinero(subioCommit),
+    etiqueta: 'Commit que subió',
+    detalle: 'suma de los proyectos donde subió',
   });
 
   operador('−');
 
   tarjeta({
     icono: '↓', tono: 'malo',
-    valor: formatearDinero(aUpside),
-    etiqueta: 'Commit → Upside',
-    detalle: 'revenue que se desconfirmó',
+    valor: formatearDinero(bajoCommit),
+    etiqueta: 'Commit que bajó',
+    detalle: 'suma de los proyectos donde bajó',
   });
 
   operador('=');
@@ -2396,10 +2549,14 @@ function capitalizar(t) {
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 }
 
+// Qué campo cambió, no "hacia dónde se movió": commit y upside se tratan
+// como dos datos independientes, no como un cupo que se transfiere entre
+// los dos (un commit que baja no implica que el upside haya subido).
 const TIPO_MOVIMIENTO = {
-  upside_a_commit: { texto: 'Upside → Commit', clase: 'mov-confirma' },
-  commit_a_upside: { texto: 'Commit → Upside', clase: 'mov-desconfirma' },
+  commit: { texto: 'Commit', clase: 'mov-campo-commit' },
+  upside: { texto: 'Upside', clase: 'mov-campo-upside' },
   alta_proyecto: { texto: 'Entró al backlog', clase: 'mov-nuevo' },
+  baja_proyecto: { texto: 'Salió del backlog', clase: 'mov-desconfirma' },
 };
 
 /**
@@ -2424,8 +2581,8 @@ function filaDetalleMovimientos(f) {
   const tabla = document.createElement('table');
   tabla.className = 'detalle-mov-tabla';
   tabla.innerHTML = '<thead><tr>' +
-    '<th>Cuándo</th><th>Mes afectado</th><th>Movimiento</th>' +
-    '<th>Monto</th><th>Commit de ese mes</th></tr></thead>';
+    '<th>Cuándo</th><th>Mes afectado</th><th>Campo</th>' +
+    '<th>Delta</th><th>Antes → Después</th></tr></thead>';
   const tbody = document.createElement('tbody');
 
   const ordenados = [...f.lista].sort(
@@ -2463,24 +2620,32 @@ function filaDetalleMovimientos(f) {
     tbody.appendChild(fila);
   });
 
-  // Fila de total: es lo que cierra el circulo con el delta de la fila de
-  // arriba. Sin ella, los montos abreviados no cuadran a simple vista.
-  const total = ordenados.reduce((acc, x) => acc + (x.ev.delta || 0), 0);
+  // Un total por campo, no uno solo: sumar un delta de Commit con uno de
+  // Upside en la misma cifra mezclaría dos datos independientes.
   const pie = document.createElement('tfoot');
-  const trTotal = document.createElement('tr');
-  const tdEtq = document.createElement('td');
-  tdEtq.colSpan = 3;
-  tdEtq.textContent = `Total de ${ordenados.length} movimiento${ordenados.length === 1 ? '' : 's'}`;
-  trTotal.appendChild(tdEtq);
-  const tdTot = document.createElement('td');
-  tdTot.className = 'celda-numero ' + (total >= 0 ? 'delta-positivo' : 'delta-negativo');
-  tdTot.textContent = (total >= 0 ? '+' : '−') + formatearDineroExacto(Math.abs(total));
-  trTotal.appendChild(tdTot);
-  const tdNota = document.createElement('td');
-  tdNota.className = 'detalle-mov-nota';
-  tdNota.textContent = `arriba se abrevia como ${(total >= 0 ? '+' : '−') + formatearDinero(Math.abs(total))}`;
-  trTotal.appendChild(tdNota);
-  pie.appendChild(trTotal);
+  const porTipo = new Map();
+  ordenados.forEach(({ ev }) => {
+    if (!porTipo.has(ev.tipo)) porTipo.set(ev.tipo, []);
+    porTipo.get(ev.tipo).push(ev);
+  });
+  porTipo.forEach((evs, tipo) => {
+    const total = evs.reduce((acc, ev) => acc + (ev.delta || 0), 0);
+    const etiquetaTipo = (TIPO_MOVIMIENTO[tipo] || { texto: tipo }).texto;
+    const trTotal = document.createElement('tr');
+    const tdEtq = document.createElement('td');
+    tdEtq.colSpan = 3;
+    tdEtq.textContent = `Total ${etiquetaTipo} · ${evs.length} movimiento${evs.length === 1 ? '' : 's'}`;
+    trTotal.appendChild(tdEtq);
+    const tdTot = document.createElement('td');
+    tdTot.className = 'celda-numero ' + (total >= 0 ? 'delta-positivo' : 'delta-negativo');
+    tdTot.textContent = (total >= 0 ? '+' : '−') + formatearDineroExacto(Math.abs(total));
+    trTotal.appendChild(tdTot);
+    const tdNota = document.createElement('td');
+    tdNota.className = 'detalle-mov-nota';
+    tdNota.textContent = `abreviado: ${(total >= 0 ? '+' : '−') + formatearDinero(Math.abs(total))}`;
+    trTotal.appendChild(tdNota);
+    pie.appendChild(trTotal);
+  });
 
   tabla.appendChild(tbody);
   tabla.appendChild(pie);
@@ -2614,7 +2779,30 @@ function actualizarTablaEventos() {
     return (nombre + ' ' + e.num_pa).toLowerCase().includes(busca);
   });
 
-  eventos = eventos.slice().sort((a, b) => Math.abs(b.delta || 0) - Math.abs(a.delta || 0));
+  const ordenEv = estado.ordenEventos;
+  if (ordenEv && ordenEv.columna) {
+    const leer = (e) => {
+      if (ordenEv.columna === 'nombre') return nombreDe.get(String(e.num_pa)) || e.nombre || '';
+      if (ordenEv.columna === 'tipo') return (TIPO_MOVIMIENTO[e.tipo] || { texto: e.tipo || '' }).texto;
+      const v = e[ordenEv.columna];
+      return v === null || v === undefined ? '' : v;
+    };
+    eventos = eventos.slice().sort((a, b) => {
+      const va = leer(a), vb = leer(b);
+      const cmp = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb : String(va).localeCompare(String(vb));
+      return ordenEv.desc ? -cmp : cmp;
+    });
+  } else {
+    eventos = eventos.slice().sort((a, b) => Math.abs(b.delta || 0) - Math.abs(a.delta || 0));
+  }
+
+  document.querySelectorAll('#tabla-eventos-cambio thead th[data-columna]').forEach(th => {
+    const activa = ordenEv && ordenEv.columna === th.dataset.columna;
+    th.classList.toggle('col-ordenada', !!activa);
+    const base = th.textContent.replace(/\s*[↑↓]\s*$/, '');
+    th.textContent = base + (activa ? (ordenEv.desc ? '  ↓' : '  ↑') : '');
+  });
 
   // Sin este tope, el proyecto más grande del portafolio se queda con todas
   // las filas y la tabla deja de ser una vista global.
@@ -2642,7 +2830,8 @@ function actualizarTablaEventos() {
     const d = ev.delta || 0;
     const signo = Math.abs(d) < 0.5 ? '—' : (d > 0 ? '+' : '−') + formatearDinero(Math.abs(d));
 
-    [[fecha, ''], [nombre, 'celda-nombre'], [(ev.tipo || '').replace(/_/g, ' '), ''],
+    [[fecha, ''], [nombre, 'celda-nombre'],
+      [(TIPO_MOVIMIENTO[ev.tipo] || { texto: ev.tipo || '' }).texto, ''],
       [ev.campo ? ev.campo.charAt(0).toUpperCase() + ev.campo.slice(1) : '—', ''],
       [formatearDinero(ev.valor_anterior), 'celda-numero'],
       [formatearDinero(ev.valor_nuevo), 'celda-numero'],
@@ -2667,6 +2856,212 @@ function actualizarTablaEventos() {
   }
   pie.textContent = `Mostrando ${mostrados.length} de ${eventos.length} movimientos ` +
     `de ${distintos} proyectos distintos · revenue de ${periodoActual().etiqueta}.`;
+}
+
+// ============================================================================
+// PMs
+// ============================================================================
+
+/**
+ * Backlog por PM, igual a la tabla de negocio: se parte por estado (In
+ * Progress / On Hold / Planned) porque esos 3 son los que de verdad tienen
+ * backlog pendiente. Completed y Canceled no suman aquí (si suman $0, no
+ * aportan nada a la vista y solo le agregan columnas vacías).
+ * Commit, Upside y Total Ejecutado sí cuentan TODOS los proyectos activos
+ * del PM: ahí no se trata de backlog pendiente sino de cuánto ha movido.
+ */
+const CLAVE_ESTADO_PM = { 'In Progress': 'inProgreso', 'On Hold': 'onHold', 'Planned': 'planned' };
+
+function calcularPMs() {
+  const porPM = new Map();
+  estado.proyectos.forEach(p => {
+    if (!estado.incluirCancelados && p.estado === 'Canceled') return;
+    const pm = p.pm_lider || SIN_DATO;
+    if (!porPM.has(pm)) {
+      porPM.set(pm, {
+        pm,
+        inProgresoN: 0, inProgresoBacklog: 0,
+        onHoldN: 0, onHoldBacklog: 0,
+        plannedN: 0, plannedBacklog: 0,
+        totalN: 0, totalBacklog: 0,
+        commit: 0, upside: 0, totalEjecutado: 0,
+        proyectos: [],
+      });
+    }
+    const acc = porPM.get(pm);
+    acc.proyectos.push(p);
+    acc.commit += revenuePeriodo(p) || 0;
+    acc.upside += upsidePeriodo(p) || 0;
+
+    const fila = backlogDe(p);
+    acc.totalEjecutado += (fila && typeof fila.total_ejecutado_acumulado === 'number')
+      ? fila.total_ejecutado_acumulado : 0;
+
+    const estadoBacklog = (fila && fila.estado) || p.estado;
+    const clave = CLAVE_ESTADO_PM[estadoBacklog];
+    if (clave) {
+      const backlogValor = fila && typeof fila.backlog === 'number' ? fila.backlog : 0;
+      acc[clave + 'N'] += 1;
+      acc[clave + 'Backlog'] += backlogValor;
+      acc.totalN += 1;
+      acc.totalBacklog += backlogValor;
+    }
+  });
+
+  const nMeses = mesesActivos().length || 1;
+  return [...porPM.values()].map(f => ({
+    ...f,
+    nProyectos: f.proyectos.length,
+    promedioMensual: f.commit / nMeses,
+    promedioProyecto: f.proyectos.length ? f.commit / f.proyectos.length : 0,
+  }));
+}
+
+const COLUMNAS_PM_DINERO = new Set([
+  'inProgresoBacklog', 'onHoldBacklog', 'plannedBacklog', 'totalBacklog',
+  'commit', 'upside', 'totalEjecutado', 'promedioMensual', 'promedioProyecto',
+]);
+
+function ordenarTablaPMs(columna) {
+  const orden = estado.ordenPMs || {};
+  const desc = orden.columna === columna ? !orden.desc : true;
+  estado.ordenPMs = { columna, desc };
+  renderizarPMs();
+}
+
+/**
+ * Tres gráficas que responden de un vistazo lo que antes solo se veía
+ * ordenando la tabla: quién mueve más plata, quién tiene más backlog
+ * pendiente, y quién carga más proyectos. Cada una ordena su propio top,
+ * sin importar cómo esté ordenada la tabla en ese momento.
+ */
+function renderizarGraficasPMs(filas) {
+  const top = (campo, n, formato) => filas
+    .slice()
+    .sort((a, b) => b[campo] - a[campo])
+    .slice(0, n)
+    .filter(f => f[campo])
+    .map(f => ({
+      etiqueta: f.pm,
+      valor: f[campo],
+      exacto: formato === 'dinero' ? formatearDineroExacto(f[campo]) : formatearNumero(f[campo]),
+    }));
+
+  crearGraficaBarrasSimple('grafica-pm-commit', top('commit', 10, 'dinero'), {
+    formato: 'dinero', unidad: 'Commit',
+  });
+  crearGraficaBarrasSimple('grafica-pm-backlog', top('totalBacklog', 10, 'dinero'), {
+    formato: 'dinero', unidad: 'Backlog total',
+  });
+  crearGraficaBarrasSimple('grafica-pm-proyectos', top('nProyectos', 15, 'conteo'), {
+    formato: 'conteo', unidad: 'Proyectos',
+  });
+}
+
+function renderizarPMs() {
+  const anfitrion = document.getElementById('periodo-pms');
+  if (anfitrion && !anfitrion.children.length) {
+    anfitrion.appendChild(construirSelectorPeriodo(renderizarPMs));
+  }
+
+  const thead = document.querySelector('#tabla-pms thead tr');
+  if (thead && !thead.dataset.wireado) {
+    thead.dataset.wireado = '1';
+    thead.querySelectorAll('th[data-columna]').forEach(th => {
+      th.style.cursor = 'pointer';
+      th.title = `Ordenar por ${th.textContent}`;
+      th.addEventListener('click', () => ordenarTablaPMs(th.dataset.columna));
+    });
+  }
+
+  let filas = calcularPMs();
+
+  renderizarGraficasPMs(filas);
+
+  // Por defecto, el que más Commit tiene primero: es la pregunta más
+  // frecuente ("¿quién tiene más plata?").
+  const orden = estado.ordenPMs || { columna: 'commit', desc: true };
+  filas = filas.slice().sort((a, b) => {
+    const va = a[orden.columna], vb = b[orden.columna];
+    const cmp = typeof va === 'number' && typeof vb === 'number'
+      ? va - vb : String(va || '').localeCompare(String(vb || ''), 'es');
+    return orden.desc ? -cmp : cmp;
+  });
+
+  thead && thead.querySelectorAll('th[data-columna]').forEach(th => {
+    const activa = orden.columna === th.dataset.columna;
+    th.classList.toggle('col-ordenada', activa);
+    const base = th.textContent.replace(/\s*[↑↓]\s*$/, '');
+    th.textContent = base + (activa ? (orden.desc ? '  ↓' : '  ↑') : '');
+  });
+
+  const fmt = (col, v) => (COLUMNAS_PM_DINERO.has(col) ? formatearDinero(v) : formatearNumero(v));
+
+  const tbody = document.querySelector('#tabla-pms tbody');
+  tbody.innerHTML = '';
+  const columnas = ['inProgresoN', 'inProgresoBacklog', 'onHoldN', 'onHoldBacklog',
+    'plannedN', 'plannedBacklog', 'totalN', 'totalBacklog',
+    'commit', 'upside', 'totalEjecutado', 'promedioMensual', 'promedioProyecto'];
+
+  filas.forEach(f => {
+    const tr = document.createElement('tr');
+    tr.className = 'fila-clicable';
+    tr.title = `Ver los proyectos de ${f.pm} en Listado de Proyectos`;
+    tr.addEventListener('click', () => irAProyectosDePM(f.pm));
+
+    const tdPM = document.createElement('td');
+    tdPM.textContent = f.pm;
+    tdPM.className = 'celda-nombre';
+    tr.appendChild(tdPM);
+
+    columnas.forEach(col => {
+      const td = document.createElement('td');
+      td.className = 'celda-numero';
+      const v = f[col];
+      td.textContent = fmt(col, v);
+      if (COLUMNAS_PM_DINERO.has(col)) td.title = formatearDineroExacto(v);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  // Fila de totales, igual a "Total Result" de la tabla de negocio.
+  const tfoot = document.querySelector('#tabla-pms tfoot');
+  tfoot.innerHTML = '';
+  if (filas.length) {
+    const trTotal = document.createElement('tr');
+    const tdEtq = document.createElement('td');
+    tdEtq.textContent = `Total (${filas.length} PM${filas.length === 1 ? '' : 's'})`;
+    tdEtq.className = 'celda-nombre';
+    trTotal.appendChild(tdEtq);
+    const totalProyectos = filas.reduce((a, f) => a + f.nProyectos, 0);
+    const totalCommit = filas.reduce((a, f) => a + f.commit, 0);
+    const nMeses = mesesActivos().length || 1;
+    columnas.forEach(col => {
+      const td = document.createElement('td');
+      td.className = 'celda-numero';
+      let v;
+      if (col === 'promedioMensual') v = totalCommit / nMeses;
+      else if (col === 'promedioProyecto') v = totalProyectos ? totalCommit / totalProyectos : 0;
+      else v = filas.reduce((a, f) => a + (f[col] || 0), 0);
+      td.textContent = fmt(col, v);
+      trTotal.appendChild(td);
+    });
+    tfoot.appendChild(trTotal);
+  }
+}
+
+/** Clic en un PM: filtra Listado de Proyectos a sus proyectos y cambia de
+ * pestaña. Reusa el filtro que ya existe en vez de construir una vista de
+ * proyectos nueva. */
+function irAProyectosDePM(pm) {
+  DIMENSIONES.forEach(d => { estado.filtros[d.campo] = []; });
+  estado.filtros.texto = '';
+  estado.filtros.pm_lider = [pm];
+  const texto = document.getElementById('filtro-texto');
+  if (texto) texto.value = '';
+  aplicarFiltros();
+  cambiarPestana('listado');
 }
 
 // ============================================================================
@@ -2711,6 +3106,8 @@ function cambiarPestana(nombre, omitirHash) {
     renderizarDetalle();
   } else if (nombre === 'trazabilidad') {
     renderizarTrazabilidad();
+  } else if (nombre === 'pms') {
+    renderizarPMs();
   }
 }
 
@@ -2766,7 +3163,7 @@ async function inicializar() {
   if (vista === 'detalle' && pa) {
     const p = estado.proyectos.find(x => String(x.num_pa) === pa);
     if (p) { estado.proyectoSeleccionado = p; cambiarPestana('detalle', true); }
-  } else if (vista === 'trazabilidad' || vista === 'detalle') {
+  } else if (vista === 'trazabilidad' || vista === 'detalle' || vista === 'pms') {
     cambiarPestana(vista, true);
   }
 

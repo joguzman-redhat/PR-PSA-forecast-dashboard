@@ -1611,6 +1611,21 @@ h3 {
 
 .chip-movimiento.mov-nada { color: var(--text-dim); }
 
+/* Qué campo de dinero cambió (no si "mejoró" o "empeoró": eso ya lo dice el
+   signo del delta al lado). Mismos colores que la leyenda Commit/Upside de
+   las gráficas, para que sea el mismo código visual en todo el dashboard. */
+.chip-movimiento.mov-campo-commit {
+  color: var(--series-1);
+  border-color: color-mix(in srgb, var(--series-1) 40%, transparent);
+  background: color-mix(in srgb, var(--series-1) 10%, transparent);
+}
+
+.chip-movimiento.mov-campo-upside {
+  color: var(--series-2);
+  border-color: color-mix(in srgb, var(--series-2) 40%, transparent);
+  background: color-mix(in srgb, var(--series-2) 10%, transparent);
+}
+
 .celda-movimiento { white-space: nowrap; }
 
 /* Los proyectos dibujados en la gráfica se marcan para que se note que

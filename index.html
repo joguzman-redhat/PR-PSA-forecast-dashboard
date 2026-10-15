@@ -55,6 +55,12 @@
             <span class="pf-v6-c-tabs__item-text">Trazabilidad Global</span>
           </button>
         </li>
+        <li class="pf-v6-c-tabs__item" role="presentation">
+          <button class="pf-v6-c-tabs__link pestana-btn" type="button" role="tab"
+                  aria-selected="false" aria-controls="pestana-pms" data-pestana="pms">
+            <span class="pf-v6-c-tabs__item-text">PMs</span>
+          </button>
+        </li>
       </ul>
     </div>
 
@@ -206,6 +212,17 @@
           </div>
         </div>
 
+        <div class="grafica-contenedor ancho-completo pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+          <h3 id="titulo-backlog-vs-revenue" class="pf-v6-c-title pf-m-md">Backlog vs. Revenue · todo el portafolio</h3>
+          <div id="selector-backlog-vs-revenue"></div>
+          <svg id="grafica-backlog-vs-revenue" class="grafica-svg"></svg>
+          <p class="nota-grafica">Mes a mes del año actual (no sigue el selector de periodo de
+            arriba ni es por snapshot): el Commit acumulado sube y el Backlog —lo que queda de
+            Valor OF menos Acum 2025 menos ese Commit acumulado— baja hasta cero.</p>
+          </div>
+        </div>
+
         <h3 class="pf-v6-c-title pf-m-lg">¿Qué cambió entre dos fechas?</h3>
         <div class="selector-snapshot">
           <label for="select-snap-a">Desde</label>
@@ -266,14 +283,79 @@
             <table id="tabla-eventos-cambio" class="tabla-eventos-tabla pf-v6-c-table pf-m-compact">
               <thead>
                 <tr>
-                  <th>Fecha</th><th>Proyecto</th><th>Tipo</th>
-                  <th>Mes</th><th>Anterior</th><th>Nuevo</th><th>Delta</th>
+                  <th data-columna="timestamp">Fecha</th><th data-columna="nombre">Proyecto</th><th data-columna="tipo">Tipo</th>
+                  <th data-columna="campo">Mes</th><th data-columna="valor_anterior">Anterior</th><th data-columna="valor_nuevo">Nuevo</th><th data-columna="delta">Delta</th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
           </div>
         </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PESTAÑA 4: PMs -->
+    <section class="pestana-contenido" id="pestana-pms">
+      <div class="panel-trazabilidad pf-v6-c-card">
+        <div class="pf-v6-c-card__body">
+        <h2 class="pf-v6-c-title pf-m-xl">Portafolio por PM</h2>
+        <div id="periodo-pms"></div>
+        <p class="nota-periodo">
+          Commit, Upside y los promedios responden al periodo de revenue elegido.
+          El backlog por estado (In Progress / On Hold / Planned), el total de
+          proyectos y el Total Ejecutado son del estado actual: no tienen
+          apertura mensual.
+        </p>
+
+        <div class="panel-graficas">
+          <div class="grafica-contenedor pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Top 10 PMs · Commit del periodo</h3>
+            <svg id="grafica-pm-commit" class="grafica-svg"></svg>
+            </div>
+          </div>
+          <div class="grafica-contenedor pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Top 10 PMs · Backlog total</h3>
+            <svg id="grafica-pm-backlog" class="grafica-svg"></svg>
+            </div>
+          </div>
+          <div class="grafica-contenedor ancho-completo pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Proyectos por PM</h3>
+            <svg id="grafica-pm-proyectos" class="grafica-svg"></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-tabla">
+          <div class="contenedor-tabla-scroll">
+            <table id="tabla-pms" class="tabla-proyectos pf-v6-c-table">
+              <thead>
+                <tr>
+                  <th data-columna="pm">PM/Líder</th>
+                  <th data-columna="inProgresoN"># PA In Progress</th>
+                  <th data-columna="inProgresoBacklog">Backlog In Progress</th>
+                  <th data-columna="onHoldN"># PA On Hold</th>
+                  <th data-columna="onHoldBacklog">Backlog On Hold</th>
+                  <th data-columna="plannedN"># PA Planned</th>
+                  <th data-columna="plannedBacklog">Backlog Planned</th>
+                  <th data-columna="totalN">Total # PA</th>
+                  <th data-columna="totalBacklog">Total Backlog</th>
+                  <th data-columna="commit">Commit · periodo</th>
+                  <th data-columna="upside">Upside · periodo</th>
+                  <th data-columna="totalEjecutado">Total Ejecutado</th>
+                  <th data-columna="promedioMensual">Promedio mensual</th>
+                  <th data-columna="promedioProyecto">Promedio x proyecto</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+              <tfoot></tfoot>
+            </table>
+          </div>
+        </div>
+        <p class="nota-tabla">Clic en un PM para ver sus proyectos en Listado de Proyectos.</p>
         </div>
       </div>
     </section>

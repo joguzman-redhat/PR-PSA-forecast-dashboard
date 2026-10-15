@@ -32,8 +32,6 @@ function nuevoAcumuladoMes() {
   return porMes;
 }
 
-function redondear(n) { return Math.round(n * 100) / 100; }
-
 async function construirHistoria() {
   const { rows: cargas } = await pool.query(
     `SELECT id, codigo, etiqueta, tipo, fecha_referencia,
@@ -84,10 +82,7 @@ async function construirHistoria() {
      SELECT coalesce(c.codigo, 'c' || c.id) AS snapshot_id, p.num_pa,
             coalesce(nullif(p.clave_historia,''), nullif(p.num_pa,''), 'fila-' || p.id) AS clave_historia,
             to_char(c.ejecutada_en, 'YYYY-MM-DD"T"HH24:MI:SS') AS ejecutada_en,
-            p.nombre, n.mes,
-            CASE WHEN n.commit_usd > a.commit_usd THEN 'upside_a_commit'
-                 ELSE 'commit_a_upside' END          AS tipo,
-            abs(n.commit_usd - a.commit_usd)         AS monto,
+            p.nombre, n.mes, NULL::text AS tipo,
             a.commit_usd AS commit_anterior, n.commit_usd AS commit_nuevo,
             a.upside_usd AS upside_anterior, n.upside_usd AS upside_nuevo
        FROM sin_movimientos s
@@ -96,8 +91,11 @@ async function construirHistoria() {
                          AND a.proyecto_id = n.proyecto_id AND a.mes = n.mes
        JOIN carga c       ON c.id = s.carga_id
        JOIN proyecto p    ON p.id = n.proyecto_id
-      -- Umbral de 1 USD: por debajo es redondeo, no una decision de negocio.
+      -- Umbral de 1 USD en CUALQUIERA de los dos campos: por debajo es ruido
+      -- de redondeo, no una decision de negocio. commit y upside se evaluan
+      -- por separado (no se asume que uno se mueve porque el otro se movio).
       WHERE abs(n.commit_usd - a.commit_usd) >= 1.0
+         OR abs(n.upside_usd - a.upside_usd) >= 1.0
       ORDER BY s.carga_id, p.id, n.mes`,
   );
 
@@ -162,22 +160,20 @@ async function construirHistoria() {
     agg.backlog += f.backlog || 0;
   }
 
-  for (const e of entradaDe.values()) {
-    e.fijo = redondear(e.fijo);
-    e.upside = redondear(e.upside);
-    e.total = redondear(e.total);
-    e.backlog = e.backlog === null || e.backlog === undefined ? null : redondear(e.backlog);
-  }
+  // Sin redondeo: los montos del Excel llegan con varios decimales (no solo
+  // centavos) y achicarlos a 2 decimales aqui les recortaba precision real
+  // antes de que el dashboard los viera. pg ya entrega el numeric exacto
+  // (ver db.js), asi que se deja tal cual.
 
   const snapshots = cargas.map((c) => {
     const a = porSnapshot.get(c.id);
     const quarters = {};
     for (const [q, meses] of Object.entries(QUARTERS)) {
-      quarters[q] = redondear(meses.reduce((acc, m) => acc + a.porMes[MESES[m - 1]].fijo, 0));
+      quarters[q] = meses.reduce((acc, m) => acc + a.porMes[MESES[m - 1]].fijo, 0);
     }
     const porMes = {};
     for (const m of MESES) {
-      porMes[m] = { fijo: redondear(a.porMes[m].fijo), upside: redondear(a.porMes[m].upside) };
+      porMes[m] = { fijo: a.porMes[m].fijo, upside: a.porMes[m].upside };
     }
     return {
       id: c.codigo || `c${c.id}`,
@@ -186,35 +182,64 @@ async function construirHistoria() {
       tipo: c.tipo,
       proyectos_activos: a.activos.size,
       totales: {
-        fijo: redondear(a.fijo),
-        upside: redondear(a.upside),
-        acum_2025: redondear(a.acum_2025),
-        total: redondear(a.fijo + a.acum_2025),
-        backlog: redondear(a.backlog),
+        fijo: a.fijo,
+        upside: a.upside,
+        acum_2025: a.acum_2025,
+        total: a.fijo + a.acum_2025,
+        backlog: a.backlog,
         ...quarters,
       },
       por_mes: porMes,
     };
   });
 
-  const eventos = movimientos.map((m) => {
-    const campo = m.mes ? MESES[m.mes - 1] : null;
-    const anterior = m.commit_anterior === null ? 0 : m.commit_anterior;
-    const nuevo = m.commit_nuevo === null ? 0 : m.commit_nuevo;
-    return {
+  // Un movimiento no es "paso de upside a commit": son dos campos que cada
+  // uno puede cambiar o no. Se evaluan por separado y se emite un evento por
+  // cada campo que de verdad cambio (puede ser uno, el otro, ambos, o -si el
+  // movimiento ya traia tipo alta/baja_proyecto- el evento especial tal cual).
+  // Umbral de medio centavo: por debajo es precision de punto flotante, no un
+  // cambio real.
+  const UMBRAL_CAMBIO = 0.005;
+  const eventos = [];
+  for (const m of movimientos) {
+    const base = {
       snapshot_id: m.snapshot_id,
       timestamp: m.ejecutada_en,
       num_pa: m.num_pa !== null && m.num_pa !== undefined ? String(m.num_pa) : m.clave_historia,
       nombre: m.nombre,
-      tipo: m.tipo,
-      campo,
-      valor_anterior: anterior,
-      valor_nuevo: nuevo,
-      delta: redondear(nuevo - anterior),
-      upside_anterior: m.upside_anterior,
-      upside_nuevo: m.upside_nuevo,
+      campo: m.mes ? MESES[m.mes - 1] : null, // mes afectado, no el campo de dinero
     };
-  });
+
+    if (m.tipo === 'alta_proyecto' || m.tipo === 'baja_proyecto') {
+      const anterior = m.commit_anterior === null ? 0 : m.commit_anterior;
+      const nuevo = m.commit_nuevo === null ? 0 : m.commit_nuevo;
+      eventos.push({
+        ...base, tipo: m.tipo,
+        valor_anterior: anterior, valor_nuevo: nuevo, delta: nuevo - anterior,
+      });
+      continue;
+    }
+
+    const commitAnterior = m.commit_anterior === null ? 0 : m.commit_anterior;
+    const commitNuevo = m.commit_nuevo === null ? 0 : m.commit_nuevo;
+    const deltaCommit = commitNuevo - commitAnterior;
+    if (Math.abs(deltaCommit) >= UMBRAL_CAMBIO) {
+      eventos.push({
+        ...base, tipo: 'commit',
+        valor_anterior: commitAnterior, valor_nuevo: commitNuevo, delta: deltaCommit,
+      });
+    }
+
+    const upsideAnterior = m.upside_anterior === null ? 0 : m.upside_anterior;
+    const upsideNuevo = m.upside_nuevo === null ? 0 : m.upside_nuevo;
+    const deltaUpside = upsideNuevo - upsideAnterior;
+    if (Math.abs(deltaUpside) >= UMBRAL_CAMBIO) {
+      eventos.push({
+        ...base, tipo: 'upside',
+        valor_anterior: upsideAnterior, valor_nuevo: upsideNuevo, delta: deltaUpside,
+      });
+    }
+  }
 
   return {
     meta: {
