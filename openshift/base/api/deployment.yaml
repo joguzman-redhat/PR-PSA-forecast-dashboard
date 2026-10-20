@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forecast-api
+  labels:
+    app: forecast-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: forecast-api
+  template:
+    metadata:
+      labels:
+        app: forecast-api
+    spec:
+      containers:
+        - name: api
+          image: forecast-api:latest
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: PGHOST
+              value: forecast-postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: PGUSER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: PGPASSWORD
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: PGDATABASE
+            - name: PORT
+              value: "3000"
+            - name: PUBLIC_DIR
+              value: /app/public
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20

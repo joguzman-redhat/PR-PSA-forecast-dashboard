@@ -1,0 +1,29 @@
+# Repo privado: necesita el secret "github-repo-credentials" (basic-auth,
+# usuario + Personal Access Token con scope "repo") creado a mano, ver
+# openshift/README.md.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: forecast-api
+  labels:
+    app: forecast-api
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/joguzman-redhat/PR-PSA-forecast-dashboard.git
+      ref: v2
+    sourceSecret:
+      name: github-repo-credentials
+    contextDir: "."
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: infra/api/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: forecast-api:latest
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange

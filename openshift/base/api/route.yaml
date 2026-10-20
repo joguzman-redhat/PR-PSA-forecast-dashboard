@@ -1,0 +1,17 @@
+# Host sin especificar: OpenShift asigna uno automatico
+# (forecast-dashboard-<namespace>.apps.<dominio-del-cluster>).
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: forecast-dashboard
+  labels:
+    app: forecast-api
+spec:
+  to:
+    kind: Service
+    name: forecast-api
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

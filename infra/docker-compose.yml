@@ -26,7 +26,8 @@ services:
 
   api:
     build:
-      context: ./api
+      context: ..
+      dockerfile: infra/api/Dockerfile
     image: localhost/forecast-api:latest
     container_name: forecast-api
     environment:
@@ -40,10 +41,6 @@ services:
       PUBLIC_DIR: /app/public
     ports:
       - "${API_PORT:-3000}:3000"
-    volumes:
-      # infra/ ahora vive DENTRO de PoC/, asi que el dashboard (index.html,
-      # app.js, styles.css, vendor/) es el directorio padre de este compose.
-      - ..:/app/public:ro,z
     depends_on:
       postgres:
         condition: service_healthy

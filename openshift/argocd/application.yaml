@@ -1,0 +1,23 @@
+# Aplicar este archivo con "oc apply -f" en el namespace openshift-gitops,
+# UNA vez, para registrar la app. De ahi en adelante, Argo CD sincroniza solo
+# cada vez que haya push a la rama v2 de este repo.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: forecast-dashboard
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/joguzman-redhat/PR-PSA-forecast-dashboard.git
+    targetRevision: v2
+    path: openshift/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: forecast-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

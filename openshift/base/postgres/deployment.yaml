@@ -1,0 +1,54 @@
+# Imagen sclorg en vez de postgres:16-alpine (la de Podman): corre con UID
+# arbitrario no-root desde el arranque, compatible con la SCC "restricted-v2"
+# que OpenShift aplica por defecto a cualquier proyecto nuevo.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forecast-postgres
+  labels:
+    app: forecast-postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: forecast-postgres
+  template:
+    metadata:
+      labels:
+        app: forecast-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: quay.io/sclorg/postgresql-16-c9s:latest
+          ports:
+            - containerPort: 5432
+              name: postgres
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRESQL_USER -d $POSTGRESQL_DATABASE"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRESQL_USER -d $POSTGRESQL_DATABASE"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: forecast-postgres-data

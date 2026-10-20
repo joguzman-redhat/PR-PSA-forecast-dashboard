@@ -1,0 +1,15 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: forecast-n8n
+  labels:
+    app: forecast-n8n
+spec:
+  to:
+    kind: Service
+    name: forecast-n8n
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
