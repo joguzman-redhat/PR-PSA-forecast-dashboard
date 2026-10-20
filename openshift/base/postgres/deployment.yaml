@@ -25,9 +25,27 @@ spec:
           ports:
             - containerPort: 5432
               name: postgres
-          envFrom:
-            - secretRef:
-                name: postgres-credentials
+          # Solo las variables POSTGRESQL_* (las que espera esta imagen) --
+          # NUNCA PGUSER/PGPASSWORD/PGDATABASE aqui: psql las lee solo via
+          # libpq y el script interno de inicializacion de la imagen las usa
+          # sin querer para conectarse ANTES de crear el rol, rompiendo el
+          # primer arranque ("role forecast does not exist").
+          env:
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRESQL_USER
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRESQL_PASSWORD
+            - name: POSTGRESQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRESQL_DATABASE
           resources:
             requests:
               cpu: 250m
