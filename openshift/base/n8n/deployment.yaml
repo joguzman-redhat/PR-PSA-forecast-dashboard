@@ -28,6 +28,10 @@ spec:
             - containerPort: 5678
               name: http
           env:
+            # Sin esto, con el UID aleatorio no-root de OpenShift, HOME no
+            # resuelve a /home/node y n8n intenta escribir en "/" (EACCES).
+            - name: HOME
+              value: /home/node
             - name: N8N_PORT
               value: "5678"
             - name: N8N_PROTOCOL
