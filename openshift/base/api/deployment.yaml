@@ -4,6 +4,12 @@ metadata:
   name: forecast-api
   labels:
     app: forecast-api
+  annotations:
+    # Hace que OpenShift reescriba automaticamente la imagen del contenedor
+    # "api" al pull-spec real del registro interno cada vez que el
+    # ImageStreamTag forecast-api:latest cambia (cada build nuevo).
+    image.openshift.io/triggers: >-
+      [{"from":{"kind":"ImageStreamTag","name":"forecast-api:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"api\")].image"}]
 spec:
   replicas: 1
   selector:
