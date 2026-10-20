@@ -64,6 +64,11 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /home/node/.n8n
+            # /home/node/.cache es parte de la imagen (no del PVC) y no es
+            # escribible para el UID arbitrario de OpenShift. Solo cachea
+            # assets estaticos compilados, no necesita persistir.
+            - name: cache
+              mountPath: /home/node/.cache
           readinessProbe:
             httpGet:
               path: /healthz
@@ -80,3 +85,5 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: forecast-n8n-data
+        - name: cache
+          emptyDir: {}
