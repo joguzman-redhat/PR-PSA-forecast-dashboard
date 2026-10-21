@@ -32,6 +32,7 @@ const estado = {
   incluirCancelados: false,
   proyectosFiltrados: [],
   proyectoSeleccionado: null,
+  expandedPMs: new Set(),
   metadataProyectos: null,
   metadataBacklog: null,
   backlogPorPA: null,
@@ -225,6 +226,49 @@ function upsidePeriodo(proyecto) {
 }
 
 /**
+ * Revenue acumulado a hoy de un proyecto. Booking = Acumulado + Backlog
+ * siempre se cumple por construcción. acum_2025 es el saldo arrastrado del
+ * año anterior; los meses de enero a hoy del año en curso suman el resto.
+ */
+function acumuladoHoy(proyecto) {
+  const fila = backlogDe(proyecto);
+  if (!fila) return proyecto.acumulado_a_hoy !== null && proyecto.acumulado_a_hoy !== undefined
+    ? proyecto.acumulado_a_hoy : null;
+  const acum2025 = typeof fila.acum_2025 === 'number' ? fila.acum_2025 : 0;
+  // Enero hasta el mes en curso, inclusive.
+  const commitHastaHoy = MESES_ES.slice(0, new Date().getMonth() + 1).reduce((acc, m) => {
+    const v = fila[m + '_fijo'];
+    return acc + (typeof v === 'number' ? v : 0);
+  }, 0);
+  return acum2025 + commitHastaHoy;
+}
+
+/**
+ * Backlog de un proyecto: lo que queda por ejecutar del contrato.
+ * Backlog = Valor OF − Revenue acumulado a hoy. Si valor_of es null, se
+ * trata como cero: un proyecto sin OF no puede tener backlog pendiente.
+ */
+function backlogHoy(proyecto) {
+  const valorOf = typeof proyecto.valor_of === 'number' ? proyecto.valor_of : 0;
+  const acum = acumuladoHoy(proyecto);
+  return acum !== null ? valorOf - acum : null;
+}
+
+/**
+ * Ejecución proyectada al cierre del año = acum_2025 + suma de los 12 meses fijo.
+ */
+function proyectadaAnio(proyecto) {
+  const fila = backlogDe(proyecto);
+  if (!fila) return null;
+  const acum2025 = typeof fila.acum_2025 === 'number' ? fila.acum_2025 : 0;
+  const totalFijo = MESES_ES.reduce((acc, m) => {
+    const v = fila[m + '_fijo'];
+    return acc + (typeof v === 'number' ? v : 0);
+  }, 0);
+  return acum2025 + totalFijo;
+}
+
+/**
  * Backlog vs Revenue, mes a mes, del estado actual (no de los snapshots
  * históricos). El Backlog no es un dato aparte: en cada mes es lo que queda
  * por ejecutar del contrato, así que se recalcula en cada punto como
@@ -271,9 +315,14 @@ function calcularKPIs() {
   const proyectos = estado.proyectosFiltrados;
   const suma = campo => proyectos.reduce(
     (acc, p) => acc + (typeof p[campo] === 'number' ? p[campo] : 0), 0);
+  const sumaCalculado = fn => proyectos.reduce((acc, p) => {
+    const v = fn(p);
+    return acc + (typeof v === 'number' ? v : 0);
+  }, 0);
 
   const valorOf = suma('valor_of');
-  const acumulado = suma('acumulado_a_hoy');
+  const acumulado = sumaCalculado(acumuladoHoy);
+  const backlog = sumaCalculado(backlogHoy);
 
   const texto = (id, valor) => {
     const el = document.getElementById(id);
@@ -283,7 +332,7 @@ function calcularKPIs() {
   texto('kpi-total-proyectos', proyectos.length.toLocaleString('es'));
   texto('kpi-valor-of-total', formatearDinero(valorOf));
   texto('kpi-acumulado-hoy', formatearDinero(acumulado));
-  texto('kpi-backlog-2026', formatearDinero(suma('backlog_2026')));
+  texto('kpi-backlog-2026', formatearDinero(backlog));
   // Ejecución global = lo ejecutado sobre lo contratado, no el promedio de
   // los porcentajes: un proyecto de 2 millones no pesa igual que uno de 20 mil.
   texto('kpi-pct-ejecucion', valorOf > 0 ? (acumulado / valorOf * 100).toFixed(1) + '%' : '—');
@@ -728,7 +777,16 @@ function renderizarTabla() {
 
     columnasVerdes.forEach(key => {
       const td = document.createElement('td');
-      let valor = key === COL_REVENUE ? revenuePeriodo(proyecto) : proyecto[key];
+      let valor;
+      if (key === COL_REVENUE) {
+        valor = revenuePeriodo(proyecto);
+      } else if (key === 'acumulado_a_hoy') {
+        valor = acumuladoHoy(proyecto);
+      } else if (key === 'backlog_2026') {
+        valor = backlogHoy(proyecto);
+      } else {
+        valor = proyecto[key];
+      }
 
       // Formatos especiales
       if (key === COL_ID) {
@@ -797,6 +855,8 @@ function ordenarTabla(columna) {
   const leer = p => {
     if (columna === '__revenue_periodo') return revenuePeriodo(p);
     if (columna === '__identificador') return identificador(p).valor;
+    if (columna === 'acumulado_a_hoy') return acumuladoHoy(p);
+    if (columna === 'backlog_2026') return backlogHoy(p);
     return p[columna];
   };
   const esNumerica = estado.proyectosFiltrados.some(p => typeof leer(p) === 'number');
@@ -881,6 +941,14 @@ const FORMATOS = {
   porcentaje: v => v.toFixed(1) + '%',
 };
 
+// Paleta de 4 colores para las series de comparación (Booking, Acumulado, Proyectada, Backlog)
+const COLORES_SERIES_COMPARACION = {
+  booking: '#0066cc',      // azul PatternFly
+  acumulado: '#f0ab00',    // naranja/amarillo PatternFly
+  proyectada: '#ec7a08',   // naranja oscuro PatternFly
+  backlog: '#c9190b',      // rojo PatternFly
+};
+
 // El color sigue a la entidad, no a su posición en el ranking: si un filtro
 // cambia el orden de las barras, cada categoría conserva su color.
 const _coloresEntidad = new Map();
@@ -962,8 +1030,8 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
       stroke: i === 0 ? 'var(--baseline-color)' : 'var(--grid-color)', 'stroke-width': 1,
     }));
     const lbl = svgEl('text', {
-      x: -9, y: y + 4, 'font-size': 11, 'text-anchor': 'end',
-      fill: 'var(--text-dim)', 'font-variant-numeric': 'tabular-nums',
+      x: -9, y: y + 4, 'font-size': 13, 'text-anchor': 'end',
+      fill: 'var(--text-secondary)', 'font-variant-numeric': 'tabular-nums',
     });
     lbl.textContent = fmt((maxValor / lineas) * i);
     g.appendChild(lbl);
@@ -985,6 +1053,19 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
     });
     g.appendChild(barra);
 
+    // Etiqueta de valor sobre la barra
+    const valorLbl = svgEl('text', {
+      x: x + anchoBarra / 2,
+      y: y - 5,
+      'text-anchor': 'middle',
+      'font-size': 11,
+      'font-weight': 600,
+      fill: 'var(--text-primary)',
+      'font-variant-numeric': 'tabular-nums',
+    });
+    valorLbl.textContent = fmt(d.valor);
+    g.appendChild(valorLbl);
+
     // El área sensible al mouse es toda la columna, no solo la barra.
     const zona = svgEl('rect', {
       x: i * paso, y: 0, width: paso, height: areaAlto, fill: 'transparent',
@@ -1005,7 +1086,7 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
 
     const texto = String(d.etiqueta);
     const lbl = svgEl('text', {
-      'font-size': 11, fill: 'var(--text-dim)',
+      'font-size': 12, fill: 'var(--text-secondary)',
     });
     if (etiquetasLargas) {
       const cx = i * paso + paso / 2;
@@ -1023,6 +1104,473 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
     lbl.appendChild(titulo);
     g.appendChild(lbl);
   });
+
+  svg.appendChild(g);
+}
+
+/**
+ * Gráfica de barras agrupadas horizontal. Para comparar múltiples series por categoría.
+ * datos = [{ etiqueta, zona, series: [{ nombre, valor, color },...] }]
+ */
+function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  svg.innerHTML = '';
+
+  const op = opciones || {};
+  const fmt = FORMATOS[op.formato] || FORMATOS.dinero;
+
+  if (!datos.length) {
+    svg.setAttribute('viewBox', '0 0 600 120');
+    const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
+      'font-size': 13, fill: 'var(--text-dim)' });
+    t.textContent = 'Sin datos para los filtros aplicados';
+    svg.appendChild(t);
+    return;
+  }
+
+  const ancho = svg.clientWidth || 800;
+  const alturaPorGrupo = 36;  // condensado de 68
+  const margenGrupo = 8;      // condensado de 24
+  const zonas = [...new Set(datos.map(d => d.zona))];
+  let altoTotal = 50;  // espacio para leyenda arriba
+  zonas.forEach(z => {
+    const enZona = datos.filter(d => d.zona === z);
+    altoTotal += 20 + enZona.length * (alturaPorGrupo + margenGrupo);
+  });
+  const margen = { top: 50, right: 80, bottom: 16, left: 160 };
+  const alto = Math.max(300, altoTotal + margen.bottom);  // right margin para labels
+  const areaAncho = ancho - margen.left - margen.right;
+  const areaAlto = alto - margen.top - margen.bottom;
+
+  svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = alto + 'px';
+  const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
+
+  const maxValor = Math.max(...datos.flatMap(d => d.series.map(s => s.valor)), 1);
+
+  // Leyenda arriba en fila horizontal
+  if (datos.length && datos[0].series.length) {
+    let offsetX = 0;
+    datos[0].series.forEach(s => {
+      const gLey = svgEl('g', {});
+      gLey.appendChild(svgEl('rect', {
+        x: offsetX, y: -32, width: 11, height: 11, rx: 2, fill: s.color,
+      }));
+      const t = svgEl('text', {
+        x: offsetX + 16, y: -23, 'font-size': 11, fill: 'var(--text-secondary)',
+      });
+      t.textContent = s.nombre;
+      gLey.appendChild(t);
+      g.appendChild(gLey);
+      offsetX += 16 + s.nombre.length * 6.6 + 18;
+    });
+  }
+
+  // Rejilla
+  const lineas = 4;
+  for (let i = 0; i <= lineas; i++) {
+    const x = (areaAncho / lineas) * i;
+    g.appendChild(svgEl('line', {
+      x1: x, y1: 0, x2: x, y2: areaAlto,
+      stroke: 'var(--grid-color)', 'stroke-width': 1,
+    }));
+    const lbl = svgEl('text', {
+      x, y: -8, 'font-size': 11, 'text-anchor': 'middle',
+      fill: 'var(--text-secondary)', 'font-variant-numeric': 'tabular-nums',
+    });
+    lbl.textContent = fmt((maxValor / lineas) * i);
+    g.appendChild(lbl);
+  }
+
+  // Dibujar grupos por zona
+  let offsetY = 0;
+  zonas.forEach(zona => {
+    const gruposZona = datos.filter(d => d.zona === zona);
+    if (gruposZona.length === 0) return;  // skip zona with no clients
+
+    // Etiqueta de zona
+    const lblZona = svgEl('text', {
+      x: -10, y: offsetY + 10, 'font-size': 10, 'text-anchor': 'end',
+      fill: 'var(--text-dim)', 'font-weight': 600, 'text-transform': 'uppercase',
+    });
+    lblZona.textContent = zona || '(sin zona)';
+    g.appendChild(lblZona);
+    offsetY += 20;
+
+    gruposZona.forEach((grupo) => {
+      const nSeries = grupo.series.length;
+      const alturaBarra = 8;  // increased from 6 to reduce overlap
+      const espacioEntreSeries = 2;
+      const alturaGrupo = nSeries * alturaBarra + (nSeries - 1) * espacioEntreSeries;
+      const yBase = offsetY + (alturaPorGrupo - alturaGrupo) / 2;
+
+      // Etiqueta del cliente
+      const lblCliente = svgEl('text', {
+        x: -10, y: offsetY + alturaPorGrupo / 2, 'font-size': 11,
+        'text-anchor': 'end', fill: 'var(--text-primary)',
+        'dominant-baseline': 'middle',
+      });
+      const textoCliente = String(grupo.etiqueta);
+      lblCliente.textContent = textoCliente.length > 20 ? textoCliente.slice(0, 19) + '…' : textoCliente;
+      const titulo = svgEl('title', {});
+      titulo.textContent = textoCliente;
+      lblCliente.appendChild(titulo);
+      g.appendChild(lblCliente);
+
+      // Barras
+      grupo.series.forEach((serie, si) => {
+        const yBarra = yBase + si * (alturaBarra + espacioEntreSeries);
+        const anchoBarra = Math.max(1, (serie.valor / maxValor) * areaAncho);
+
+        const barra = svgEl('rect', {
+          x: 0, y: yBarra, width: anchoBarra, height: alturaBarra,
+          fill: serie.color, rx: 1.5,
+        });
+        g.appendChild(barra);
+
+        // Valor al final de la barra - only for Booking (si=0) and Backlog (si=3)
+        if (si === 0 || si === 3) {
+          const lblValor = svgEl('text', {
+            x: Math.min(anchoBarra + 4, areaAncho - 2), y: yBarra + alturaBarra / 2,
+            'font-size': 10, 'font-weight': 600,
+            'dominant-baseline': 'middle',
+            fill: 'var(--text-primary)',
+            'font-variant-numeric': 'tabular-nums',
+          });
+          lblValor.textContent = fmt(serie.valor);
+          g.appendChild(lblValor);
+        }
+
+        // Tooltip
+        const zona = svgEl('rect', {
+          x: 0, y: yBarra, width: Math.max(anchoBarra, 30), height: alturaBarra,
+          fill: 'transparent',
+        });
+        zona.style.cursor = 'pointer';
+        zona.addEventListener('mouseenter', e => {
+          barra.setAttribute('opacity', '0.78');
+          mostrarTooltip(e, grupo.etiqueta, [{
+            color: serie.color,
+            etiqueta: serie.nombre,
+            valor: '$' + serie.valor.toLocaleString('en-US', { maximumFractionDigits: 0 }),
+          }]);
+        });
+        zona.addEventListener('mousemove', moverTooltip);
+        zona.addEventListener('mouseleave', () => {
+          barra.removeAttribute('opacity');
+          ocultarTooltip();
+        });
+        g.appendChild(zona);
+      });
+
+      offsetY += alturaPorGrupo + margenGrupo;
+    });
+  });
+
+  svg.appendChild(g);
+}
+
+/**
+ * Gráfica de barras agrupadas vertical. Similar a horizontal pero con barras verticales.
+ * datos = [{ etiqueta, series: [{ nombre, valor, color },...] }]
+ * opciones.alClickar: callback(etiqueta) cuando se hace clic en un grupo
+ */
+function crearGraficaBarrasAgrupadasVertical(svgId, datos, opciones) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  svg.innerHTML = '';
+
+  const op = opciones || {};
+  const fmt = FORMATOS[op.formato] || FORMATOS.dinero;
+
+  if (!datos.length) {
+    svg.setAttribute('viewBox', '0 0 600 120');
+    const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
+      'font-size': 13, fill: 'var(--text-dim)' });
+    t.textContent = 'Sin datos para los filtros aplicados';
+    svg.appendChild(t);
+    return;
+  }
+
+  const ancho = svg.clientWidth || 900;
+  const alto = 340;
+  // Arriba: leyenda y, debajo, las etiquetas rotadas de la barra más alta.
+  const margen = { top: 100, right: 16, bottom: 70, left: 70 };
+  const areaAncho = ancho - margen.left - margen.right;
+  const areaAlto = alto - margen.top - margen.bottom;
+
+  svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = alto + 'px';
+  const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
+
+  const maxValor = Math.max(...datos.flatMap(d => d.series.map(s => s.valor)), 1);
+  const pasoGrupo = areaAncho / datos.length;
+  const nSeries = datos.length ? datos[0].series.length : 0;
+  const anchoBarra = Math.min(16, (pasoGrupo - 16) / nSeries);
+
+  // Rejilla y eje Y
+  const lineas = 4;
+  for (let i = 0; i <= lineas; i++) {
+    const y = areaAlto - (areaAlto / lineas) * i;
+    g.appendChild(svgEl('line', {
+      x1: 0, y1: y, x2: areaAncho, y2: y,
+      stroke: i === 0 ? 'var(--baseline-color)' : 'var(--grid-color)', 'stroke-width': 1,
+    }));
+    const lbl = svgEl('text', {
+      x: -9, y: y + 4, 'font-size': 13, 'text-anchor': 'end',
+      fill: 'var(--text-secondary)', 'font-variant-numeric': 'tabular-nums',
+    });
+    lbl.textContent = fmt((maxValor / lineas) * i);
+    g.appendChild(lbl);
+  }
+
+  // Grupos
+  datos.forEach((grupo, ig) => {
+    const xGrupo = ig * pasoGrupo + pasoGrupo / 2;
+    const anchoTotal = nSeries * anchoBarra + (nSeries - 1) * 3;
+    const xBase = xGrupo - anchoTotal / 2;
+
+    grupo.series.forEach((serie, is) => {
+      const xBarra = xBase + is * (anchoBarra + 3);
+      const altura = Math.max(1, (serie.valor / maxValor) * areaAlto);
+      const yBarra = areaAlto - altura;
+
+      const barra = svgEl('rect', {
+        x: xBarra, y: yBarra, width: anchoBarra, height: altura,
+        fill: serie.color, rx: 2,
+      });
+      g.appendChild(barra);
+
+      // Valor rotado -90, positioned ABOVE bar top
+      const lblValor = svgEl('text', {
+        'font-size': 10, 'font-weight': 600,
+        fill: 'var(--text-primary)',
+        'font-variant-numeric': 'tabular-nums',
+        transform: `translate(${xBarra + anchoBarra / 2},${yBarra - 3}) rotate(-90)`,
+        'text-anchor': 'start',  // start makes text go UP from rotation point
+      });
+      lblValor.textContent = fmt(serie.valor);
+      g.appendChild(lblValor);
+
+      // Tooltip
+      const zona = svgEl('rect', {
+        x: xBarra, y: 0, width: anchoBarra, height: areaAlto,
+        fill: 'transparent',
+      });
+      zona.style.cursor = 'pointer';
+      zona.addEventListener('mouseenter', e => {
+        barra.setAttribute('opacity', '0.78');
+        mostrarTooltip(e, grupo.etiqueta, [{
+          color: serie.color,
+          etiqueta: serie.nombre,
+          valor: '$' + serie.valor.toLocaleString('en-US', { maximumFractionDigits: 0 }),
+        }]);
+      });
+      zona.addEventListener('mousemove', moverTooltip);
+      zona.addEventListener('mouseleave', () => {
+        barra.removeAttribute('opacity');
+        ocultarTooltip();
+      });
+      // El clic va en la misma zona del tooltip: una capa aparte encima del
+      // grupo tapaba los tooltips de cada barra.
+      if (op.alClickar) zona.addEventListener('click', () => op.alClickar(grupo.etiqueta));
+      g.appendChild(zona);
+    });
+
+    // Etiqueta del eje X (2 líneas si es largo)
+    const texto = String(grupo.etiqueta);
+    if (texto.length > 10) {
+      const mitad = Math.floor(texto.length / 2);
+      const espacio = texto.lastIndexOf(' ', mitad);
+      const corte = espacio > mitad - 5 && espacio < mitad + 5 ? espacio : mitad;
+      const linea1 = texto.slice(0, corte).trim();
+      const linea2 = texto.slice(corte).trim();
+
+      const lbl1 = svgEl('text', {
+        x: xGrupo, y: areaAlto + 16, 'font-size': 10,
+        'text-anchor': 'middle', fill: 'var(--text-secondary)',
+      });
+      lbl1.textContent = linea1.length > 12 ? linea1.slice(0, 11) + '…' : linea1;
+      g.appendChild(lbl1);
+
+      const lbl2 = svgEl('text', {
+        x: xGrupo, y: areaAlto + 28, 'font-size': 10,
+        'text-anchor': 'middle', fill: 'var(--text-secondary)',
+      });
+      lbl2.textContent = linea2.length > 12 ? linea2.slice(0, 11) + '…' : linea2;
+      const titulo = svgEl('title', {});
+      titulo.textContent = texto;
+      lbl2.appendChild(titulo);
+      g.appendChild(lbl2);
+    } else {
+      const lbl = svgEl('text', {
+        x: xGrupo, y: areaAlto + 16, 'font-size': 10,
+        'text-anchor': 'middle', fill: 'var(--text-secondary)',
+      });
+      lbl.textContent = texto;
+      const titulo = svgEl('title', {});
+      titulo.textContent = texto;
+      lbl.appendChild(titulo);
+      g.appendChild(lbl);
+    }
+  });
+
+  // Leyenda arriba
+  if (datos.length && datos[0].series.length) {
+    let offset = 0;
+    datos[0].series.forEach(s => {
+      const gLey = svgEl('g', {});
+      gLey.appendChild(svgEl('rect', {
+        x: offset, y: -92, width: 11, height: 11, rx: 2, fill: s.color,
+      }));
+      const t = svgEl('text', {
+        x: offset + 16, y: -83, 'font-size': 11, fill: 'var(--text-secondary)',
+      });
+      t.textContent = s.nombre;
+      gLey.appendChild(t);
+      g.appendChild(gLey);
+      offset += 16 + s.nombre.length * 6.6 + 18;
+    });
+  }
+
+  svg.appendChild(g);
+}
+
+/**
+ * Gráfica de barras apiladas horizontal. Para mostrar composición por categoría.
+ * datos = [{ etiqueta, segmentos: [{ nombre, valor, color },...] }]
+ */
+function crearGraficaBarrasApiladas(svgId, datos, opciones) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  svg.innerHTML = '';
+
+  const op = opciones || {};
+
+  if (!datos.length) {
+    svg.setAttribute('viewBox', '0 0 600 120');
+    const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
+      'font-size': 13, fill: 'var(--text-dim)' });
+    t.textContent = 'Sin datos para los filtros aplicados';
+    svg.appendChild(t);
+    return;
+  }
+
+  const ancho = svg.clientWidth || 800;
+  const alturaPorBarra = 32;
+  const margenBarra = 12;
+  const alto = Math.max(220, datos.length * (alturaPorBarra + margenBarra) + 80);
+  const margen = { top: 40, right: 50, bottom: 20, left: 140 };  // right margin for total label
+  const espacioTotal = 36;  // reserve space for total label at end of bar
+  const areaAncho = ancho - margen.left - margen.right - espacioTotal;
+  const areaAlto = alto - margen.top - margen.bottom;
+
+  svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = alto + 'px';
+  const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
+
+  // Valor máximo = suma de segmentos de cada barra
+  const maxTotal = Math.max(...datos.map(d =>
+    d.segmentos.reduce((a, s) => a + s.valor, 0)), 1);
+
+  // Dibujar barras
+  datos.forEach((fila, i) => {
+    const yBarra = i * (alturaPorBarra + margenBarra);
+    const total = fila.segmentos.reduce((a, s) => a + s.valor, 0);
+
+    // Etiqueta
+    const lbl = svgEl('text', {
+      x: -10, y: yBarra + alturaPorBarra / 2, 'font-size': 12,
+      'text-anchor': 'end', fill: 'var(--text-primary)',
+      'dominant-baseline': 'middle',
+    });
+    const texto = String(fila.etiqueta);
+    lbl.textContent = texto.length > 18 ? texto.slice(0, 17) + '…' : texto;
+    const titulo = svgEl('title', {});
+    titulo.textContent = texto;
+    lbl.appendChild(titulo);
+    g.appendChild(lbl);
+
+    // Segmentos
+    let offsetX = 0;
+    fila.segmentos.forEach((seg, si) => {
+      const ancho = Math.max(0, (seg.valor / maxTotal) * areaAncho);
+
+      const rect = svgEl('rect', {
+        x: offsetX, y: yBarra, width: ancho, height: alturaPorBarra,
+        fill: seg.color, rx: si === 0 ? 2 : 0,
+      });
+      if (si === fila.segmentos.length - 1) rect.setAttribute('rx', 2);
+      g.appendChild(rect);
+
+      // Valor dentro del segmento si cabe
+      if (ancho > 30 && seg.valor > 0) {
+        const lblSeg = svgEl('text', {
+          x: offsetX + ancho / 2, y: yBarra + alturaPorBarra / 2,
+          'font-size': 11, 'font-weight': 600,
+          'text-anchor': 'middle', 'dominant-baseline': 'middle',
+          fill: '#ffffff',
+          'font-variant-numeric': 'tabular-nums',
+        });
+        lblSeg.textContent = String(seg.valor);
+        g.appendChild(lblSeg);
+      }
+
+      // Tooltip
+      const zona = svgEl('rect', {
+        x: offsetX, y: yBarra, width: ancho, height: alturaPorBarra,
+        fill: 'transparent',
+      });
+      zona.style.cursor = 'pointer';
+      zona.addEventListener('mouseenter', e => {
+        rect.setAttribute('opacity', '0.78');
+        mostrarTooltip(e, fila.etiqueta, [{
+          color: seg.color,
+          etiqueta: seg.nombre,
+          valor: `${seg.valor} proyecto${seg.valor === 1 ? '' : 's'}`,
+        }]);
+      });
+      zona.addEventListener('mousemove', moverTooltip);
+      zona.addEventListener('mouseleave', () => {
+        rect.removeAttribute('opacity');
+        ocultarTooltip();
+      });
+      g.appendChild(zona);
+
+      offsetX += ancho;
+    });
+
+    // Total al final
+    const lblTotal = svgEl('text', {
+      x: offsetX + 8, y: yBarra + alturaPorBarra / 2,
+      'font-size': 11, 'font-weight': 600,
+      'dominant-baseline': 'middle',
+      fill: 'var(--text-primary)',
+      'font-variant-numeric': 'tabular-nums',
+    });
+    lblTotal.textContent = String(total);
+    g.appendChild(lblTotal);
+  });
+
+  // Leyenda arriba
+  const segmentosLeyenda = op.todosSegmentos || (datos.length && datos[0].segmentos) || [];
+  if (segmentosLeyenda.length) {
+    let offset = -margen.left + 8;
+    segmentosLeyenda.forEach(s => {
+      const gLey = svgEl('g', {});
+      gLey.appendChild(svgEl('rect', {
+        x: offset, y: -26, width: 11, height: 11, rx: 2, fill: s.color,
+      }));
+      const t = svgEl('text', {
+        x: offset + 16, y: -17, 'font-size': 11, fill: 'var(--text-secondary)',
+      });
+      t.textContent = s.nombre;
+      gLey.appendChild(t);
+      g.appendChild(gLey);
+      offset += 16 + s.nombre.length * 6.6 + 18;
+    });
+  }
 
   svg.appendChild(g);
 }
@@ -1045,8 +1593,56 @@ function actualizarGraficas() {
   };
   const dinero = v => `$${(v || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
-  // 1. Proyectos por estado. Aquí el color SÍ aporta: son 6 categorías fijas
-  //    que el usuario reconoce de un vistazo en todo el dashboard.
+  // Verificar si hay exactamente un vendedor filtrado
+  const vendedorUnico = estado.filtros.vendedor.length === 1 ? estado.filtros.vendedor[0] : null;
+  const cardVendedor = document.getElementById('card-vendedor-resumen');
+  if (vendedorUnico && cardVendedor) {
+    cardVendedor.style.display = 'block';
+    // Calcular estadísticas del vendedor
+    const proysVendedor = proyectos.filter(p => valorDimension(p, 'vendedor') === vendedorUnico);
+    const booking = proysVendedor.reduce((a, p) => a + (typeof p.valor_of === 'number' ? p.valor_of : 0), 0);
+    const acum = proysVendedor.reduce((a, p) => a + (acumuladoHoy(p) || 0), 0);
+    const backlog = proysVendedor.reduce((a, p) => a + (backlogHoy(p) || 0), 0);
+    const pctEjec = booking > 0 ? (acum / booking * 100).toFixed(1) : '—';
+
+    const porEstado = new Map();
+    proysVendedor.forEach(p => {
+      const est = p.estado || SIN_DATO;
+      porEstado.set(est, (porEstado.get(est) || 0) + 1);
+    });
+
+    const topClientes = new Map();
+    proysVendedor.forEach(p => {
+      const cli = p.cliente || SIN_DATO;
+      topClientes.set(cli, (topClientes.get(cli) || 0) + (typeof p.valor_of === 'number' ? p.valor_of : 0));
+    });
+    const top5 = Array.from(topClientes, ([cli, val]) => ({ cli, val }))
+      .sort((a, b) => b.val - a.val).slice(0, 5);
+
+    document.getElementById('vendedor-nombre').textContent = vendedorUnico;
+    document.getElementById('vendedor-n-proyectos').textContent = proysVendedor.length;
+    document.getElementById('vendedor-booking').textContent = formatearDinero(booking);
+    document.getElementById('vendedor-acumulado').textContent = formatearDinero(acum);
+    document.getElementById('vendedor-backlog').textContent = formatearDinero(backlog);
+    document.getElementById('vendedor-pct-ejec').textContent = pctEjec + (pctEjec === '—' ? '' : '%');
+
+    let htmlEstados = '';
+    ['In Progress', 'On Hold', 'Planned', 'Completed'].forEach(est => {
+      const n = porEstado.get(est) || 0;
+      if (n > 0) htmlEstados += `<span class="vendedor-badge">${est}: ${n}</span> `;
+    });
+    document.getElementById('vendedor-por-estado').innerHTML = htmlEstados || '—';
+
+    let htmlClientes = '';
+    top5.forEach(({ cli, val }) => {
+      htmlClientes += `<div class="vendedor-cliente">${cli}: ${formatearDinero(val)}</div>`;
+    });
+    document.getElementById('vendedor-top-clientes').innerHTML = htmlClientes || '—';
+  } else if (cardVendedor) {
+    cardVendedor.style.display = 'none';
+  }
+
+  // 1. Proyectos por estado
   const ordenEstado = (estado.metadataProyectos || {}).orden_estado || [];
   fijarColores('estado', ordenEstado);
   const porEstado = agrupar('estado', () => 1)
@@ -1059,24 +1655,22 @@ function actualizarGraficas() {
     formato: 'conteo', campoColor: 'estado', unidad: 'Proyectos',
   });
 
-  // En el resto, el eje X ya identifica cada barra: pintarlas de colores
-  // distintos sería decorativo y haría creer que el color significa algo.
+  // 2. Valor Booking por Zona
   const valorOf = p => (typeof p.valor_of === 'number' ? p.valor_of : 0);
-
   const porZona = agrupar('zona', valorOf);
   porZona.forEach(d => { d.exacto = dinero(d.valor); });
   crearGraficaBarrasSimple('grafica-zona', porZona, {
-    formato: 'dinero', unidad: 'Valor OF',
+    formato: 'dinero', unidad: 'Valor Booking',
   });
 
+  // 3. Top 10 Países
   const porPais = agrupar('pais', valorOf).slice(0, 10);
   porPais.forEach(d => { d.exacto = dinero(d.valor); });
   crearGraficaBarrasSimple('grafica-paises', porPais, {
-    formato: 'dinero', unidad: 'Valor OF',
+    formato: 'dinero', unidad: 'Valor Booking',
   });
 
-  // Ejecución promedio por PM: el promedio simple de los proyectos que
-  // tienen el dato. Los nulos no cuentan como cero, que sesgaría hacia abajo.
+  // 4. Ejecución por PM
   const suma = new Map(), cuenta = new Map();
   proyectos.forEach(p => {
     if (typeof p.pct_ejecucion_actual !== 'number' || !p.pm_lider) return;
@@ -1093,6 +1687,228 @@ function actualizarGraficas() {
   crearGraficaBarrasSimple('grafica-pm', porPM, {
     formato: 'porcentaje', unidad: 'Ejecución promedio',
   });
+
+  // 5. Ejecutado vs. planeado por cliente (horizontal grouped bars)
+  const porCliente = new Map();
+  proyectos.forEach(p => {
+    const cli = p.cliente || SIN_DATO;
+    const zona = p.zona || SIN_DATO;
+    if (!porCliente.has(cli)) {
+      porCliente.set(cli, { booking: 0, acumulado: 0, proyectada: 0, backlog: 0, zona });
+    }
+    const acc = porCliente.get(cli);
+    acc.booking += valorOf(p);
+    acc.acumulado += acumuladoHoy(p) || 0;
+    acc.proyectada += proyectadaAnio(p) || 0;
+    acc.backlog += backlogHoy(p) || 0;
+  });
+  const datosCliente = Array.from(porCliente, ([cli, vals]) => ({
+    etiqueta: cli,
+    zona: vals.zona,
+    booking: vals.booking,
+    series: [
+      { nombre: 'Valor Booking', valor: vals.booking, color: COLORES_SERIES_COMPARACION.booking },
+      { nombre: 'Revenue acumulado a hoy', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
+      { nombre: 'Ejecución proyectada', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
+      { nombre: 'Backlog', valor: vals.backlog, color: COLORES_SERIES_COMPARACION.backlog },
+    ],
+  })).sort((a, b) => b.booking - a.booking).slice(0, 10);
+
+  // Ordenar por zona, luego por booking
+  datosCliente.sort((a, b) => {
+    if (a.zona !== b.zona) return a.zona.localeCompare(b.zona, 'es');
+    return b.booking - a.booking;
+  });
+
+  crearGraficaBarrasAgrupadasHorizontal('grafica-ejecutado-cliente', datosCliente, { formato: 'dinero' });
+
+  // 6. Booking vs. ejecución por vendedor (vertical grouped bars, clickable)
+  const porVendedor = new Map();
+  proyectos.forEach(p => {
+    const vend = valorDimension(p, 'vendedor');
+    if (!porVendedor.has(vend)) {
+      porVendedor.set(vend, { booking: 0, acumulado: 0, proyectada: 0, backlog: 0 });
+    }
+    const acc = porVendedor.get(vend);
+    acc.booking += valorOf(p);
+    acc.acumulado += acumuladoHoy(p) || 0;
+    acc.proyectada += proyectadaAnio(p) || 0;
+    acc.backlog += backlogHoy(p) || 0;
+  });
+  const datosVendedor = Array.from(porVendedor, ([vend, vals]) => ({
+    etiqueta: vend,
+    booking: vals.booking,
+    series: [
+      { nombre: 'Valor Booking', valor: vals.booking, color: COLORES_SERIES_COMPARACION.booking },
+      { nombre: 'Revenue acumulado a hoy', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
+      { nombre: 'Ejecución proyectada', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
+      { nombre: 'Backlog', valor: vals.backlog, color: COLORES_SERIES_COMPARACION.backlog },
+    ],
+  })).filter(d => d.etiqueta !== SIN_DATO)
+    .sort((a, b) => b.booking - a.booking).slice(0, 6);
+
+  crearGraficaBarrasAgrupadasVertical('grafica-booking-vendedor', datosVendedor, {
+    formato: 'dinero',
+    alClickar: (vendedor) => {
+      // Aplicar filtro de vendedor y refrescar
+      DIMENSIONES.forEach(d => { estado.filtros[d.campo] = []; });
+      estado.filtros.texto = '';
+      estado.filtros.vendedor = [vendedor];
+      const texto = document.getElementById('filtro-texto');
+      if (texto) texto.value = '';
+      aplicarFiltros();
+    },
+  });
+
+  // 7. Estado de ejecución por vendedor (stacked horizontal bars)
+  const vendedorEstado = new Map();
+  proyectos.forEach(p => {
+    const vend = valorDimension(p, 'vendedor');
+    const est = p.estado || SIN_DATO;
+    if (!vendedorEstado.has(vend)) vendedorEstado.set(vend, new Map());
+    const mapa = vendedorEstado.get(vend);
+    mapa.set(est, (mapa.get(est) || 0) + 1);
+  });
+  const datosVendedorEstado = Array.from(vendedorEstado, ([vend, mapa]) => {
+    const total = Array.from(mapa.values()).reduce((a, v) => a + v, 0);
+    return { etiqueta: vend, total, mapa };
+  }).filter(d => d.etiqueta !== SIN_DATO)  // excluir (sin dato)
+    .sort((a, b) => b.total - a.total).slice(0, 10);
+
+  // Todos los estados que existen en los datos (para la leyenda)
+  const todosEstados = new Set();
+  datosVendedorEstado.forEach(d => d.mapa.forEach((v, est) => todosEstados.add(est)));
+
+  // Ordenar estados: primero los del orden de negocio, luego los demás
+  const estadosOrdenados = ordenEstado.filter(e => todosEstados.has(e));
+  Array.from(todosEstados).forEach(e => {
+    if (!estadosOrdenados.includes(e)) estadosOrdenados.push(e);
+  });
+
+  datosVendedorEstado.forEach(d => {
+    d.segmentos = estadosOrdenados.map(est => ({
+      nombre: est,
+      valor: d.mapa.get(est) || 0,
+      color: colorDeEntidad('estado', est),
+    })).filter(s => s.valor > 0);  // solo segmentos con valor para ESTE vendedor
+  });
+
+  crearGraficaBarrasApiladas('grafica-estado-vendedor', datosVendedorEstado, {
+    todosSegmentos: estadosOrdenados.map(est => ({
+      nombre: est, color: colorDeEntidad('estado', est)
+    }))
+  });
+
+  // 8. Tabla de proyectos no iniciados / on hold
+  renderizarTablaNoIniciados();
+}
+
+/**
+ * Tabla de proyectos no iniciados o en espera
+ */
+function renderizarTablaNoIniciados() {
+  const tabla = document.getElementById('tabla-no-iniciados');
+  if (!tabla) return;
+
+  const tbody = tabla.querySelector('tbody');
+  const tfoot = tabla.querySelector('tfoot');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  const noIniciados = estado.proyectosFiltrados.filter(p =>
+    p.estado === 'On Hold' || p.estado === 'Planned');
+
+  if (noIniciados.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:var(--spacing-lg);">No hay proyectos On Hold o Planned en los filtros aplicados</td></tr>';
+    if (tfoot) tfoot.innerHTML = '';
+    return;
+  }
+
+  // Ordenar por backlog desc
+  const ordenados = noIniciados.slice().sort((a, b) => {
+    const ba = backlogHoy(a) || 0;
+    const bb = backlogHoy(b) || 0;
+    return bb - ba;
+  });
+
+  let totalBacklog = 0;
+  ordenados.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.className = 'fila-clicable';
+    tr.addEventListener('click', () => abrirDetalle(p));
+
+    const nombre = p.nombre_del_proyecto || identificador(p).valor;
+    const pm = p.pm_lider || '—';
+    const cli = p.cliente || '—';
+    const dias = p.dias_para_vencimiento;
+    const meses = p.meses_transcurridos;
+    const bl = backlogHoy(p) || 0;
+    totalBacklog += bl;
+
+    // Barra inline del backlog
+    const maxBl = Math.max(...ordenados.map(x => backlogHoy(x) || 0), 1);
+    const pctBarra = bl > 0 ? (bl / maxBl * 100) : 0;
+
+    [[nombre, 'celda-nombre'], [pm, ''], [cli, ''],
+      [dias !== null && dias !== undefined ? formatearNumero(dias) : '—', 'celda-numero'],
+      [meses !== null && meses !== undefined ? formatearNumero(meses) : '—', 'celda-numero'],
+    ].forEach(([txt, cls], idx) => {
+      const td = document.createElement('td');
+      td.textContent = txt;
+      if (cls) td.className = cls;
+      if (idx === 0 || idx === 1 || idx === 2) td.title = txt;  // title for Proyecto, PM, Cliente
+      tr.appendChild(td);
+    });
+
+    // Columna de backlog con barra y valor
+    const tdBl = document.createElement('td');
+    tdBl.className = 'celda-backlog-barra';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+    const divBarra = document.createElement('div');
+    divBarra.className = 'inline-backlog-barra-container';
+    divBarra.style.cssText = 'flex:1;min-width:0;position:relative;height:20px;';
+
+    const barraFondo = document.createElement('div');
+    barraFondo.style.cssText = 'position:absolute;inset:0;background:var(--grid-color);border-radius:3px;';
+
+    const relleno = document.createElement('div');
+    relleno.style.cssText = `position:absolute;left:0;top:0;bottom:0;width:${pctBarra}%;background:var(--series-1);border-radius:3px;`;
+
+    divBarra.appendChild(barraFondo);
+    divBarra.appendChild(relleno);
+
+    const lblValor = document.createElement('span');
+    lblValor.className = 'inline-backlog-valor';
+    lblValor.style.cssText = 'font-size:10px;font-weight:600;white-space:nowrap;flex-shrink:0;';
+    lblValor.textContent = formatearDinero(bl);
+
+    wrapper.appendChild(divBarra);
+    wrapper.appendChild(lblValor);
+    tdBl.appendChild(wrapper);
+    tr.appendChild(tdBl);
+
+    tbody.appendChild(tr);
+  });
+
+  // Fila total
+  if (tfoot) {
+    tfoot.innerHTML = '';
+    const trTotal = document.createElement('tr');
+    const tdEtq = document.createElement('td');
+    tdEtq.colSpan = 5;
+    tdEtq.textContent = `Total (${ordenados.length} proyecto${ordenados.length === 1 ? '' : 's'})`;
+    tdEtq.style.fontWeight = '600';
+    trTotal.appendChild(tdEtq);
+    const tdTotal = document.createElement('td');
+    tdTotal.className = 'celda-numero';
+    tdTotal.style.fontWeight = '600';
+    tdTotal.textContent = formatearDinero(totalBacklog);
+    trTotal.appendChild(tdTotal);
+    tfoot.appendChild(trTotal);
+  }
 }
 
 
@@ -1671,8 +2487,8 @@ function chip(texto, clase, titulo) {
 function renderizarEncabezadoProyecto(contenedor, proyecto) {
   const num = v => (typeof v === 'number' ? v : null);
   const valorOf = num(proyecto.valor_of);
-  const acum = num(proyecto.acumulado_a_hoy);
-  const backlog = num(proyecto.backlog_2026);
+  const acum = acumuladoHoy(proyecto);
+  const backlog = backlogHoy(proyecto);
   const consumido = num(proyecto.consumido_2025);
   const pct = (valorOf && acum !== null) ? (acum / valorOf) * 100 : null;
 
@@ -1712,9 +2528,9 @@ function renderizarEncabezadoProyecto(contenedor, proyecto) {
   const cifras = document.createElement('div');
   cifras.className = 'hero-cifras';
   [
-    ['Valor OF', valorOf, 'Por cuánto se vendió el proyecto'],
-    ['Acumulado a hoy', acum, 'Revenue ya ejecutado'],
-    ['Backlog 2026', backlog, 'Lo que queda por ejecutar'],
+    ['Valor Booking', valorOf, 'Por cuánto se vendió el proyecto'],
+    ['Revenue acumulado a hoy', acum, 'Revenue ya ejecutado'],
+    ['Backlog', backlog, 'Lo que queda por ejecutar'],
     ['Consumido 2025', consumido, 'Revenue ejecutado durante 2025'],
   ].forEach(([et, v, tip]) => {
     const d = document.createElement('div');
@@ -1792,14 +2608,14 @@ function renderizarHermanosDeCliente(contenedor, proyecto) {
     .reduce((a, p) => a + (typeof p.valor_of === 'number' ? p.valor_of : 0), 0);
   const nota = document.createElement('p');
   nota.className = 'nota-tabla';
-  nota.textContent = `Valor OF de la cuenta completa: ${formatearDinero(totalCliente)}`;
+  nota.textContent = `Valor Booking de la cuenta completa: ${formatearDinero(totalCliente)}`;
   div.appendChild(nota);
 
   const t = document.createElement('table');
   t.className = 'tabla-eventos-proyecto';
   const th = document.createElement('thead');
   const trh = document.createElement('tr');
-  ['PA / PR', 'Proyecto', 'Estado', 'PM/Líder', 'Valor OF', `Revenue · ${periodoActual().etiqueta}`]
+  ['PA / PR', 'Proyecto', 'Estado', 'PM/Líder', 'Valor Booking', `Revenue · ${periodoActual().etiqueta}`]
     .forEach(x => { const e = document.createElement('th'); e.textContent = x; trh.appendChild(e); });
   th.appendChild(trh); t.appendChild(th);
 
@@ -1865,7 +2681,7 @@ function renderizarTrazabilidadProyecto(contenedor, proyecto) {
     const notaBVR = document.createElement('p');
     notaBVR.className = 'nota-grafica';
     notaBVR.textContent = 'El Commit es acumulado (enero, enero+febrero, …) y el Backlog es ' +
-      'lo que queda de Valor OF en ese punto del año: Valor OF − Acum 2025 − Commit acumulado.';
+      'lo que queda de Valor Booking en ese punto del año: Valor Booking − Acum 2025 − Commit acumulado.';
     divBVR.appendChild(notaBVR);
     const svgBVR = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svgBVR.setAttribute('class', 'grafica-svg');
@@ -2663,9 +3479,73 @@ function renderizarResumenProyectos() {
   renderizarKpisRango(filas, snaps, iA, iB);
   renderizarGraficaCambios(filas, snaps, iA, iB);
 
+  // Populate PM filter if empty
+  const filtroPM = document.getElementById('filtro-resumen-pm');
+  if (filtroPM && filtroPM.options.length === 1) {
+    const pms = [...new Set(filas.map(f => f.pm).filter(Boolean))].sort();
+    pms.forEach(pm => {
+      const opt = document.createElement('option');
+      opt.value = pm;
+      opt.textContent = pm;
+      filtroPM.appendChild(opt);
+    });
+  }
+
+  // Populate "Qué pasó" filter if empty
+  const filtroQuePaso = document.getElementById('filtro-resumen-que-paso');
+  if (filtroQuePaso && filtroQuePaso.options.length === 1) {
+    const tipos = new Set();
+    filas.forEach(f => {
+      const dir = direccionDe(f);
+      tipos.add(dir.texto);
+    });
+    [...tipos].sort().forEach(tipo => {
+      const opt = document.createElement('option');
+      opt.value = tipo;
+      opt.textContent = tipo;
+      filtroQuePaso.appendChild(opt);
+    });
+
+    // Wire up filter events
+    const filtroTexto = document.getElementById('filtro-resumen-texto');
+    filtroTexto.addEventListener('input', renderizarResumenProyectos);
+    filtroPM.addEventListener('change', renderizarResumenProyectos);
+    filtroQuePaso.addEventListener('change', renderizarResumenProyectos);
+  }
+
+  // Apply filters
+  const textoFiltro = (document.getElementById('filtro-resumen-texto').value || '').trim().toLowerCase();
+  const pmFiltro = document.getElementById('filtro-resumen-pm').value;
+  const quePasoFiltro = document.getElementById('filtro-resumen-que-paso').value;
   const soloCambios = document.getElementById('chk-solo-cambios');
-  const visibles = (soloCambios && soloCambios.checked)
+  
+  let visibles = (soloCambios && soloCambios.checked)
     ? filas.filter(f => f.cambio) : filas;
+
+  // Apply text filter
+  if (textoFiltro) {
+    visibles = visibles.filter(f =>
+      (f.nombre || '').toLowerCase().includes(textoFiltro) ||
+      (f.pa || '').toLowerCase().includes(textoFiltro)
+    );
+  }
+
+  // Apply PM filter
+  if (pmFiltro) {
+    visibles = visibles.filter(f => f.pm === pmFiltro);
+  }
+
+  // Apply "Qué pasó" filter
+  if (quePasoFiltro) {
+    visibles = visibles.filter(f => direccionDe(f).texto === quePasoFiltro);
+  }
+
+  // Update indicator
+  const indicador = document.getElementById('indicador-resumen-proyectos');
+  if (indicador) {
+    const total = soloCambios.checked ? filas.filter(f => f.cambio).length : filas.length;
+    indicador.textContent = `${visibles.length} de ${total}`;
+  }
 
   tbody.innerHTML = '';
   visibles.forEach(f => {
@@ -2756,6 +3636,7 @@ function renderizarResumenProyectos() {
   }
 }
 
+
 function actualizarTablaEventos() {
   const hist = estado.historia;
   const tabla = document.querySelector('#tabla-eventos-cambio tbody');
@@ -2767,13 +3648,51 @@ function actualizarTablaEventos() {
     .trim().toLowerCase();
   const limitar = document.getElementById('limitar-por-proyecto').checked;
 
+  // Initialize PM filter
+  const filtroPMEvento = document.getElementById('filtro-eventos-pm');
+  if (filtroPMEvento && filtroPMEvento.options.length === 1) {
+    const nombreDe = new Map(estado.proyectos.map(
+      p => [claveProyecto(p), p.pm_lider || SIN_DATO]));
+    const pms = [...new Set(hist.eventos.map(e => nombreDe.get(String(e.num_pa))).filter(Boolean))].sort();
+    pms.forEach(pm => {
+      const opt = document.createElement('option');
+      opt.value = pm;
+      opt.textContent = pm;
+      filtroPMEvento.appendChild(opt);
+    });
+    filtroPMEvento.addEventListener('change', actualizarTablaEventos);
+  }
+  const pmEvento = filtroPMEvento ? filtroPMEvento.value : '';
+
+  // Initialize Mes filter
+  const filtroMesEvento = document.getElementById('filtro-eventos-mes');
+  if (filtroMesEvento && filtroMesEvento.options.length === 1) {
+    MESES_ES.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m.charAt(0).toUpperCase() + m.slice(1);
+      filtroMesEvento.appendChild(opt);
+    });
+    filtroMesEvento.addEventListener('change', actualizarTablaEventos);
+  }
+  const mesEvento = filtroMesEvento ? filtroMesEvento.value : '';
+
   const nombreDe = new Map(estado.proyectos.map(
     p => [claveProyecto(p), p.nombre_del_proyecto || identificador(p).valor]));
+  const pmDe = new Map(estado.proyectos.map(
+    p => [claveProyecto(p), p.pm_lider || SIN_DATO]));
 
   const mesesOk = new Set(mesesActivos().map(i => MESES_ES[i]));
+  // Base del contador "N de M": los movimientos del periodo, sin los filtros de la tabla.
+  const totalPeriodo = hist.eventos.filter(e => !e.campo || mesesOk.has(e.campo)).length;
   let eventos = hist.eventos.filter(e => {
     if (e.campo && !mesesOk.has(e.campo)) return false;   // mes fuera del periodo
     if (tipo && e.tipo !== tipo) return false;
+    if (pmEvento) {
+      const pmProyecto = pmDe.get(String(e.num_pa));
+      if (pmProyecto !== pmEvento) return false;
+    }
+    if (mesEvento && e.campo !== mesEvento) return false;
     if (!busca) return true;
     const nombre = nombreDe.get(String(e.num_pa)) || e.nombre || '';
     return (nombre + ' ' + e.num_pa).toLowerCase().includes(busca);
@@ -2847,6 +3766,10 @@ function actualizarTablaEventos() {
   });
 
   const distintos = new Set(mostrados.map(e => e.num_pa)).size;
+  const indicador = document.getElementById('indicador-eventos');
+  if (indicador) {
+    indicador.textContent = `${mostrados.length} de ${totalPeriodo}`;
+  }
   let pie = document.getElementById('pie-eventos');
   if (!pie) {
     pie = document.createElement('p');
@@ -2858,7 +3781,7 @@ function actualizarTablaEventos() {
     `de ${distintos} proyectos distintos · revenue de ${periodoActual().etiqueta}.`;
 }
 
-// ============================================================================
+
 // PMs
 // ============================================================================
 
@@ -2870,7 +3793,7 @@ function actualizarTablaEventos() {
  * Commit, Upside y Total Ejecutado sí cuentan TODOS los proyectos activos
  * del PM: ahí no se trata de backlog pendiente sino de cuánto ha movido.
  */
-const CLAVE_ESTADO_PM = { 'In Progress': 'inProgreso', 'On Hold': 'onHold', 'Planned': 'planned' };
+const CLAVE_ESTADO_PM = { 'In Progress': 'inProgreso', 'On Hold': 'onHold', 'Planned': 'planned', 'Completed': 'completed' };
 
 function calcularPMs() {
   const porPM = new Map();
@@ -2883,6 +3806,7 @@ function calcularPMs() {
         inProgresoN: 0, inProgresoBacklog: 0,
         onHoldN: 0, onHoldBacklog: 0,
         plannedN: 0, plannedBacklog: 0,
+        completedN: 0,
         totalN: 0, totalBacklog: 0,
         commit: 0, upside: 0, totalEjecutado: 0,
         proyectos: [],
@@ -2900,11 +3824,16 @@ function calcularPMs() {
     const estadoBacklog = (fila && fila.estado) || p.estado;
     const clave = CLAVE_ESTADO_PM[estadoBacklog];
     if (clave) {
-      const backlogValor = fila && typeof fila.backlog === 'number' ? fila.backlog : 0;
-      acc[clave + 'N'] += 1;
-      acc[clave + 'Backlog'] += backlogValor;
-      acc.totalN += 1;
-      acc.totalBacklog += backlogValor;
+      if (clave === 'completed') {
+        // Completed no tiene backlog, solo cuenta
+        acc.completedN += 1;
+      } else {
+        const backlogValor = backlogHoy(p);
+        acc[clave + 'N'] += 1;
+        acc[clave + 'Backlog'] += (typeof backlogValor === 'number' ? backlogValor : 0);
+        acc.totalN += 1;
+        acc.totalBacklog += (typeof backlogValor === 'number' ? backlogValor : 0);
+      }
     }
   });
 
@@ -2918,6 +3847,7 @@ function calcularPMs() {
 }
 
 const COLUMNAS_PM_DINERO = new Set([
+  // completedN is NOT money, it's a count
   'inProgresoBacklog', 'onHoldBacklog', 'plannedBacklog', 'totalBacklog',
   'commit', 'upside', 'totalEjecutado', 'promedioMensual', 'promedioProyecto',
 ]);
@@ -2964,7 +3894,7 @@ function renderizarPMs() {
     anfitrion.appendChild(construirSelectorPeriodo(renderizarPMs));
   }
 
-  const thead = document.querySelector('#tabla-pms thead tr');
+  const thead = document.querySelector('#tabla-pms > thead tr');
   if (thead && !thead.dataset.wireado) {
     thead.dataset.wireado = '1';
     thead.querySelectorAll('th[data-columna]').forEach(th => {
@@ -2975,6 +3905,25 @@ function renderizarPMs() {
   }
 
   let filas = calcularPMs();
+
+  // Renderizar KPIs resumen
+  const kpisData = {
+    totalPMs: filas.length,
+    inProgress: filas.reduce((a, f) => a + f.inProgresoN, 0),
+    onHold: filas.reduce((a, f) => a + f.onHoldN, 0),
+    planned: filas.reduce((a, f) => a + f.plannedN, 0),
+    completed: filas.reduce((a, f) => a + f.completedN, 0),
+    totalBooking: filas.reduce((a, f) => a + f.proyectos.reduce((s, p) => s + (typeof p.valor_of === 'number' ? p.valor_of : 0), 0), 0),
+    // Total Backlog KPI: sum backlogHoy over all projects (same as main tab)
+    totalBacklog: filas.reduce((a, f) => a + f.proyectos.reduce((s, p) => s + (backlogHoy(p) || 0), 0), 0),
+  };
+  document.getElementById('kpi-pms-total').textContent = kpisData.totalPMs;
+  document.getElementById('kpi-pms-in-progress').textContent = kpisData.inProgress;
+  document.getElementById('kpi-pms-on-hold').textContent = kpisData.onHold;
+  document.getElementById('kpi-pms-planned').textContent = kpisData.planned;
+  document.getElementById('kpi-pms-completed').textContent = kpisData.completed;
+  document.getElementById('kpi-pms-total-booking').textContent = formatearDinero(kpisData.totalBooking);
+  document.getElementById('kpi-pms-total-backlog').textContent = formatearDinero(kpisData.totalBacklog);
 
   renderizarGraficasPMs(filas);
 
@@ -2997,21 +3946,39 @@ function renderizarPMs() {
 
   const fmt = (col, v) => (COLUMNAS_PM_DINERO.has(col) ? formatearDinero(v) : formatearNumero(v));
 
-  const tbody = document.querySelector('#tabla-pms tbody');
+  const tbody = document.querySelector('#tabla-pms > tbody');
   tbody.innerHTML = '';
   const columnas = ['inProgresoN', 'inProgresoBacklog', 'onHoldN', 'onHoldBacklog',
-    'plannedN', 'plannedBacklog', 'totalN', 'totalBacklog',
+    'plannedN', 'plannedBacklog', 'completedN', 'totalN', 'totalBacklog',
     'commit', 'upside', 'totalEjecutado', 'promedioMensual', 'promedioProyecto'];
 
   filas.forEach(f => {
     const tr = document.createElement('tr');
-    tr.className = 'fila-clicable';
-    tr.title = `Ver los proyectos de ${f.pm} en Listado de Proyectos`;
-    tr.addEventListener('click', () => irAProyectosDePM(f.pm));
+    tr.className = 'fila-pm-principal';
+    tr.dataset.pm = f.pm;
 
+    // Toggle button column
+    const tdToggle = document.createElement('td');
+    tdToggle.className = 'celda-toggle';
+    const btnToggle = document.createElement('button');
+    btnToggle.type = 'button';
+    btnToggle.className = 'btn-toggle-pm pf-v6-c-button pf-m-plain pf-m-small';
+    btnToggle.innerHTML = '<span class="chevron-pm">›</span>';
+    btnToggle.title = 'Ver proyectos de este PM';
+    btnToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleProyectosPM(f.pm);
+    });
+    tdToggle.appendChild(btnToggle);
+    tr.appendChild(tdToggle);
+
+    // PM name column - clickable for navigation to listado
     const tdPM = document.createElement('td');
     tdPM.textContent = f.pm;
-    tdPM.className = 'celda-nombre';
+    tdPM.className = 'celda-nombre celda-pm-nombre';
+    tdPM.title = `Ver los proyectos de ${f.pm} en Listado de Proyectos`;
+    tdPM.style.cursor = 'pointer';
+    tdPM.addEventListener('click', () => irAProyectosDePM(f.pm));
     tr.appendChild(tdPM);
 
     columnas.forEach(col => {
@@ -3023,13 +3990,22 @@ function renderizarPMs() {
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
+
+    // If this PM is expanded, render the sub-table
+    if (estado.expandedPMs.has(f.pm)) {
+      tbody.appendChild(crearFilaProyectosPM(f));
+      btnToggle.classList.add('expandido');
+      btnToggle.querySelector('.chevron-pm').textContent = '▾';
+    }
   });
 
   // Fila de totales, igual a "Total Result" de la tabla de negocio.
-  const tfoot = document.querySelector('#tabla-pms tfoot');
+  const tfoot = document.querySelector('#tabla-pms > tfoot');
   tfoot.innerHTML = '';
   if (filas.length) {
     const trTotal = document.createElement('tr');
+    const tdVacio = document.createElement('td'); // toggle column
+    trTotal.appendChild(tdVacio);
     const tdEtq = document.createElement('td');
     tdEtq.textContent = `Total (${filas.length} PM${filas.length === 1 ? '' : 's'})`;
     tdEtq.className = 'celda-nombre';
@@ -3051,9 +4027,144 @@ function renderizarPMs() {
   }
 }
 
-/** Clic en un PM: filtra Listado de Proyectos a sus proyectos y cambia de
- * pestaña. Reusa el filtro que ya existe en vez de construir una vista de
- * proyectos nueva. */
+function toggleProyectosPM(pm) {
+  if (estado.expandedPMs.has(pm)) {
+    estado.expandedPMs.delete(pm);
+  } else {
+    estado.expandedPMs.add(pm);
+  }
+  renderizarPMs();
+}
+
+function crearFilaProyectosPM(filaPM) {
+  const tr = document.createElement('tr');
+  tr.className = 'fila-proyectos-pm-expandida';
+  const td = document.createElement('td');
+  td.colSpan = 16; // all columns
+
+  const cont = document.createElement('div');
+  cont.className = 'contenedor-proyectos-pm';
+
+  const tabla = document.createElement('table');
+  tabla.className = 'tabla-proyectos-pm pf-v6-c-table pf-m-compact';
+
+  // Header
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  ['PA', 'Proyecto', 'Cliente', 'Estado', 'Valor Booking', 'Revenue acum.', 'Backlog', '% ejecución']
+    .forEach(txt => {
+      const th = document.createElement('th');
+      th.textContent = txt;
+      trh.appendChild(th);
+    });
+  thead.appendChild(trh);
+  tabla.appendChild(thead);
+
+  // Sort projects: by estado order, then backlog desc
+  const ordenEstado = (estado.metadataProyectos || {}).orden_estado || [];
+  const proyectos = filaPM.proyectos.slice().sort((a, b) => {
+    const iaEst = ordenEstado.indexOf(a.estado);
+    const ibEst = ordenEstado.indexOf(b.estado);
+    const estCmp = (iaEst < 0 ? 99 : iaEst) - (ibEst < 0 ? 99 : ibEst);
+    if (estCmp !== 0) return estCmp;
+    const blA = backlogHoy(a) || 0;
+    const blB = backlogHoy(b) || 0;
+    return blB - blA;
+  });
+
+  const tbody = document.createElement('tbody');
+  proyectos.forEach(p => {
+    const trp = document.createElement('tr');
+    trp.className = 'fila-proyecto-pm';
+    trp.addEventListener('click', () => abrirDetalle(p));
+
+    const valorOf = typeof p.valor_of === 'number' ? p.valor_of : 0;
+    const acum = acumuladoHoy(p) || 0;
+    const backlog = backlogHoy(p) || 0;
+    const pctEjec = valorOf > 0 ? (acum / valorOf * 100) : 0;
+
+    // PA
+    const tdPA = document.createElement('td');
+    tdPA.textContent = identificador(p).valor;
+    tdPA.className = 'celda-id';
+    trp.appendChild(tdPA);
+
+    // Proyecto name - ellipsis + title
+    const tdNom = document.createElement('td');
+    tdNom.textContent = p.nombre_del_proyecto || '—';
+    tdNom.className = 'celda-nombre';
+    tdNom.title = p.nombre_del_proyecto || '';
+    trp.appendChild(tdNom);
+
+    // Cliente
+    const tdCli = document.createElement('td');
+    tdCli.textContent = p.cliente || '—';
+    trp.appendChild(tdCli);
+
+    // Estado - colored chip
+    const tdEst = document.createElement('td');
+    const chipEst = document.createElement('span');
+    chipEst.className = 'chip-estado-pm';
+    chipEst.textContent = p.estado || '—';
+    chipEst.style.color = colorDeEntidad('estado', p.estado || '—');
+    tdEst.appendChild(chipEst);
+    trp.appendChild(tdEst);
+
+    // Valor Booking
+    const tdBooking = document.createElement('td');
+    tdBooking.textContent = formatearDinero(valorOf);
+    tdBooking.className = 'celda-numero';
+    trp.appendChild(tdBooking);
+
+    // Revenue acum
+    const tdAcum = document.createElement('td');
+    tdAcum.textContent = formatearDinero(acum);
+    tdAcum.className = 'celda-numero';
+    trp.appendChild(tdAcum);
+
+    // Backlog
+    const tdBacklog = document.createElement('td');
+    tdBacklog.textContent = formatearDinero(backlog);
+    tdBacklog.className = 'celda-numero';
+    trp.appendChild(tdBacklog);
+
+    // % ejecución
+    const tdPct = document.createElement('td');
+    tdPct.textContent = pctEjec.toFixed(1) + '%';
+    tdPct.className = 'celda-numero';
+    trp.appendChild(tdPct);
+
+    tbody.appendChild(trp);
+  });
+  tabla.appendChild(tbody);
+
+  // Footer with link to Listado
+  const tfoot = document.createElement('tfoot');
+  const trf = document.createElement('tr');
+  const tdf = document.createElement('td');
+  tdf.colSpan = 8;
+  tdf.style.textAlign = 'center';
+  tdf.style.padding = 'var(--spacing-sm)';
+  const link = document.createElement('button');
+  link.type = 'button';
+  link.className = 'pf-v6-c-button pf-m-link pf-m-small';
+  link.textContent = 'Ver en Listado de Proyectos';
+  link.addEventListener('click', (e) => {
+    e.stopPropagation();
+    irAProyectosDePM(filaPM.pm);
+  });
+  tdf.appendChild(link);
+  trf.appendChild(tdf);
+  tfoot.appendChild(trf);
+  tabla.appendChild(tfoot);
+
+  cont.appendChild(tabla);
+  td.appendChild(cont);
+  tr.appendChild(td);
+  return tr;
+}
+
+
 function irAProyectosDePM(pm) {
   DIMENSIONES.forEach(d => { estado.filtros[d.campo] = []; });
   estado.filtros.texto = '';

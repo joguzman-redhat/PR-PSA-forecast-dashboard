@@ -19,8 +19,8 @@
   --surface-1: #ffffff;
   --surface-page: #f2f2f2;
   --text-primary: #151515;
-  --text-secondary: #4f5255;
-  --text-dim: #8a8d90;
+  --text-secondary: #3a3d40;
+  --text-dim: #6a6e73;
   --grid-color: #e0e0e0;
   --baseline-color: #c7c7c7;
   --border-color: #d2d2d2;
@@ -89,7 +89,7 @@ body {
 body {
   background-color: var(--surface-page);
   color: var(--text-primary);
-  font: 400 14px/1.5 var(--font-stack);
+  font: 400 15px/1.5 var(--font-stack);
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -291,13 +291,13 @@ h3 {
 }
 
 /* ============================================================================
-   FILA DE KPIs
+   FILA DE KPIs (condensada)
    ============================================================================ */
 .fila-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-2xl);
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
 }
 
 /* Fondo, borde, radio y relleno vienen del componente real .pf-v6-c-card
@@ -306,17 +306,21 @@ h3 {
   text-align: center;
 }
 
+.kpi-tile .pf-v6-c-card__body {
+  padding: var(--spacing-md) var(--spacing-sm);
+}
+
 .kpi-valor {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
   color: var(--brand);
   word-break: break-word;
 }
 
 .kpi-etiqueta {
-  font-size: 12px;
+  font-size: 10px;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1384,6 +1388,202 @@ h3 {
 #detalle-contenedor .hero-proyecto { grid-column: 1 / -1; }
 
 /* ============================================================================
+   LAYOUT CONDENSADO DEL DASHBOARD
+   ============================================================================ */
+
+/* Card de resumen de vendedor */
+.card-vendedor-resumen {
+  margin-bottom: var(--spacing-lg);
+}
+
+.vendedor-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--spacing-lg);
+  margin: var(--spacing-md) 0;
+  padding: var(--spacing-md) 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.vendedor-stat {
+  text-align: center;
+}
+
+.vendedor-stat-valor {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+
+.vendedor-stat-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vendedor-detalle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-md);
+}
+
+.vendedor-seccion-titulo {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-sm);
+}
+
+.vendedor-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-right: 6px;
+  font-size: 11px;
+  background: var(--surface-page);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.vendedor-cliente {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+/* Layouts de gráficas condensadas */
+.panel-graficas-dos-cols {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.panel-graficas-tres-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  align-items: start;
+}
+
+.grafica-svg-condensed {
+  width: 100%;
+  height: auto;
+}
+
+.grafica-svg-small {
+  width: 100%;
+  height: auto;
+}
+
+/* Tabla de proyectos no iniciados con barra inline */
+.tabla-no-iniciados-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.tabla-no-iniciados {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.tabla-no-iniciados td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 8px !important;
+  font-size: 11px;
+}
+
+.tabla-no-iniciados th {
+  font-size: 10px;
+  padding: 6px 8px !important;
+}
+
+.celda-backlog-barra {
+  position: relative;
+  padding: var(--spacing-sm) !important;
+  overflow: visible !important;
+}
+
+.inline-backlog-barra {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  background: var(--grid-color);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.inline-backlog-relleno {
+  height: 100%;
+  background: var(--series-1);
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+
+.inline-backlog-valor {
+  position: relative;
+  z-index: 1;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px;
+}
+
+/* Reducir padding en cards de gráficas */
+.grafica-contenedor .pf-v6-c-card__body {
+  padding: var(--spacing-md);
+}
+
+.grafica-contenedor h3 {
+  margin-bottom: var(--spacing-sm);
+  font-size: 13px;
+}
+
+/* Responsive condensado */
+@media (max-width: 1200px) {
+  .panel-graficas-tres-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-graficas-dos-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .fila-kpis {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .vendedor-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .vendedor-detalle {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .fila-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .vendedor-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ============================================================================
    VISTA "¿QUÉ CAMBIÓ ENTRE DOS FECHAS?"
    ============================================================================ */
 
@@ -1733,4 +1933,190 @@ tr.fila-en-grafica:hover { background-color: color-mix(in srgb, var(--brand) 7%,
   font-weight: 400;
   font-size: 10.5px;
   color: var(--text-dim);
+}
+
+/* ============================================================================
+   PMs expandable table
+   ============================================================================ */
+
+.tabla-pms-expandible .col-toggle {
+  width: 40px;
+  padding: 0 !important;
+}
+
+.celda-toggle {
+  text-align: center;
+  padding: var(--spacing-sm) !important;
+}
+
+.btn-toggle-pm {
+  min-width: 28px;
+  padding: 2px 6px;
+}
+
+.btn-toggle-pm .chevron-pm {
+  display: inline-block;
+  font-size: 14px;
+  transition: transform 0.15s ease;
+}
+
+.btn-toggle-pm.expandido .chevron-pm {
+  transform: rotate(90deg);
+}
+
+.celda-pm-nombre {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fila-proyectos-pm-expandida {
+  background: var(--surface-page);
+}
+
+.fila-proyectos-pm-expandida > td {
+  padding: 0 !important;
+}
+
+.contenedor-proyectos-pm {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-left: 3px solid var(--brand);
+}
+
+.tabla-proyectos-pm {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.tabla-proyectos-pm th {
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tabla-proyectos-pm td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--grid-color);
+}
+
+.tabla-proyectos-pm tbody tr {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.tabla-proyectos-pm tbody tr:hover {
+  background-color: color-mix(in srgb, var(--brand) 6%, var(--surface-1));
+}
+
+.tabla-proyectos-pm tfoot td {
+  padding: var(--spacing-md) var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
+  border-bottom: none;
+}
+
+.chip-estado-pm {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+}
+
+.fila-kpis-pms {
+  margin-bottom: var(--spacing-xl);
+  grid-template-columns: repeat(7, 1fr);
+}
+
+/* ============================================================================
+   Movement filters
+   ============================================================================ */
+
+.filtros-resumen-proyectos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+  margin-top: var(--spacing-md);
+}
+
+.filtros-resumen-proyectos .filtro-input {
+  flex: 1 1 200px;
+  max-width: 280px;
+}
+
+.filtros-resumen-proyectos select {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--surface-page);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  min-width: 160px;
+}
+
+.filtro-eventos {
+  flex-wrap: wrap;
+}
+
+.filtro-eventos select {
+  min-width: 140px;
+}
+
+@media (max-width: 768px) {
+  .filtros-resumen-proyectos {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filtros-resumen-proyectos .filtro-input,
+  .filtros-resumen-proyectos select {
+    max-width: none;
+  }
+}
+
+/* Fix sub-table width and column sizing */
+.tabla-proyectos-pm {
+  table-layout: fixed;
+}
+
+.tabla-proyectos-pm th:nth-child(1) { width: 80px; }   /* PA */
+.tabla-proyectos-pm th:nth-child(2) { width: 200px; }  /* Proyecto - ellipsis */
+.tabla-proyectos-pm th:nth-child(3) { width: 120px; }  /* Cliente */
+.tabla-proyectos-pm th:nth-child(4) { width: 100px; }  /* Estado */
+.tabla-proyectos-pm th:nth-child(5) { width: 100px; }  /* Booking */
+.tabla-proyectos-pm th:nth-child(6) { width: 100px; }  /* Revenue acum */
+.tabla-proyectos-pm th:nth-child(7) { width: 100px; }  /* Backlog */
+.tabla-proyectos-pm th:nth-child(8) { width: 80px; }   /* % ejecución */
+
+.tabla-proyectos-pm .celda-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Ensure main table tfoot doesn't bleed into expanded area */
+#tabla-pms > tfoot {
+  background: var(--surface-1);
+}
+
+.fila-proyectos-pm-expandida > td {
+  border-bottom: 2px solid var(--border-color);
+}
+
+
+/* La tabla de PMs tiene scroll horizontal: sin esto, la subtabla de proyectos
+   se estira al ancho total y las columnas de dinero quedan fuera de vista. */
+.contenedor-proyectos-pm {
+  position: sticky;
+  left: 0;
+  width: min(1240px, calc(100vw - 160px));
 }
