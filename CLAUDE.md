@@ -30,6 +30,14 @@ Revisa `n8n/n8n_nola_completo.json` (lista de nodos) en vez de asumir desde
 este archivo o desde READMEs — este documento puede quedar desactualizado más
 rápido que el propio export del workflow.
 
+## Antes de tocar un cálculo de dinero
+
+Lee `docs/REGLAS_DE_DATOS.md`: todo el dinero sale de BackLog NOLA (Info
+Proyectos no tiene el factor de conversión) y el Backlog es la columna del Excel,
+no Booking − Acumulado.
+Los cambios de esquema van en `01_schema.sql` y en una migración en
+`infra/db/migraciones/`.
+
 ## Qué no está en este repo (a propósito)
 
 El ETL en Python del PoC original (`etl.py`, `generar_historia.py`,

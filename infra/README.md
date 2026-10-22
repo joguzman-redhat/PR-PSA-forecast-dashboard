@@ -46,6 +46,7 @@ credencial Postgres (host `postgres`, puerto `5432`, mismas credenciales de
 | `up` | Levanta postgres + api + n8n + nginx |
 | `public` | Lo mismo + ngrok (perfil `public`) |
 | `seed` | Carga datos a Postgres e invalida caché — ver aviso abajo |
+| `migrate` | Aplica migraciones de esquema (`db/migraciones/*.sql`, idempotentes) |
 | `rebuild` | Reconstruye la imagen de la API y recrea el contenedor |
 | `logs` / `psql` | Logs de la API / consola SQL |
 | `down` | Apaga, conserva los volúmenes |
