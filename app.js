@@ -638,7 +638,10 @@ function inicializarFiltros() {
 
 function cerrarDropdowns(excepto) {
   document.querySelectorAll('.dropdown-filtro.abierto').forEach(d => {
-    if (d !== excepto) d.classList.remove('abierto');
+    if (d !== excepto) {
+      d.classList.remove('abierto');
+      d.querySelector('.dropdown-boton').setAttribute('aria-expanded', 'false');
+    }
   });
 }
 
@@ -650,6 +653,8 @@ function construirDropdown(dim) {
   const boton = document.createElement('button');
   boton.type = 'button';
   boton.className = 'dropdown-boton';
+  boton.setAttribute('aria-expanded', 'false');
+  boton.setAttribute('aria-controls', `opciones-${dim.campo}`);
   boton.innerHTML = `<span class="dropdown-etiqueta">${dim.etiqueta}</span>
                      <span class="dropdown-badge"></span>
                      <span class="dropdown-flecha" aria-hidden="true">▾</span>`;
@@ -658,10 +663,12 @@ function construirDropdown(dim) {
     const abierto = cont.classList.contains('abierto');
     cerrarDropdowns(cont);
     cont.classList.toggle('abierto', !abierto);
+    boton.setAttribute('aria-expanded', String(!abierto));
   });
 
   const panel = document.createElement('div');
   panel.className = 'dropdown-panel';
+  panel.id = `opciones-${dim.campo}`;
 
   const opciones = opcionesDe(dim.campo);
   if (opciones.length > 10) {
@@ -669,6 +676,7 @@ function construirDropdown(dim) {
     buscador.type = 'text';
     buscador.className = 'dropdown-buscar';
     buscador.placeholder = 'Filtrar opciones...';
+    buscador.setAttribute('aria-label', `Buscar opciones de ${dim.etiqueta}`);
     buscador.addEventListener('click', e => e.stopPropagation());
     buscador.addEventListener('input', () => {
       const q = buscador.value.toLowerCase();
@@ -793,6 +801,7 @@ function renderizarTabla() {
   // Headers
   const COL_ID = '__identificador';
   const COL_REVENUE = '__revenue_periodo';
+  const columnasResumen = new Set([COL_ID, 'estado', 'nombre_del_proyecto', 'pm_lider', 'valor_of', 'backlog_2026', COL_REVENUE]);
   columnasVerdes.unshift(COL_ID);
   columnasVerdes.push(COL_REVENUE);
   columnasVerdes.forEach((key) => {
@@ -800,8 +809,10 @@ function renderizarTabla() {
       || { label: key === COL_ID ? 'PA / PR' : `Revenue · ${periodoActual().etiqueta}` };
     const th = document.createElement('th');
     const ord = estado.orden || {};
-    th.textContent = col.label + (ord.columna === key ? (ord.desc ? '  ↓' : '  ↑') : '');
+    const etiqueta = ({ valor_of: 'Valor Booking', backlog_2026: 'Backlog', pm_lider: 'PM/Líder' })[key] || col.label;
+    th.textContent = etiqueta + (ord.columna === key ? (ord.desc ? '  ↓' : '  ↑') : '');
     th.dataset.columna = key;
+    if (!columnasResumen.has(key)) th.classList.add('columna-secundaria');
     th.title = `Ordenar por ${col.label}`;
     if (ord.columna === key) th.classList.add('col-ordenada');
     th.addEventListener('click', () => ordenarTabla(key));
@@ -906,6 +917,7 @@ function renderizarTabla() {
         td.className += ' celda-nulo';
       }
 
+      if (!columnasResumen.has(key)) td.classList.add('columna-secundaria');
       tr.appendChild(td);
     });
 
@@ -1027,10 +1039,10 @@ const FORMATOS = {
 
 // Paleta de 4 colores para las series de comparación (Booking, Acumulado, Proyectada, Backlog)
 const COLORES_SERIES_COMPARACION = {
-  booking: '#0066cc',      // azul PatternFly
-  acumulado: '#f0ab00',    // naranja/amarillo PatternFly
-  proyectada: '#ec7a08',   // naranja oscuro PatternFly
-  backlog: '#c9190b',      // rojo PatternFly
+  booking: 'var(--series-1)',
+  acumulado: 'var(--series-3)',
+  proyectada: 'var(--series-4)',
+  backlog: 'var(--series-7)',
 };
 
 // El color sigue a la entidad, no a su posición en el ranking: si un filtro
@@ -1084,12 +1096,17 @@ function svgEl(tag, attrs) {
 function crearGraficaBarrasSimple(svgId, datos, opciones) {
   const svg = document.getElementById(svgId);
   if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaBarrasSimple(svgId, datos, opciones));
   svg.innerHTML = '';
+  svg.style.removeProperty('height');
 
   const op = opciones || {};
   const fmt = FORMATOS[op.formato] || FORMATOS.dinero;
 
   if (!datos.length) {
+    svg.style.height = '120px';
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Gráfica sin datos');
     svg.setAttribute('viewBox', '0 0 600 120');
     const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
       'font-size': 13, fill: 'var(--text-dim)' });
@@ -1098,19 +1115,53 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
     return;
   }
 
-  // Las etiquetas largas (países, nombres de PM) se dibujan inclinadas.
-  const etiquetasLargas = datos.some(d => String(d.etiqueta).length > 9);
-  const ancho = svg.clientWidth || 600;
-  const alto = etiquetasLargas ? 340 : 280;
+  const ancho = Math.max(300, svg.clientWidth || 300);
+  const pasoPrevio = Math.max(1, (ancho - 78) / datos.length);
+  const etiquetasLargas = datos.some(d => String(d.etiqueta).length > 9 || String(d.etiqueta).length * 7 > pasoPrevio);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', op.unidad ? `Gráfica de ${op.unidad}` : 'Gráfica de barras');
+  svg.setAttribute('title', op.unidad ? `Gráfica de ${op.unidad}` : 'Gráfica de barras');
+  if (etiquetasLargas) {
+    const fila = 28;
+    const alto = Math.max(120, datos.length * fila + 24);
+    const margen = { top: 12, right: 18, bottom: 12, left: Math.min(190, Math.max(105, Math.round(ancho * 0.34))) };
+    const areaAncho = Math.max(90, ancho - margen.left - margen.right);
+    const maxValor = Math.max(...datos.map(d => d.valor), 0) || 1;
+    const maxCaracteres = Math.max(8, Math.floor((margen.left - 12) / 6.3));
+    svg.style.height = `${alto}px`;
+    svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+    const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
+    datos.forEach((d, i) => {
+      const y = i * fila + 4;
+      const texto = String(d.etiqueta);
+      const label = svgEl('text', { x: -8, y: y + 8, 'font-size': 11, 'text-anchor': 'end', fill: 'var(--text-secondary)' });
+      label.textContent = texto.length > maxCaracteres ? texto.slice(0, maxCaracteres - 1) + '…' : texto;
+      const title = svgEl('title', {}); title.textContent = texto; label.appendChild(title); g.appendChild(label);
+      const barW = Math.max(1, d.valor / maxValor * areaAncho);
+      const bar = svgEl('rect', { x: 0, y, width: barW, height: 14, rx: 2, fill: op.campoColor ? colorDeEntidad(op.campoColor, d.etiqueta) : 'var(--series-1)' });
+      g.appendChild(bar);
+      const cercaDelBorde = barW > areaAncho - 52;
+      const value = svgEl('text', { x: cercaDelBorde ? areaAncho - 3 : Math.min(barW + 5, areaAncho - 2), y: y + 11, 'font-size': 10, 'text-anchor': cercaDelBorde ? 'end' : 'start', fill: 'var(--text-primary)', 'font-variant-numeric': 'tabular-nums' });
+      value.textContent = fmt(d.valor); g.appendChild(value);
+      const hit = svgEl('rect', { x: 0, y: y - 2, width: areaAncho, height: 18, fill: 'transparent' });
+      hit.addEventListener('mouseenter', e => mostrarTooltip(e, texto, [{ color: bar.getAttribute('fill'), etiqueta: op.unidad || 'Valor', valor: d.exacto || fmt(d.valor) }]));
+      hit.addEventListener('mousemove', moverTooltip); hit.addEventListener('mouseleave', ocultarTooltip); g.appendChild(hit);
+    });
+    svg.appendChild(g);
+    return;
+  }
+  // Las categorías cortas conservan las barras verticales.
+  const alto = 280;
   const margen = {
     top: 16, right: 16,
-    bottom: etiquetasLargas ? 112 : 44,
-    left: etiquetasLargas ? 76 : 62,
+    bottom: 44,
+    left: 62,
   };
   const areaAncho = Math.max(80, ancho - margen.left - margen.right);
   const areaAlto = alto - margen.top - margen.bottom;
 
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = `${alto}px`;
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
   const maxValor = Math.max(...datos.map(d => d.valor), 0) || 1;
@@ -1184,12 +1235,7 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
     const lbl = svgEl('text', {
       'font-size': 12, fill: 'var(--text-secondary)',
     });
-    if (etiquetasLargas) {
-      const cx = i * paso + paso / 2;
-      lbl.setAttribute('transform', `translate(${cx},${areaAlto + 12}) rotate(-32)`);
-      lbl.setAttribute('text-anchor', 'end');
-      lbl.textContent = texto.length > 19 ? texto.slice(0, 18) + '…' : texto;
-    } else {
+    {
       lbl.setAttribute('x', i * paso + paso / 2);
       lbl.setAttribute('y', areaAlto + 16);
       lbl.setAttribute('text-anchor', 'middle');
@@ -1211,12 +1257,15 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
 function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
   const svg = document.getElementById(svgId);
   if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones));
   svg.innerHTML = '';
+  svg.style.removeProperty('height');
 
   const op = opciones || {};
   const fmt = FORMATOS[op.formato] || FORMATOS.dinero;
 
   if (!datos.length) {
+    svg.style.height = '120px';
     svg.setAttribute('viewBox', '0 0 600 120');
     const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
       'font-size': 13, fill: 'var(--text-dim)' });
@@ -1225,41 +1274,57 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
     return;
   }
 
-  const ancho = svg.clientWidth || 800;
-  const alturaPorGrupo = 36;  // condensado de 68
+  const ancho = Math.max(300, svg.clientWidth || 300);
+  const nSeriesGlobal = datos[0].series.length;
+  const alturaPorGrupo = Math.max(36, nSeriesGlobal * 10 + (nSeriesGlobal - 1) * 3 + 8);
   const margenGrupo = 8;      // condensado de 24
-  const zonas = [...new Set(datos.map(d => d.zona))];
-  let altoTotal = 50;  // espacio para leyenda arriba
-  zonas.forEach(z => {
-    const enZona = datos.filter(d => d.zona === z);
-    altoTotal += 20 + enZona.length * (alturaPorGrupo + margenGrupo);
+  const zonas = [...new Set(datos.map(d => d.zona ?? null))];
+  const seriesLeyenda = datos[0].series;
+  const margenIzq = Math.min(190, Math.max(110, Math.round(ancho * 0.32)));
+  const anchoMaxLeyenda = ancho - margenIzq - 8;
+  let leyendaFilas = 1, anchoFilaLeyenda = 0;
+  seriesLeyenda.forEach(s => {
+    const w = 34 + s.nombre.length * 6.5;
+    if (anchoFilaLeyenda && anchoFilaLeyenda + w > anchoMaxLeyenda) { leyendaFilas++; anchoFilaLeyenda = 0; }
+    anchoFilaLeyenda += w;
   });
-  const margen = { top: 64, right: 80, bottom: 16, left: Math.round(160 * escalaTexto()) };
-  const alto = Math.max(300, altoTotal + margen.bottom);  // right margin para labels
-  const areaAncho = ancho - margen.left - margen.right;
+  const margenTop = 38 + leyendaFilas * 18;
+  let altoTotal = margenTop;
+  zonas.forEach(z => {
+    const enZona = datos.filter(d => z === null ? d.zona == null : d.zona === z);
+    altoTotal += (z !== null && z !== '' ? 20 : 0) + enZona.length * (alturaPorGrupo + margenGrupo);
+  });
+  const margen = { top: margenTop, right: 80, bottom: 16, left: margenIzq };
+  const alto = Math.max(120, altoTotal + margen.bottom);
+  const areaAncho = Math.max(80, ancho - margen.left - margen.right);
   const areaAlto = alto - margen.top - margen.bottom;
 
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
   svg.style.height = alto + 'px';
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', op.unidad || 'Gráfica de barras agrupadas');
+  svg.setAttribute('title', op.unidad || 'Gráfica de barras agrupadas');
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
   const maxValor = Math.max(...datos.flatMap(d => d.series.map(s => s.valor)), 1);
 
-  // Leyenda arriba en fila horizontal
+  // Leyenda envuelta dentro del ancho disponible.
   if (datos.length && datos[0].series.length) {
-    let offsetX = 0;
-    datos[0].series.forEach(s => {
+    let offsetX = 0, filaLeyenda = 0;
+    seriesLeyenda.forEach(s => {
+      const anchoLeyenda = 34 + s.nombre.length * 6.5;
+      if (offsetX && offsetX + anchoLeyenda > anchoMaxLeyenda) { offsetX = 0; filaLeyenda++; }
       const gLey = svgEl('g', {});
       gLey.appendChild(svgEl('rect', {
-        x: offsetX, y: -46, width: 11, height: 11, rx: 2, fill: s.color,
+        x: offsetX, y: -margenTop + 14 + filaLeyenda * 18, width: 11, height: 11, rx: 2, fill: s.color,
       }));
       const t = svgEl('text', {
-        x: offsetX + 16, y: -37, 'font-size': 11, fill: 'var(--text-secondary)',
+        x: offsetX + 16, y: -margenTop + 23 + filaLeyenda * 18, 'font-size': 11, fill: 'var(--text-secondary)',
       });
       t.textContent = s.nombre;
       gLey.appendChild(t);
       g.appendChild(gLey);
-      offsetX += 16 + s.nombre.length * 7.2 * escalaTexto() + 18;
+      offsetX += anchoLeyenda;
     });
   }
 
@@ -1282,21 +1347,23 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
   // Dibujar grupos por zona
   let offsetY = 0;
   zonas.forEach(zona => {
-    const gruposZona = datos.filter(d => d.zona === zona);
+    const gruposZona = datos.filter(d => zona === null ? d.zona == null : d.zona === zona);
     if (gruposZona.length === 0) return;  // skip zona with no clients
 
     // Etiqueta de zona
-    const lblZona = svgEl('text', {
-      x: -10, y: offsetY + 10, 'font-size': 10, 'text-anchor': 'end',
-      fill: 'var(--text-dim)', 'font-weight': 600, 'text-transform': 'uppercase',
-    });
-    lblZona.textContent = zona || '(sin zona)';
-    g.appendChild(lblZona);
-    offsetY += 20;
+    if (zona !== null && zona !== '') {
+      const lblZona = svgEl('text', {
+        x: -10, y: offsetY + 10, 'font-size': 10, 'text-anchor': 'end',
+        fill: 'var(--text-dim)', 'font-weight': 600, 'text-transform': 'uppercase',
+      });
+      lblZona.textContent = zona;
+      g.appendChild(lblZona);
+      offsetY += 20;
+    }
 
     gruposZona.forEach((grupo) => {
       const nSeries = grupo.series.length;
-      const alturaBarra = 8;  // increased from 6 to reduce overlap
+      const alturaBarra = 9;
       const espacioEntreSeries = 2;
       const alturaGrupo = nSeries * alturaBarra + (nSeries - 1) * espacioEntreSeries;
       const yBase = offsetY + (alturaPorGrupo - alturaGrupo) / 2;
@@ -1344,6 +1411,12 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
           fill: 'transparent',
         });
         zona.style.cursor = 'pointer';
+        if (op.alClickar) {
+          zona.setAttribute('role', 'button'); zona.setAttribute('tabindex', '0');
+          zona.setAttribute('aria-label', `${grupo.etiqueta}: ${serie.nombre}, ${fmt(serie.valor)}. Filtrar por ${grupo.etiqueta}`);
+          zona.addEventListener('click', () => op.alClickar(grupo.etiqueta));
+          zona.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); op.alClickar(grupo.etiqueta); } });
+        }
         zona.addEventListener('mouseenter', e => {
           barra.setAttribute('opacity', '0.78');
           mostrarTooltip(e, grupo.etiqueta, [{
@@ -1375,12 +1448,15 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
 function crearGraficaBarrasAgrupadasVertical(svgId, datos, opciones) {
   const svg = document.getElementById(svgId);
   if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaBarrasAgrupadasVertical(svgId, datos, opciones));
   svg.innerHTML = '';
+  svg.style.removeProperty('height');
 
   const op = opciones || {};
   const fmt = FORMATOS[op.formato] || FORMATOS.dinero;
 
   if (!datos.length) {
+    svg.style.height = '120px';
     svg.setAttribute('viewBox', '0 0 600 120');
     const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
       'font-size': 13, fill: 'var(--text-dim)' });
@@ -1398,6 +1474,9 @@ function crearGraficaBarrasAgrupadasVertical(svgId, datos, opciones) {
 
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
   svg.style.height = alto + 'px';
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Gráfica de barras agrupadas verticales');
+  svg.setAttribute('title', 'Gráfica de barras agrupadas verticales');
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
   const maxValor = Math.max(...datos.flatMap(d => d.series.map(s => s.valor)), 1);
@@ -1470,7 +1549,12 @@ function crearGraficaBarrasAgrupadasVertical(svgId, datos, opciones) {
       });
       // El clic va en la misma zona del tooltip: una capa aparte encima del
       // grupo tapaba los tooltips de cada barra.
-      if (op.alClickar) zona.addEventListener('click', () => op.alClickar(grupo.etiqueta));
+      if (op.alClickar) {
+        zona.setAttribute('role', 'button'); zona.setAttribute('tabindex', '0');
+        zona.setAttribute('aria-label', `Filtrar por vendedor ${grupo.etiqueta}: ${serie.nombre}, ${fmt(serie.valor)}`);
+        zona.addEventListener('click', () => op.alClickar(grupo.etiqueta));
+        zona.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); op.alClickar(grupo.etiqueta); } });
+      }
       g.appendChild(zona);
     });
 
@@ -1540,11 +1624,14 @@ function crearGraficaBarrasAgrupadasVertical(svgId, datos, opciones) {
 function crearGraficaBarrasApiladas(svgId, datos, opciones) {
   const svg = document.getElementById(svgId);
   if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaBarrasApiladas(svgId, datos, opciones));
   svg.innerHTML = '';
+  svg.style.removeProperty('height');
 
   const op = opciones || {};
 
   if (!datos.length) {
+    svg.style.height = '120px';
     svg.setAttribute('viewBox', '0 0 600 120');
     const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
       'font-size': 13, fill: 'var(--text-dim)' });
@@ -1553,17 +1640,29 @@ function crearGraficaBarrasApiladas(svgId, datos, opciones) {
     return;
   }
 
-  const ancho = svg.clientWidth || 800;
+  const ancho = Math.max(300, svg.clientWidth || 300);
   const alturaPorBarra = 32;
   const margenBarra = 12;
-  const alto = Math.max(220, datos.length * (alturaPorBarra + margenBarra) + 80);
-  const margen = { top: 40, right: 50, bottom: 20, left: Math.round(140 * escalaTexto()) };  // right margin for total label
+  const segmentosLeyenda = op.todosSegmentos || (datos.length && datos[0].segmentos) || [];
+  const anchoLeyenda = Math.max(120, ancho - 24);
+  let filasLeyenda = 1, anchoFila = 0;
+  segmentosLeyenda.forEach(s => {
+    const w = 34 + s.nombre.length * 7.2 * escalaTexto();
+    if (anchoFila && anchoFila + w > anchoLeyenda) { filasLeyenda++; anchoFila = 0; }
+    anchoFila += w;
+  });
+  const margenTop = 24 + filasLeyenda * 18;
+  const alto = Math.max(160, datos.length * (alturaPorBarra + margenBarra) + margenTop + 36);
+  const margen = { top: margenTop, right: 50, bottom: 20, left: Math.round(140 * escalaTexto()) };  // right margin for total label
   const espacioTotal = 36;  // reserve space for total label at end of bar
   const areaAncho = ancho - margen.left - margen.right - espacioTotal;
   const areaAlto = alto - margen.top - margen.bottom;
 
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
   svg.style.height = alto + 'px';
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', op.unidad || 'Gráfica de barras apiladas');
+  svg.setAttribute('title', op.unidad || 'Gráfica de barras apiladas');
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
   // Valor máximo = suma de segmentos de cada barra
@@ -1649,22 +1748,23 @@ function crearGraficaBarrasApiladas(svgId, datos, opciones) {
     g.appendChild(lblTotal);
   });
 
-  // Leyenda arriba
-  const segmentosLeyenda = op.todosSegmentos || (datos.length && datos[0].segmentos) || [];
+  // Leyenda envuelta arriba, con espacio reservado en el SVG.
   if (segmentosLeyenda.length) {
-    let offset = -margen.left + 8;
+    let offset = -margen.left + 8, filaLeyenda = 0;
     segmentosLeyenda.forEach(s => {
+      const anchoItem = 34 + s.nombre.length * 7.2 * escalaTexto();
+      if (offset > -margen.left + 8 && offset + anchoItem > ancho - margen.left - 8) { offset = -margen.left + 8; filaLeyenda++; }
       const gLey = svgEl('g', {});
       gLey.appendChild(svgEl('rect', {
-        x: offset, y: -26, width: 11, height: 11, rx: 2, fill: s.color,
+        x: offset, y: -margenTop + 12 + filaLeyenda * 18, width: 11, height: 11, rx: 2, fill: s.color,
       }));
       const t = svgEl('text', {
-        x: offset + 16, y: -17, 'font-size': 11, fill: 'var(--text-secondary)',
+        x: offset + 16, y: -margenTop + 21 + filaLeyenda * 18, 'font-size': 11, fill: 'var(--text-secondary)',
       });
       t.textContent = s.nombre;
       gLey.appendChild(t);
       g.appendChild(gLey);
-      offset += 16 + s.nombre.length * 7.2 * escalaTexto() + 18;
+      offset += anchoItem;
     });
   }
 
@@ -1926,8 +2026,9 @@ function actualizarGraficas() {
   })).filter(d => d.etiqueta !== SIN_DATO)
     .sort((a, b) => b.booking - a.booking).slice(0, 6);
 
-  crearGraficaBarrasAgrupadasVertical('grafica-booking-vendedor', datosVendedor, {
+  crearGraficaBarrasAgrupadasHorizontal('grafica-booking-vendedor', datosVendedor, {
     formato: 'dinero',
+    unidad: 'Booking y ejecución por vendedor',
     alClickar: (vendedor) => {
       // Aplicar filtro de vendedor y refrescar
       DIMENSIONES.forEach(d => { estado.filtros[d.campo] = []; });
@@ -2136,10 +2237,11 @@ function renderizarDetalle() {
   ];
 
   secciones.forEach(seccion => {
-    const div = document.createElement('div');
+    const div = document.createElement('details');
     div.className = 'seccion-detalle';
+    div.open = seccion.titulo === 'Datos Comerciales' || seccion.titulo === 'Estatus';
 
-    const h4 = document.createElement('h4');
+    const h4 = document.createElement('summary');
     h4.textContent = seccion.titulo;
     div.appendChild(h4);
 
@@ -2306,15 +2408,21 @@ function renderizarDetalle() {
  */
 function crearGraficaRevenueProyecto(svg, datos, meses) {
   if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaRevenueProyecto(svg, datos, meses));
   svg.innerHTML = '';
+  svg.style.removeProperty('height');
 
   const SERIES = ['Commit', 'Upside'];
-  const ancho = 900;
+  const ancho = Math.max(300, svg.clientWidth || 300);
   const alto = 320;
   const margen = { top: 34, right: 18, bottom: 46, left: 72 };
   const areaAncho = ancho - margen.left - margen.right;
   const areaAlto = alto - margen.top - margen.bottom;
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = `${alto}px`;
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Revenue mensual del proyecto');
+  svg.setAttribute('title', 'Revenue mensual del proyecto');
 
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
@@ -2423,7 +2531,9 @@ function crearGraficaRevenueProyecto(svg, datos, meses) {
  */
 function crearGraficaLinea(svg, datos, opciones) {
   if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaLinea(svg, datos, opciones));
   svg.innerHTML = '';
+  svg.style.removeProperty('height');
   const op = opciones || {};
 
   const puntos = Object.keys(datos);
@@ -2433,6 +2543,8 @@ function crearGraficaLinea(svg, datos, opciones) {
   // Decir "sin historico" se lee como "no hay datos" y manda a buscar un fallo
   // que no esta: se muestran los valores de esa carga y por que falta la linea.
   if (puntos.length === 1 && series.length) {
+    svg.style.height = '130px';
+    svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Valores de la única carga disponible');
     svg.setAttribute('viewBox', '0 0 600 130');
     const etq = svgEl('text', { x: 300, y: 26, 'text-anchor': 'middle',
       'font-size': 12, fill: 'var(--text-dim)' });
@@ -2455,6 +2567,8 @@ function crearGraficaLinea(svg, datos, opciones) {
   }
 
   if (puntos.length < 2 || !series.length) {
+    svg.style.height = '120px';
+    svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Sin histórico disponible');
     svg.setAttribute('viewBox', '0 0 600 120');
     const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
       'font-size': 13, fill: 'var(--text-dim)' });
@@ -2463,14 +2577,25 @@ function crearGraficaLinea(svg, datos, opciones) {
     return;
   }
 
-  const ancho = svg.clientWidth || 900;
-  const alto = 340;
-  // Las fechas del eje X van rotadas y ancladas al final: se extienden hacia
-  // la izquierda del primer punto, así que el margen izquierdo crece con la letra.
-  const margen = { top: 40, right: 22, bottom: Math.round(64 * escalaTexto()), left: Math.round(120 * escalaTexto()) };
+  const ancho = Math.max(300, svg.clientWidth || 300);
+  // Se calcula el número real de filas de leyenda con el mismo algoritmo que
+  // dibuja los elementos, dejando el área del gráfico libre.
+  const margenIzq = Math.min(100, Math.round(ancho * 0.24));
+  const anchoLeyenda = Math.max(100, ancho - margenIzq - 44);
+  let leyendaFilas = 1, anchoFilaLeyenda = 0;
+  series.forEach(s => {
+    const w = 19 + s.length * 7.2 * escalaTexto() + 16;
+    if (anchoFilaLeyenda && anchoFilaLeyenda + w > anchoLeyenda) { leyendaFilas++; anchoFilaLeyenda = 0; }
+    anchoFilaLeyenda += w;
+  });
+  const margen = { top: 24 + leyendaFilas * 18, right: 44, bottom: 40, left: margenIzq };
+  const alto = Math.max(340, margen.top + margen.bottom + 200);
   const areaAncho = Math.max(120, ancho - margen.left - margen.right);
   const areaAlto = alto - margen.top - margen.bottom;
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = `${alto}px`;
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Evolución de revenue');
+  svg.setAttribute('title', 'Evolución de revenue');
 
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
@@ -2497,16 +2622,24 @@ function crearGraficaLinea(svg, datos, opciones) {
     g.appendChild(lbl);
   }
 
-  // Eje X: solo ~7 etiquetas, si no se encabalgan.
-  const salto = Math.max(1, Math.ceil(puntos.length / 7));
+  // Eje X: fecha breve y horizontal; el title conserva la etiqueta exacta.
+  const maxTicks = Math.max(2, Math.min(6, Math.floor(areaAncho / 76)));
+  const salto = Math.max(1, Math.ceil((puntos.length - 1) / (maxTicks - 1)));
   puntos.forEach((p, i) => {
     if (i % salto !== 0 && i !== puntos.length - 1) return;
     const lbl = svgEl('text', {
       'font-size': 10, fill: 'var(--text-dim)',
-      transform: `translate(${x(i)},${areaAlto + 12}) rotate(-28)`,
-      'text-anchor': 'end',
+      x: x(i), y: areaAlto + 24, 'text-anchor': 'middle',
     });
-    lbl.textContent = p.length > 16 ? p.slice(0, 15) + '…' : p;
+    const fecha = new Date(p);
+    const fechaValida = !Number.isNaN(fecha.getTime());
+    const tieneHora = /(?:T|\s)\d{1,2}:\d{2}/.test(p);
+    lbl.textContent = fechaValida
+      ? new Intl.DateTimeFormat('es-CO', tieneHora
+        ? { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }
+        : { day: '2-digit', month: 'short' }).format(fecha).replace(',', '')
+      : (p.length > 12 ? p.slice(0, 11) + '…' : p);
+    const fechaCompleta = svgEl('title', {}); fechaCompleta.textContent = p; lbl.appendChild(fechaCompleta);
     g.appendChild(lbl);
   });
 
@@ -2537,23 +2670,26 @@ function crearGraficaLinea(svg, datos, opciones) {
   });
 
   // Leyenda arriba, fuera del área de datos para no taparlos.
-  const leyenda = svgEl('g', { transform: `translate(0,${-22})` });
+  const leyenda = svgEl('g', {});
   const etiquetasLeyenda = [];
-  let offset = 0;
+  let offset = 0, filaLeyenda = 0;
   series.forEach((s, si) => {
+    const anchoItem = 19 + s.length * 7.2 * escalaTexto() + 16;
+    if (offset && offset + anchoItem > anchoLeyenda) { offset = 0; filaLeyenda++; }
     const item = svgEl('g', {});
+    item.setAttribute('transform', `translate(${offset},${-margen.top + 16 + filaLeyenda * 18})`);
     item.appendChild(svgEl('line', {
-      x1: offset, y1: -4, x2: offset + 14, y2: -4,
+      x1: 0, y1: -4, x2: 14, y2: -4,
       stroke: colorSerie(si), 'stroke-width': 2, 'stroke-linecap': 'round',
     }));
     const t = svgEl('text', {
-      x: offset + 19, y: 0, 'font-size': 11, fill: 'var(--text-secondary)',
+      x: 19, y: 0, 'font-size': 11, fill: 'var(--text-secondary)',
     });
     t.textContent = s;
     item.appendChild(t);
     leyenda.appendChild(item);
     etiquetasLeyenda.push(item);
-    offset += 19 + s.length * 7.2 * escalaTexto() + 16;
+    offset += anchoItem;
   });
   g.appendChild(leyenda);
 
@@ -3506,11 +3642,13 @@ function renderizarGraficaCambios(filas, snaps, iA, iB) {
   const svg = document.getElementById('grafica-que-cambio');
   const nota = document.getElementById('nota-que-cambio');
   if (!svg) return;
+  registrarGrafica(svg, () => renderizarGraficaCambios(filas, snaps, iA, iB));
   graficaQueCambio = null;
 
   const movidos = filas.filter(f => f.cambio).slice(0, MAX_LINEAS_CAMBIO);
   if (!movidos.length || iB - iA < 1) {
     svg.innerHTML = '';
+    svg.style.height = '110px';
     svg.setAttribute('viewBox', '0 0 600 90');
     const t = svgEl('text', { x: 300, y: 50, 'text-anchor': 'middle',
       'font-size': 13, fill: 'var(--text-dim)' });
@@ -4666,6 +4804,198 @@ function setupMutationObserver() {
 // NAVEGACIÓN
 // ============================================================================
 
+// Cada SVG conserva su función de dibujo. El observador solo reacciona al
+// ancho: abrir un panel o cambiar su altura no crea un bucle de renderizado.
+const graficasRegistradas = new WeakMap();
+const graficasPendientes = new Set();
+let ajusteGraficasPendiente = 0;
+const observadorGraficas = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entradas => {
+  entradas.forEach(({ target, contentRect }) => {
+    if (!target.isConnected) {
+      observadorGraficas.unobserve(target);
+      graficasRegistradas.delete(target);
+      return;
+    }
+    const registro = graficasRegistradas.get(target);
+    if (registro && contentRect.width > 0 && Math.abs(target.clientWidth - registro.ancho) > 1) {
+      graficasPendientes.add(target);
+    }
+  });
+  if (!graficasPendientes.size || ajusteGraficasPendiente) return;
+  ajusteGraficasPendiente = requestAnimationFrame(() => {
+    ajusteGraficasPendiente = 0;
+    const pendientes = [...graficasPendientes];
+    graficasPendientes.clear();
+    pendientes.forEach(svg => {
+      if (svg.isConnected && svg.clientWidth > 0) graficasRegistradas.get(svg)?.pintar();
+    });
+  });
+});
+
+function registrarGrafica(svg, pintar) {
+  if (!svg) return;
+  svg.style.minHeight = '0';
+  const nuevo = !graficasRegistradas.has(svg);
+  graficasRegistradas.set(svg, {
+    pintar: () => {
+      const controlador = pintar();
+      if (svg.id === 'grafica-que-cambio' && controlador) graficaQueCambio = controlador;
+    },
+    ancho: svg.clientWidth,
+  });
+  if (nuevo) observadorGraficas?.observe(svg);
+}
+
+function ajustarGraficasVisibles() {
+  ocultarTooltip();
+  document.querySelectorAll('.pestana-contenido.activa svg').forEach(svg => {
+    if (svg.clientWidth > 0 && svg.getClientRects().length) graficasRegistradas.get(svg)?.pintar();
+  });
+}
+
+// Reporte independiente del layout del dashboard. Los SVG siguen siendo
+// vectoriales al guardar el resultado desde la impresión del navegador.
+let detallesAntesDeImprimir = [];
+let scrollAntesDelReporte = 0;
+
+function prepararReporteGraficas() {
+  const vista = document.querySelector('.pestana-contenido.activa');
+  if (!vista) return;
+  cerrarDropdowns();
+  document.body.classList.add('preparando-reporte');
+  detallesAntesDeImprimir = [...vista.querySelectorAll('details:not([open])')];
+  detallesAntesDeImprimir.forEach(detalle => { detalle.open = true; });
+  ajustarGraficasVisibles();
+
+  const reporte = document.getElementById('reporte-graficas') || document.createElement('section');
+  reporte.id = 'reporte-graficas';
+  reporte.replaceChildren();
+  const barra = document.createElement('div');
+  barra.className = 'reporte-acciones';
+  const volver = document.createElement('button');
+  volver.type = 'button';
+  volver.className = 'pf-v6-c-button pf-m-secondary';
+  volver.textContent = 'Volver al dashboard';
+  volver.addEventListener('click', cerrarReporteGraficas);
+  const imprimir = document.createElement('button');
+  imprimir.type = 'button';
+  imprimir.className = 'pf-v6-c-button pf-m-primary';
+  imprimir.textContent = 'Imprimir / guardar como PDF';
+  imprimir.addEventListener('click', () => window.print());
+  barra.append(volver, imprimir);
+  reporte.appendChild(barra);
+
+  const cabecera = document.createElement('header');
+  cabecera.className = 'reporte-cabecera';
+  const titulo = document.createElement('h1');
+  const nombreVista = document.querySelector('.pestana-btn.activa')?.textContent.trim() || 'Dashboard';
+  titulo.textContent = `${nombreVista} · Gráficas`;
+  const contexto = document.createElement('p');
+  contexto.className = 'reporte-contexto';
+  const partes = [new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }), `Periodo de revenue: ${periodoActual().etiqueta}`];
+  if (vista.id === 'pestana-listado') {
+    DIMENSIONES.forEach(dim => {
+      if (estado.filtros[dim.campo].length) partes.push(`${dim.etiqueta}: ${estado.filtros[dim.campo].join(', ')}`);
+    });
+    if (estado.filtros.texto) partes.push(`Búsqueda: ${estado.filtros.texto}`);
+    partes.push(estado.incluirCancelados ? 'Incluye cancelados' : 'Excluye cancelados');
+    partes.push(document.getElementById('indicador-proyectos').textContent);
+  } else if (vista.id === 'pestana-trazabilidad') {
+    ['select-snap-a', 'select-snap-b'].forEach((id, i) => {
+      const selector = document.getElementById(id);
+      if (selector?.selectedOptions.length) partes.push(`${i ? 'Hasta' : 'Desde'}: ${selector.selectedOptions[0].textContent}`);
+    });
+  } else if (vista.id === 'pestana-detalle' && estado.proyectoSeleccionado) {
+    partes.push(estado.proyectoSeleccionado.nombre_del_proyecto || identificador(estado.proyectoSeleccionado).valor);
+  }
+  contexto.textContent = partes.join(' · ');
+  cabecera.append(titulo, contexto);
+  const ayuda = document.createElement('p');
+  ayuda.className = 'reporte-nota';
+  ayuda.textContent = 'En el diálogo de impresión elige Guardar como PDF. Cada gráfica conserva su proporción y se imprime en una página.';
+  cabecera.appendChild(ayuda);
+  reporte.appendChild(cabecera);
+
+  vista.querySelectorAll('svg').forEach(svg => {
+    if (!graficasRegistradas.has(svg) || !svg.children.length) return;
+    const figura = document.createElement('figure');
+    figura.className = 'reporte-grafica';
+    const contenedor = svg.closest('.grafica-contenedor, .detalle-revenue, .detalle-trazabilidad');
+    const caption = document.createElement('figcaption');
+    caption.textContent = contenedor?.querySelector('h3, h4')?.textContent || 'Revenue';
+    figura.appendChild(caption);
+    if (svg.id === 'grafica-backlog-vs-revenue') {
+      const selector = document.querySelector('#selector-backlog-vs-revenue select');
+      if (selector?.selectedOptions.length) {
+        const alcance = document.createElement('p');
+        alcance.className = 'reporte-nota';
+        alcance.textContent = `Mes a mes del año actual · ${selector.selectedOptions[0].textContent} · independiente del periodo superior y los snapshots.`;
+        figura.appendChild(alcance);
+      }
+    }
+    const copia = svg.cloneNode(true);
+    copia.removeAttribute('id');
+    copia.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+    copia.querySelectorAll('[tabindex]').forEach(el => el.removeAttribute('tabindex'));
+    copia.querySelectorAll('[role="button"]').forEach(el => el.removeAttribute('role'));
+    copia.style.width = '100%';
+    copia.style.height = 'auto';
+    copia.style.minHeight = '0';
+    figura.appendChild(copia);
+    const nota = contenedor?.querySelector('.nota-grafica');
+    if (nota && svg.id !== 'grafica-booking-vendedor') {
+      const texto = document.createElement('p');
+      texto.className = 'reporte-nota';
+      texto.textContent = nota.textContent;
+      figura.appendChild(texto);
+    }
+    reporte.appendChild(figura);
+  });
+  if (!reporte.querySelector('figure')) {
+    const vacio = document.createElement('p');
+    vacio.textContent = 'No hay gráficas disponibles en esta vista.';
+    reporte.appendChild(vacio);
+  }
+  document.body.appendChild(reporte);
+  document.body.classList.remove('preparando-reporte');
+}
+
+function cerrarReporteGraficas() {
+  document.body.classList.remove('modo-reporte');
+  detallesAntesDeImprimir.forEach(detalle => { detalle.open = false; });
+  detallesAntesDeImprimir = [];
+  document.getElementById('reporte-graficas')?.remove();
+  window.scrollTo(0, scrollAntesDelReporte);
+  document.querySelector('.btn-exportar-graficas')?.focus({ preventScroll: true });
+}
+
+function inicializarReporteGraficas() {
+  const boton = document.createElement('button');
+  boton.type = 'button';
+  boton.className = 'btn-exportar-graficas pf-v6-c-button pf-m-secondary';
+  boton.textContent = 'Exportar gráficas';
+  boton.addEventListener('click', () => {
+    scrollAntesDelReporte = window.scrollY;
+    prepararReporteGraficas();
+    document.body.classList.add('modo-reporte');
+    window.scrollTo(0, 0);
+    document.querySelector('#reporte-graficas button')?.focus({ preventScroll: true });
+  });
+  document.querySelector('.encabezado').appendChild(boton);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.body.classList.contains('modo-reporte')) cerrarReporteGraficas();
+  });
+  window.addEventListener('beforeprint', () => {
+    if (!document.body.classList.contains('modo-reporte')) {
+      scrollAntesDelReporte = window.scrollY;
+      prepararReporteGraficas();
+    }
+  });
+  window.addEventListener('afterprint', () => {
+    if (!document.body.classList.contains('modo-reporte')) cerrarReporteGraficas();
+  });
+}
+
 function cambiarPestana(nombre, omitirHash) {
   // La pestaña queda en el hash de la URL: así se puede compartir un enlace
   // directo a la trazabilidad o a un proyecto concreto.
@@ -4707,6 +5037,8 @@ function cambiarPestana(nombre, omitirHash) {
   } else if (nombre === 'pms') {
     renderizarPMs();
   }
+  if (nombre === 'detalle') window.scrollTo(0, 0);
+  requestAnimationFrame(ajustarGraficasVisibles);
 }
 
 // ============================================================================
@@ -4714,6 +5046,7 @@ function cambiarPestana(nombre, omitirHash) {
 // ============================================================================
 
 function actualizarUI() {
+  ocultarTooltip();
   calcularKPIs();
   renderizarTabla();
   actualizarGraficas();
@@ -4737,6 +5070,15 @@ async function inicializar() {
 
   // Inicializar filtros
   inicializarFiltros();
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    document.querySelector('.panel-filtros').open = false;
+  }
+  inicializarReporteGraficas();
+  window.addEventListener('scroll', ocultarTooltip, { capture: true, passive: true });
+  document.addEventListener('toggle', ocultarTooltip, true);
+  document.getElementById('mostrar-columnas-completas').addEventListener('change', e => {
+    document.getElementById('tabla-proyectos').classList.toggle('vista-completa', e.target.checked);
+  });
 
   // Configurar eventos de pestañas
   document.querySelectorAll('.pestana-btn').forEach(btn => {
@@ -4777,7 +5119,7 @@ async function inicializar() {
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      actualizarGraficas();
+      ajustarGraficasVisibles();
     }, 200);
   });
 }
