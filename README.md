@@ -13,6 +13,9 @@ cd infra
 Dashboard en <http://localhost:3000/>. Resto de comandos, puertos y cómo
 conectar n8n: `infra/README.md`.
 
+Para probar el contenedor en SPAship con datos ficticios y sin Postgres remoto,
+ver [la guía de prueba](spaship/README.md).
+
 ## Estructura
 
 | Carpeta/archivo | Qué es |

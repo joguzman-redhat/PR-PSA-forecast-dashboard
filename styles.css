@@ -75,6 +75,15 @@
 /* ============================================================================
    RESET Y ESTILOS BASE
    ============================================================================ */
+.aviso-demo {
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--color-advertencia);
+  color: var(--text-primary);
+  border-bottom: 2px solid currentColor;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
 html {
   font-size: clamp(16px, 0.5vw + 9px, 21px);
 }
@@ -2401,6 +2410,7 @@ body.dragging-col-resizer {
 .preparando-reporte .panel-graficas-tres-cols > .grafica-contenedor { grid-row: auto; grid-column: 1; }
 body.modo-reporte > * { display: none; }
 body.modo-reporte > #reporte-graficas { display: block; }
+body.modo-reporte > .aviso-demo { display: block; }
 #reporte-graficas { max-width: 850px; padding: var(--spacing-xl); margin: 0 auto; background: var(--surface-1); }
 .reporte-acciones { display: flex; flex-wrap: wrap; gap: var(--spacing-md); margin-bottom: var(--spacing-xl); }
 .reporte-cabecera { margin-bottom: var(--spacing-xl); }
@@ -2413,6 +2423,7 @@ body.modo-reporte > #reporte-graficas { display: block; }
 @page { size: A4 portrait; margin: 12mm; }
 @media print {
   body > * { display: none !important; }
+  body > .aviso-demo { display: block !important; margin-bottom: var(--spacing-lg); }
   body > #reporte-graficas {
     display: block !important;
     color: #151515;

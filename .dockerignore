@@ -1,0 +1,57 @@
+# El Dockerfile de infra/api se construye con el contexto en la raiz del repo.
+# Enviar solo sus fuentes y assets; .gitignore no protege el contexto de build.
+**
+!index.html
+!app.js
+!styles.css
+!vendor/
+!vendor/**
+!infra/
+!infra/api/
+!infra/api/Dockerfile
+!infra/api/package.json
+!infra/api/package-lock.json
+!infra/api/src/
+!infra/api/src/**
+
+# Mantener estas exclusiones incluso dentro de los directorios permitidos.
+**/.git
+**/.git/**
+**/node_modules
+**/node_modules/**
+**/.env
+**/.env.*
+**/*.env
+**/.npmrc
+**/.netrc
+**/.aws/**
+**/.ssh/**
+**/.kube/**
+**/secrets/**
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+
+# Datos de negocio y respaldos no forman parte de la imagen de la aplicacion.
+**/data/**
+**/*.xls*
+**/*.csv
+**/*.tsv
+**/*.sql
+**/*.dump
+**/*.backup
+**/*.bak
+**/*.sqlite*
+**/*.db
+
+# Dependencias generadas y artefactos de pruebas.
+**/test/**
+**/tests/**
+**/__tests__/**
+**/*.test.*
+**/*.spec.*
+**/coverage/**
+**/test-results/**
+**/playwright-report/**
+**/*.log
