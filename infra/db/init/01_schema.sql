@@ -127,11 +127,13 @@ CREATE TABLE proyecto (
   fecha_fin             date,
   estado_contrato       text,                   -- recalculado por el ETL
   dias_para_vencimiento int,                    -- recalculado
-  meses_transcurridos   numeric,          -- recalculado
+  meses_transcurridos   numeric,                -- recalculado (Excel o derivado)
   tipo_de_ejecucion     text,                   -- recalculado
   q_del_clawback        text,                   -- recalculado
   estatus               text,
   start_at_risk         boolean,                -- SIMULADO, no viene del Excel
+  executive_watchlist   boolean,                -- nuevo: proyectos en watchlist ejecutivo
+  project_status        text CHECK (project_status IN ('Red', 'Yellow', 'Green') OR project_status IS NULL), -- Estado visual
   campos_con_error      jsonb,                  -- celdas #VALUE! originales
   campos_recalculados   text[],
   datos_info            jsonb NOT NULL DEFAULT '{}'::jsonb,

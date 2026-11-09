@@ -7,7 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23EE0000' d='M341.52 285.56c33.65 0 82.34-6.94 82.34-47 .22-6.74.86-1.82-20.88-96.24-4.62-19.15-8.68-27.84-42.31-44.65-26.09-13.34-82.92-35.37-99.73-35.37-15.66 0-20.2 20.17-38.87 20.17-18 0-31.31-15.06-48.12-15.06-16.14 0-26.66 11-34.78 33.62-27.5 77.55-26.28 74.27-26.12 78.27 0 24.8 97.64 106.11 228.47 106.11M429 254.84c4.65 22 4.65 24.35 4.65 27.25 0 37.66-42.33 58.56-98 58.56-125.74.08-235.91-73.65-235.91-122.33a49.55 49.55 0 0 1 4.06-19.72C58.56 200.86 0 208.93 0 260.63c0 84.67 200.63 189 359.49 189 121.79 0 152.51-55.08 152.51-98.58 0-34.21-29.59-73.05-82.93-96.24'/%3E%3C/svg%3E">
   <!-- CSS real y compilado de PatternFly v6 (vendorizado en vendor/, sin CDN) -->
   <link rel="stylesheet" href="vendor/patternfly.css">
-  <link rel="stylesheet" href="styles.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=26">
 </head>
 <body>
   <!-- Masthead: estructura real de PatternFly (pf-v6-c-masthead) con la marca Red Hat -->
@@ -77,19 +77,19 @@
         <div class="kpi-tile pf-v6-c-card">
           <div class="pf-v6-c-card__body">
             <div class="kpi-valor" id="kpi-valor-of-total">—</div>
-            <div class="kpi-etiqueta">Valor OF Total</div>
+            <div class="kpi-etiqueta">Valor Booking Total</div>
           </div>
         </div>
         <div class="kpi-tile pf-v6-c-card">
           <div class="pf-v6-c-card__body">
             <div class="kpi-valor" id="kpi-acumulado-hoy">—</div>
-            <div class="kpi-etiqueta">Acumulado a Hoy</div>
+            <div class="kpi-etiqueta">Revenue acumulado a hoy</div>
           </div>
         </div>
         <div class="kpi-tile pf-v6-c-card">
           <div class="pf-v6-c-card__body">
             <div class="kpi-valor" id="kpi-backlog-2026">—</div>
-            <div class="kpi-etiqueta">Backlog 2026</div>
+            <div class="kpi-etiqueta">Backlog</div>
           </div>
         </div>
         <div class="kpi-tile pf-v6-c-card">
@@ -112,49 +112,75 @@
         que no tiene apertura por mes.
       </p>
 
-      <!-- Barra de filtros -->
-      <div class="panel-filtros pf-v6-c-card">
+      <div class="layout-listado">
+      <!-- Filtros -->
+      <aside class="listado-filtros" aria-label="Filtros de proyectos">
+      <details class="panel-filtros pf-v6-c-card" open>
+        <summary class="filtros-titulo">Filtros de proyectos</summary>
         <div class="pf-v6-c-card__body">
+        <label class="busqueda-etiqueta" for="filtro-texto">Buscar proyectos</label>
+        <input type="search" id="filtro-texto" class="filtro-input"
+               placeholder="Cliente, proyecto, PA o Project ID...">
         <div class="fila-dropdowns" id="fila-dropdowns"></div>
         <div class="fila-acciones">
-          <input type="text" id="filtro-texto" class="filtro-input"
-                 placeholder="Buscar cliente, proyecto, PA o Project ID...">
           <button id="btn-limpiar-filtros" class="btn-limpiar pf-v6-c-button pf-m-secondary">Limpiar filtros</button>
           <label class="check-inline">
             <input type="checkbox" id="incluir-cancelados">
             Incluir cancelados
           </label>
-          <span class="indicador-filtros" id="indicador-proyectos">304 de 304 proyectos</span>
         </div>
+        </div>
+      </details>
+      </aside>
+
+      <div class="listado-contenido">
+      <div class="resumen-listado">
+        <span class="indicador-filtros" id="indicador-proyectos" aria-live="polite">Cargando proyectos…</span>
         <div class="chips-activos" id="chips-activos"></div>
+      </div>
+      <!-- Resumen de Vendedor (solo cuando hay exactamente 1 vendedor filtrado) -->
+      <div id="card-vendedor-resumen" class="card-vendedor-resumen pf-v6-c-card" style="display:none;">
+        <div class="pf-v6-c-card__body">
+          <h3 class="pf-v6-c-title pf-m-md">Vendedor: <span id="vendedor-nombre">—</span></h3>
+          <div class="vendedor-stats">
+            <div class="vendedor-stat">
+              <div class="vendedor-stat-valor" id="vendedor-n-proyectos">—</div>
+              <div class="vendedor-stat-label">Proyectos</div>
+            </div>
+            <div class="vendedor-stat">
+              <div class="vendedor-stat-valor" id="vendedor-booking">—</div>
+              <div class="vendedor-stat-label">Booking</div>
+            </div>
+            <div class="vendedor-stat">
+              <div class="vendedor-stat-valor" id="vendedor-acumulado">—</div>
+              <div class="vendedor-stat-label">Revenue acumulado</div>
+            </div>
+            <div class="vendedor-stat">
+              <div class="vendedor-stat-valor" id="vendedor-backlog">—</div>
+              <div class="vendedor-stat-label">Backlog</div>
+            </div>
+            <div class="vendedor-stat">
+              <div class="vendedor-stat-valor" id="vendedor-pct-ejec">—</div>
+              <div class="vendedor-stat-label">% Ejecución</div>
+            </div>
+          </div>
+          <div class="vendedor-detalle">
+            <div class="vendedor-seccion">
+              <div class="vendedor-seccion-titulo">Proyectos por estado</div>
+              <div id="vendedor-por-estado">—</div>
+            </div>
+            <div class="vendedor-seccion">
+              <div class="vendedor-seccion-titulo">Top 5 clientes por Booking</div>
+              <div id="vendedor-top-clientes">—</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Gráficas -->
-      <div class="panel-graficas">
-        <div class="grafica-contenedor pf-v6-c-card">
-          <div class="pf-v6-c-card__body">
-          <h3 class="pf-v6-c-title pf-m-md">Proyectos por Estado</h3>
-          <svg id="grafica-estado" class="grafica-svg"></svg>
-          </div>
-        </div>
-        <div class="grafica-contenedor pf-v6-c-card">
-          <div class="pf-v6-c-card__body">
-          <h3 class="pf-v6-c-title pf-m-md">Valor OF por Zona</h3>
-          <svg id="grafica-zona" class="grafica-svg"></svg>
-          </div>
-        </div>
-        <div class="grafica-contenedor ancho-completo pf-v6-c-card">
-          <div class="pf-v6-c-card__body">
-          <h3 class="pf-v6-c-title pf-m-md">Top 10 Países por Valor OF</h3>
-          <svg id="grafica-paises" class="grafica-svg"></svg>
-          </div>
-        </div>
-        <div class="grafica-contenedor ancho-completo pf-v6-c-card">
-          <div class="pf-v6-c-card__body">
-          <h3 class="pf-v6-c-title pf-m-md">Ejecución por PM/Líder (Top 10)</h3>
-          <svg id="grafica-pm" class="grafica-svg"></svg>
-          </div>
+      <!-- Semáforo de proyectos -->
+      <div id="card-semaforo-proyectos" class="card-semaforo-proyectos pf-v6-c-card">
+        <div class="pf-v6-c-card__body">
+          <!-- Poblado dinámicamente -->
         </div>
       </div>
 
@@ -162,6 +188,10 @@
       <div class="panel-tabla pf-v6-c-card">
         <div class="pf-v6-c-card__body">
         <h3 class="pf-v6-c-title pf-m-md">Proyectos</h3>
+        <label class="check-inline columnas-tabla">
+          <input type="checkbox" id="mostrar-columnas-completas">
+          Mostrar todas las columnas
+        </label>
         <div class="contenedor-tabla-scroll">
           <table id="tabla-proyectos" class="tabla-proyectos pf-v6-c-table">
             <thead>
@@ -175,6 +205,95 @@
           </table>
         </div>
         </div>
+      </div>
+
+      <details class="analisis-listado">
+        <summary class="analisis-titulo">Análisis visual</summary>
+      <!-- Gráficas -->
+      <!-- Fila A: Ejecutado vs. planeado por cliente (ancho completo) -->
+      <div class="grafica-contenedor ancho-completo pf-v6-c-card">
+        <div class="pf-v6-c-card__body">
+          <h3 class="pf-v6-c-title pf-m-md">Ejecutado vs. planeado por cliente</h3>
+          <svg id="grafica-ejecutado-cliente" class="grafica-svg-condensed"></svg>
+        </div>
+      </div>
+
+      <!-- Fila B: dos columnas -->
+      <div class="panel-graficas-dos-cols panel-vendedor">
+        <div class="grafica-contenedor pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Booking vs. ejecución por vendedor</h3>
+            <p class="nota-grafica">Clic en un vendedor para filtrar sus proyectos</p>
+            <svg id="grafica-booking-vendedor" class="grafica-svg-condensed"></svg>
+          </div>
+        </div>
+
+        <div class="grafica-contenedor pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Proyectos no iniciados / On Hold</h3>
+            <div class="contenedor-tabla-scroll tabla-no-iniciados-scroll">
+              <table id="tabla-no-iniciados" class="tabla-proyectos tabla-no-iniciados pf-v6-c-table pf-m-compact">
+                <thead>
+                  <tr>
+                    <th style="width: 24%;">Proyecto</th>
+                    <th style="width: 16%;">PM/Líder</th>
+                    <th style="width: 16%;">Cliente</th>
+                    <th style="width: 11%;" title="Días para vencimiento">Días</th>
+                    <th style="width: 11%;">Meses</th>
+                    <th style="width: 22%;">Backlog</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+                <tfoot></tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fila C: tres columnas pequeñas -->
+      <div class="panel-graficas-tres-cols">
+        <div class="grafica-contenedor pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Proyectos por Estado</h3>
+            <svg id="grafica-estado" class="grafica-svg-small"></svg>
+          </div>
+        </div>
+
+        <div class="grafica-contenedor pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Estado de ejecución por vendedor</h3>
+            <svg id="grafica-estado-vendedor" class="grafica-svg-small"></svg>
+          </div>
+        </div>
+
+        <div class="grafica-contenedor pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Valor Booking por Zona</h3>
+            <svg id="grafica-zona" class="grafica-svg-small"></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fila D: dos columnas pequeñas -->
+      <div class="panel-graficas-dos-cols">
+        <div class="grafica-contenedor pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Top 10 Países por Valor Booking</h3>
+            <svg id="grafica-paises" class="grafica-svg-small"></svg>
+          </div>
+        </div>
+
+        <div class="grafica-contenedor pf-v6-c-card">
+          <div class="pf-v6-c-card__body">
+            <h3 class="pf-v6-c-title pf-m-md">Ejecución por PM/Líder (Top 10)</h3>
+            <svg id="grafica-pm" class="grafica-svg-small"></svg>
+          </div>
+        </div>
+      </div>
+
+      </details>
+      </div>
       </div>
     </section>
 
@@ -205,6 +324,8 @@
           </div>
         </div>
 
+        <details class="analisis-plegable" open>
+          <summary class="analisis-titulo">Desglose y contexto mensual</summary>
         <div class="grafica-contenedor ancho-completo pf-v6-c-card">
           <div class="pf-v6-c-card__body">
           <h3 id="titulo-desglose" class="pf-v6-c-title pf-m-md">Revenue fijo por quarter</h3>
@@ -219,9 +340,10 @@
           <svg id="grafica-backlog-vs-revenue" class="grafica-svg"></svg>
           <p class="nota-grafica">Mes a mes del año actual (no sigue el selector de periodo de
             arriba ni es por snapshot): el Commit acumulado sube y el Backlog —lo que queda de
-            Valor OF menos Acum 2025 menos ese Commit acumulado— baja hasta cero.</p>
+            Valor Booking menos Acum 2025 menos ese Commit acumulado— baja hasta cero.</p>
           </div>
         </div>
+        </details>
 
         <h3 class="pf-v6-c-title pf-m-lg">¿Qué cambió entre dos fechas?</h3>
         <div class="selector-snapshot">
@@ -249,10 +371,21 @@
 
         <div class="barra-tabla-cambios">
           <p class="nota-tabla" id="nota-tabla-cambios"></p>
-          <label class="interruptor-inline">
-            <input type="checkbox" id="chk-solo-cambios" checked>
-            Mostrar solo los que cambiaron
-          </label>
+          <div class="filtros-resumen-proyectos">
+            <input type="text" id="filtro-resumen-texto" class="filtro-input"
+                   placeholder="Buscar proyecto o PA...">
+            <select id="filtro-resumen-pm">
+              <option value="">Todos los PMs</option>
+            </select>
+            <select id="filtro-resumen-que-paso">
+              <option value="">Qué pasó: Todos</option>
+            </select>
+            <label class="interruptor-inline">
+              <input type="checkbox" id="chk-solo-cambios" checked>
+              Mostrar solo los que cambiaron
+            </label>
+            <span class="indicador-filtros" id="indicador-resumen-proyectos">—</span>
+          </div>
         </div>
         <div class="contenedor-tabla">
           <table id="tabla-resumen-proyectos" class="tabla-eventos-tabla pf-v6-c-table pf-m-compact">
@@ -274,16 +407,23 @@
             <select id="filtro-tipo-evento"></select>
             <input type="text" id="buscar-evento-proyecto" class="filtro-input"
                    placeholder="Filtrar por proyecto o PA...">
+            <select id="filtro-eventos-pm">
+              <option value="">Todos los PMs</option>
+            </select>
+            <select id="filtro-eventos-mes">
+              <option value="">Todos los meses</option>
+            </select>
             <label class="check-inline">
               <input type="checkbox" id="limitar-por-proyecto" checked>
               Máximo 2 por proyecto
             </label>
+            <span class="indicador-filtros" id="indicador-eventos">—</span>
           </div>
           <div class="contenedor-tabla">
             <table id="tabla-eventos-cambio" class="tabla-eventos-tabla pf-v6-c-table pf-m-compact">
               <thead>
                 <tr>
-                  <th data-columna="timestamp">Fecha</th><th data-columna="nombre">Proyecto</th><th data-columna="tipo">Tipo</th>
+                  <th data-columna="timestamp">Fecha</th><th data-columna="nombre">Proyecto</th><th data-columna="pm">PM/Líder</th><th data-columna="tipo">Tipo</th>
                   <th data-columna="campo">Mes</th><th data-columna="valor_anterior">Anterior</th><th data-columna="valor_nuevo">Nuevo</th><th data-columna="delta">Delta</th>
                 </tr>
               </thead>
@@ -303,11 +443,60 @@
         <div id="periodo-pms"></div>
         <p class="nota-periodo">
           Commit, Upside y los promedios responden al periodo de revenue elegido.
-          El backlog por estado (In Progress / On Hold / Planned), el total de
+          El backlog por estado (In Progress / On Hold / Planned / Completed), el total de
           proyectos y el Total Ejecutado son del estado actual: no tienen
           apertura mensual.
         </p>
 
+        <!-- Fila de KPIs resumen -->
+        <div class="fila-kpis fila-kpis-pms">
+          <div class="kpi-tile pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+              <div class="kpi-valor" id="kpi-pms-total">—</div>
+              <div class="kpi-etiqueta"># PMs</div>
+            </div>
+          </div>
+          <div class="kpi-tile pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+              <div class="kpi-valor" id="kpi-pms-in-progress">—</div>
+              <div class="kpi-etiqueta"># Proyectos In Progress</div>
+            </div>
+          </div>
+          <div class="kpi-tile pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+              <div class="kpi-valor" id="kpi-pms-on-hold">—</div>
+              <div class="kpi-etiqueta"># Proyectos On Hold</div>
+            </div>
+          </div>
+          <div class="kpi-tile pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+              <div class="kpi-valor" id="kpi-pms-planned">—</div>
+              <div class="kpi-etiqueta"># Proyectos Planned</div>
+            </div>
+          </div>
+          <div class="kpi-tile pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+              <div class="kpi-valor" id="kpi-pms-completed">—</div>
+              <div class="kpi-etiqueta"># Proyectos Completed</div>
+            </div>
+          </div>
+          <div class="kpi-tile pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+              <div class="kpi-valor" id="kpi-pms-total-booking">—</div>
+              <div class="kpi-etiqueta">Total Booking</div>
+            </div>
+          </div>
+          <div class="kpi-tile pf-v6-c-card">
+            <div class="pf-v6-c-card__body">
+              <div class="kpi-valor" id="kpi-pms-total-backlog">—</div>
+              <div class="kpi-etiqueta">Total Backlog</div>
+            </div>
+          </div>
+        </div>
+
+
+        <details class="analisis-plegable" open>
+          <summary class="analisis-titulo">Gráficas de PMs</summary>
         <div class="panel-graficas">
           <div class="grafica-contenedor pf-v6-c-card">
             <div class="pf-v6-c-card__body">
@@ -328,21 +517,24 @@
             </div>
           </div>
         </div>
+        </details>
 
         <div class="panel-tabla">
           <div class="contenedor-tabla-scroll">
-            <table id="tabla-pms" class="tabla-proyectos pf-v6-c-table">
+            <table id="tabla-pms" class="tabla-proyectos pf-v6-c-table tabla-pms-expandible">
               <thead>
                 <tr>
+                  <th class="col-toggle"></th>
                   <th data-columna="pm">PM/Líder</th>
-                  <th data-columna="inProgresoN"># PA In Progress</th>
+                  <th data-columna="inProgresoN"># In Progress</th>
                   <th data-columna="inProgresoBacklog">Backlog In Progress</th>
-                  <th data-columna="onHoldN"># PA On Hold</th>
+                  <th data-columna="onHoldN"># On Hold</th>
                   <th data-columna="onHoldBacklog">Backlog On Hold</th>
-                  <th data-columna="plannedN"># PA Planned</th>
+                  <th data-columna="plannedN"># Planned</th>
                   <th data-columna="plannedBacklog">Backlog Planned</th>
-                  <th data-columna="totalN">Total # PA</th>
-                  <th data-columna="totalBacklog">Total Backlog</th>
+                  <th data-columna="completedN"># Completed</th>
+                  <th data-columna="totalN"># PA activos</th>
+                  <th data-columna="totalBacklog">Backlog activo</th>
                   <th data-columna="commit">Commit · periodo</th>
                   <th data-columna="upside">Upside · periodo</th>
                   <th data-columna="totalEjecutado">Total Ejecutado</th>
@@ -355,12 +547,12 @@
             </table>
           </div>
         </div>
-        <p class="nota-tabla">Clic en un PM para ver sus proyectos en Listado de Proyectos.</p>
+        <p class="nota-tabla">Clic en el chevron para ver los proyectos del PM. Clic en el nombre del PM para filtrarlos en Listado de Proyectos.</p>
         </div>
       </div>
     </section>
   </div>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>

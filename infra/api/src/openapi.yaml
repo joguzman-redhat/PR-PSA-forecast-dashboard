@@ -298,6 +298,19 @@ components:
             (se buscó). Está generado con un hash del `project_id` al 15% solo
             para poder enseñar el filtro. Hay que pedírselo a la fuente antes
             de producción, y advertirlo en cualquier respuesta que lo use.
+        executive_watchlist:
+          type: boolean
+          nullable: true
+          description: |
+            Indica si el proyecto está en la watchlist ejecutiva. Puede llegar
+            como TRUE/FALSE, "Sí"/"No", 1/0, o vacío (null).
+        project_status:
+          type: string
+          nullable: true
+          enum: [Red, Yellow, Green, null]
+          description: |
+            Estado visual del proyecto (semáforo). Se normaliza a Red/Yellow/Green
+            desde variantes en español o inglés. Null si no está definido.
         estatus:
           type: string
           nullable: true

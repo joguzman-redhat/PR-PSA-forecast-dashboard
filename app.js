@@ -25,6 +25,8 @@ const estado = {
     ano_de_finalizacion: [],
     cliente: [],
     riesgo: [],
+    executive_watchlist: [],
+    project_status: [],
     texto: '',
   },
   // Los cancelados se esconden por defecto: ensucian conteos y gráficas, y
@@ -32,6 +34,7 @@ const estado = {
   incluirCancelados: false,
   proyectosFiltrados: [],
   proyectoSeleccionado: null,
+  expandedPMs: new Set(),
   metadataProyectos: null,
   metadataBacklog: null,
   backlogPorPA: null,
@@ -205,6 +208,30 @@ function backlogDe(proyecto) {
   return null;
 }
 
+/**
+ * Valor Booking de un proyecto. TODA LA PLATA viene de BackLog NOLA, nunca de
+ * Info Proyectos: los campos p.valor_of / p.acumulado_a_hoy / p.consumido_2025
+ * / p.backlog_2026 NO están convertidos (carecen del factor de conversión).
+ * Se reconstruye como lo calcula el propio Excel: Valor OF = Backlog + Total
+ * Ejecutado Acumulado, las dos ya convertidas. Va primero porque las cargas
+ * anteriores al arreglo del ETL guardaron en fila.valor_of el OF de Info (sin
+ * convertir); fila.valor_of queda solo de respaldo.
+ */
+function valorBooking(proyecto) {
+  const fila = backlogDe(proyecto);
+  if (!fila) return null;
+  if (typeof fila.backlog === 'number' && typeof fila.total_ejecutado_acumulado === 'number') {
+    return fila.backlog + fila.total_ejecutado_acumulado;
+  }
+  return typeof fila.valor_of === 'number' ? fila.valor_of : null;
+}
+
+/** Acumulado del año pasado (2025), desde BackLog NOLA. */
+function acum2025(proyecto) {
+  const fila = backlogDe(proyecto);
+  return (fila && typeof fila.acum_2025 === 'number') ? fila.acum_2025 : null;
+}
+
 function revenuePeriodo(proyecto) {
   const fila = backlogDe(proyecto);
   if (!fila) return null;
@@ -225,6 +252,50 @@ function upsidePeriodo(proyecto) {
 }
 
 /**
+ * Revenue acumulado a hoy de un proyecto. acum_2025 es el saldo arrastrado del
+ * año anterior; los meses de enero a hoy del año en curso suman el resto.
+ * TODA LA PLATA viene de BackLog NOLA: si no hay fila de backlog, el proyecto
+ * no tiene cifras de revenue (se muestra "—" en vez de cero).
+ */
+function acumuladoHoy(proyecto) {
+  const fila = backlogDe(proyecto);
+  if (!fila) return null;
+  const acum2025 = typeof fila.acum_2025 === 'number' ? fila.acum_2025 : 0;
+  // Enero hasta el mes en curso, inclusive.
+  const commitHastaHoy = MESES_ES.slice(0, new Date().getMonth() + 1).reduce((acc, m) => {
+    const v = fila[m + '_fijo'];
+    return acc + (typeof v === 'number' ? v : 0);
+  }, 0);
+  return acum2025 + commitHastaHoy;
+}
+
+/**
+ * Backlog de un proyecto: la columna "Backlog" de BackLog NOLA, tal cual. El
+ * Excel lo calcula como Valor OF − Acum 2025 − commit de los 12 meses, o sea,
+ * ya descuenta lo planeado para el resto del año. Es el número de las tablas
+ * dinámicas del negocio, así que manda sobre cualquier cálculo propio.
+ * Consecuencia: Booking = Acumulado a hoy + commit planeado resto del año + Backlog.
+ */
+function backlogHoy(proyecto) {
+  const fila = backlogDe(proyecto);
+  return fila && typeof fila.backlog === 'number' ? fila.backlog : null;
+}
+
+/**
+ * Ejecución proyectada al cierre del año = acum_2025 + suma de los 12 meses fijo.
+ */
+function proyectadaAnio(proyecto) {
+  const fila = backlogDe(proyecto);
+  if (!fila) return null;
+  const acum2025 = typeof fila.acum_2025 === 'number' ? fila.acum_2025 : 0;
+  const totalFijo = MESES_ES.reduce((acc, m) => {
+    const v = fila[m + '_fijo'];
+    return acc + (typeof v === 'number' ? v : 0);
+  }, 0);
+  return acum2025 + totalFijo;
+}
+
+/**
  * Backlog vs Revenue, mes a mes, del estado actual (no de los snapshots
  * históricos). El Backlog no es un dato aparte: en cada mes es lo que queda
  * por ejecutar del contrato, así que se recalcula en cada punto como
@@ -240,17 +311,16 @@ function upsidePeriodo(proyecto) {
  * Verificado contra las 278 filas con dato completo: coincide exacto.
  */
 function serieBacklogRevenuePorMes(proyectos) {
-  let valorOf = 0;
-  let acum2025 = 0;
+  let valorOfTotal = 0;
+  let acum2025Total = 0;
   const commitPorMes = new Array(12).fill(0);
   proyectos.forEach(p => {
+    const booking = valorBooking(p);
+    const acum = acum2025(p);
+    valorOfTotal += booking || 0;
+    acum2025Total += acum || 0;
     const fila = backlogDe(p);
     if (!fila) return;
-    const backlogFinal = typeof fila.backlog === 'number' ? fila.backlog : 0;
-    const totalEjecutado = typeof fila.total_ejecutado_acumulado === 'number'
-      ? fila.total_ejecutado_acumulado : 0;
-    valorOf += typeof fila.valor_of === 'number' ? fila.valor_of : backlogFinal + totalEjecutado;
-    acum2025 += typeof fila.acum_2025 === 'number' ? fila.acum_2025 : 0;
     MESES_ES.forEach((m, i) => {
       const v = fila[m + '_fijo'];
       commitPorMes[i] += typeof v === 'number' ? v : 0;
@@ -262,18 +332,21 @@ function serieBacklogRevenuePorMes(proyectos) {
   MESES_ES.forEach((m, i) => {
     acumulado += commitPorMes[i];
     const etiqueta = m.charAt(0).toUpperCase() + m.slice(1);
-    datos[etiqueta] = { Commit: acumulado, Backlog: valorOf - acum2025 - acumulado };
+    datos[etiqueta] = { Commit: acumulado, Backlog: valorOfTotal - acum2025Total - acumulado };
   });
   return datos;
 }
 
 function calcularKPIs() {
   const proyectos = estado.proyectosFiltrados;
-  const suma = campo => proyectos.reduce(
-    (acc, p) => acc + (typeof p[campo] === 'number' ? p[campo] : 0), 0);
+  const sumaCalculado = fn => proyectos.reduce((acc, p) => {
+    const v = fn(p);
+    return acc + (typeof v === 'number' ? v : 0);
+  }, 0);
 
-  const valorOf = suma('valor_of');
-  const acumulado = suma('acumulado_a_hoy');
+  const booking = sumaCalculado(valorBooking);
+  const acumulado = sumaCalculado(acumuladoHoy);
+  const backlog = sumaCalculado(backlogHoy);
 
   const texto = (id, valor) => {
     const el = document.getElementById(id);
@@ -281,12 +354,12 @@ function calcularKPIs() {
   };
 
   texto('kpi-total-proyectos', proyectos.length.toLocaleString('es'));
-  texto('kpi-valor-of-total', formatearDinero(valorOf));
+  texto('kpi-valor-of-total', formatearDinero(booking));
   texto('kpi-acumulado-hoy', formatearDinero(acumulado));
-  texto('kpi-backlog-2026', formatearDinero(suma('backlog_2026')));
+  texto('kpi-backlog-2026', formatearDinero(backlog));
   // Ejecución global = lo ejecutado sobre lo contratado, no el promedio de
   // los porcentajes: un proyecto de 2 millones no pesa igual que uno de 20 mil.
-  texto('kpi-pct-ejecucion', valorOf > 0 ? (acumulado / valorOf * 100).toFixed(1) + '%' : '—');
+  texto('kpi-pct-ejecucion', booking > 0 ? (acumulado / booking * 100).toFixed(1) + '%' : '—');
 
   const rev = proyectos.reduce((acc, p) => acc + (revenuePeriodo(p) || 0), 0);
   texto('kpi-revenue-periodo', formatearDinero(rev));
@@ -312,6 +385,8 @@ const DIMENSIONES = [
   { campo: 'tipo_de_ejecucion', etiqueta: 'Tipo de ejecución' },
   { campo: 'ano_de_finalizacion', etiqueta: 'Año fin' },
   { campo: 'riesgo', etiqueta: 'Riesgo' },
+  { campo: 'executive_watchlist', etiqueta: 'Handover' },
+  { campo: 'project_status', etiqueta: 'Project Status' },
 ];
 
 const SIN_DATO = '(sin dato)';
@@ -444,6 +519,18 @@ function valorDimension(proyecto, campo) {
   if (campo === 'riesgo') {
     return proyecto.start_at_risk ? 'Start at risk' : 'Sin marca de riesgo';
   }
+  if (campo === 'executive_watchlist') {
+    const v = proyecto[campo];
+    if (v === null || v === undefined) return SIN_DATO;
+    return v ? 'Sí' : 'No';
+  }
+  if (campo === 'project_status') {
+    const v = proyecto[campo];
+    if (v === null || v === undefined || v === '') return SIN_DATO;
+    // Map internal values to Spanish display
+    const mapa = { 'Red': 'Rojo', 'Yellow': 'Amarillo', 'Green': 'Verde' };
+    return mapa[v] || String(v);
+  }
   const v = proyecto[campo];
   return (v === null || v === undefined || v === '') ? SIN_DATO : String(v);
 }
@@ -551,7 +638,10 @@ function inicializarFiltros() {
 
 function cerrarDropdowns(excepto) {
   document.querySelectorAll('.dropdown-filtro.abierto').forEach(d => {
-    if (d !== excepto) d.classList.remove('abierto');
+    if (d !== excepto) {
+      d.classList.remove('abierto');
+      d.querySelector('.dropdown-boton').setAttribute('aria-expanded', 'false');
+    }
   });
 }
 
@@ -563,6 +653,8 @@ function construirDropdown(dim) {
   const boton = document.createElement('button');
   boton.type = 'button';
   boton.className = 'dropdown-boton';
+  boton.setAttribute('aria-expanded', 'false');
+  boton.setAttribute('aria-controls', `opciones-${dim.campo}`);
   boton.innerHTML = `<span class="dropdown-etiqueta">${dim.etiqueta}</span>
                      <span class="dropdown-badge"></span>
                      <span class="dropdown-flecha" aria-hidden="true">▾</span>`;
@@ -571,10 +663,12 @@ function construirDropdown(dim) {
     const abierto = cont.classList.contains('abierto');
     cerrarDropdowns(cont);
     cont.classList.toggle('abierto', !abierto);
+    boton.setAttribute('aria-expanded', String(!abierto));
   });
 
   const panel = document.createElement('div');
   panel.className = 'dropdown-panel';
+  panel.id = `opciones-${dim.campo}`;
 
   const opciones = opcionesDe(dim.campo);
   if (opciones.length > 10) {
@@ -582,6 +676,7 @@ function construirDropdown(dim) {
     buscador.type = 'text';
     buscador.className = 'dropdown-buscar';
     buscador.placeholder = 'Filtrar opciones...';
+    buscador.setAttribute('aria-label', `Buscar opciones de ${dim.etiqueta}`);
     buscador.addEventListener('click', e => e.stopPropagation());
     buscador.addEventListener('input', () => {
       const q = buscador.value.toLowerCase();
@@ -706,6 +801,7 @@ function renderizarTabla() {
   // Headers
   const COL_ID = '__identificador';
   const COL_REVENUE = '__revenue_periodo';
+  const columnasResumen = new Set([COL_ID, 'estado', 'nombre_del_proyecto', 'pm_lider', 'valor_of', 'backlog_2026', COL_REVENUE]);
   columnasVerdes.unshift(COL_ID);
   columnasVerdes.push(COL_REVENUE);
   columnasVerdes.forEach((key) => {
@@ -713,8 +809,10 @@ function renderizarTabla() {
       || { label: key === COL_ID ? 'PA / PR' : `Revenue · ${periodoActual().etiqueta}` };
     const th = document.createElement('th');
     const ord = estado.orden || {};
-    th.textContent = col.label + (ord.columna === key ? (ord.desc ? '  ↓' : '  ↑') : '');
+    const etiqueta = ({ valor_of: 'Valor Booking', backlog_2026: 'Backlog', pm_lider: 'PM/Líder' })[key] || col.label;
+    th.textContent = etiqueta + (ord.columna === key ? (ord.desc ? '  ↓' : '  ↑') : '');
     th.dataset.columna = key;
+    if (!columnasResumen.has(key)) th.classList.add('columna-secundaria');
     th.title = `Ordenar por ${col.label}`;
     if (ord.columna === key) th.classList.add('col-ordenada');
     th.addEventListener('click', () => ordenarTabla(key));
@@ -728,7 +826,20 @@ function renderizarTabla() {
 
     columnasVerdes.forEach(key => {
       const td = document.createElement('td');
-      let valor = key === COL_REVENUE ? revenuePeriodo(proyecto) : proyecto[key];
+      let valor;
+      if (key === COL_REVENUE) {
+        valor = revenuePeriodo(proyecto);
+      } else if (key === 'valor_of') {
+        valor = valorBooking(proyecto);
+      } else if (key === 'acumulado_a_hoy') {
+        valor = acumuladoHoy(proyecto);
+      } else if (key === 'consumido_2025') {
+        valor = acum2025(proyecto);
+      } else if (key === 'backlog_2026') {
+        valor = backlogHoy(proyecto);
+      } else {
+        valor = proyecto[key];
+      }
 
       // Formatos especiales
       if (key === COL_ID) {
@@ -744,9 +855,42 @@ function renderizarTabla() {
           td.appendChild(document.createTextNode(' '));
           td.appendChild(b);
         }
+        // "sin backlog" chip si no hay fila de backlog
+        if (!backlogDe(proyecto)) {
+          const chip = document.createElement('span');
+          chip.className = 'chip-sin-backlog';
+          chip.textContent = 'sin backlog';
+          chip.title = 'Este proyecto no tiene fila en BackLog NOLA: las cifras de revenue son nulas';
+          td.appendChild(document.createTextNode(' '));
+          td.appendChild(chip);
+        }
       } else if (key === COL_REVENUE) {
         td.textContent = valor === null ? '—' : formatearDinero(valor);
         td.className = 'celda-numero';
+      } else if (key === 'executive_watchlist') {
+        td.style.textAlign = 'center';
+        if (proyecto.executive_watchlist) {
+          const chip = document.createElement('span');
+          chip.className = 'chip-dato chip-bueno';
+          chip.textContent = '✓';
+          chip.style.fontSize = '0.75rem';
+          chip.style.padding = '2px 6px';
+          td.appendChild(chip);
+        } else {
+          td.textContent = '';
+        }
+      } else if (key === 'project_status') {
+        if (proyecto.project_status) {
+          const statusMap = { 'Red': 'Rojo', 'Yellow': 'Amarillo', 'Green': 'Verde' };
+          const statusColor = { 'Red': '#c9190b', 'Yellow': '#f0ab00', 'Green': '#3e8635' };
+          const dot = document.createElement('span');
+          dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${statusColor[proyecto.project_status] || '#8a8d90'};margin-right:4px;`;
+          td.appendChild(dot);
+          td.appendChild(document.createTextNode(statusMap[proyecto.project_status] || proyecto.project_status));
+        } else {
+          td.textContent = '—';
+        }
+        td.style.fontSize = '0.8125rem';
       } else if (CAMPOS_DINERO.has(key)) {
         td.textContent = formatearDinero(valor);
         td.className = 'celda-numero';
@@ -773,8 +917,16 @@ function renderizarTabla() {
         td.className += ' celda-nulo';
       }
 
+      if (!columnasResumen.has(key)) td.classList.add('columna-secundaria');
       tr.appendChild(td);
     });
+
+    // Apply subtle row tinting based on project_status
+    if (proyecto.project_status === 'Red') {
+      tr.classList.add('fila-status-red');
+    } else if (proyecto.project_status === 'Yellow') {
+      tr.classList.add('fila-status-yellow');
+    }
 
     tbody.appendChild(tr);
   });
@@ -797,6 +949,10 @@ function ordenarTabla(columna) {
   const leer = p => {
     if (columna === '__revenue_periodo') return revenuePeriodo(p);
     if (columna === '__identificador') return identificador(p).valor;
+    if (columna === 'valor_of') return valorBooking(p);
+    if (columna === 'acumulado_a_hoy') return acumuladoHoy(p);
+    if (columna === 'consumido_2025') return acum2025(p);
+    if (columna === 'backlog_2026') return backlogHoy(p);
     return p[columna];
   };
   const esNumerica = estado.proyectosFiltrados.some(p => typeof leer(p) === 'number');
@@ -881,6 +1037,14 @@ const FORMATOS = {
   porcentaje: v => v.toFixed(1) + '%',
 };
 
+// Paleta de 4 colores para las series de comparación (Booking, Acumulado, Proyectada, Backlog)
+const COLORES_SERIES_COMPARACION = {
+  booking: 'var(--series-1)',
+  acumulado: 'var(--series-3)',
+  proyectada: 'var(--series-4)',
+  backlog: 'var(--series-7)',
+};
+
 // El color sigue a la entidad, no a su posición en el ranking: si un filtro
 // cambia el orden de las barras, cada categoría conserva su color.
 const _coloresEntidad = new Map();
@@ -902,9 +1066,21 @@ function fijarColores(campo, valores) {
   valores.forEach(v => colorDeEntidad(campo, v));
 }
 
+/** Escala del tamaño de fuente en gráficas respecto al root (16px). */
+function escalaTexto() {
+  return parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
+}
+
 function svgEl(tag, attrs) {
   const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  Object.entries(attrs || {}).forEach(([k, v]) => el.setAttribute(k, String(v)));
+  Object.entries(attrs || {}).forEach(([k, v]) => {
+    // Escalar font-size en SVG con el factor de escala del root
+    if (k === 'font-size' && typeof v === 'number') {
+      el.setAttribute(k, String(Math.max(12, v) * escalaTexto()));
+    } else {
+      el.setAttribute(k, String(v));
+    }
+  });
   return el;
 }
 
@@ -920,12 +1096,17 @@ function svgEl(tag, attrs) {
 function crearGraficaBarrasSimple(svgId, datos, opciones) {
   const svg = document.getElementById(svgId);
   if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaBarrasSimple(svgId, datos, opciones));
   svg.innerHTML = '';
+  svg.style.removeProperty('height');
 
   const op = opciones || {};
   const fmt = FORMATOS[op.formato] || FORMATOS.dinero;
 
   if (!datos.length) {
+    svg.style.height = '120px';
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Gráfica sin datos');
     svg.setAttribute('viewBox', '0 0 600 120');
     const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
       'font-size': 13, fill: 'var(--text-dim)' });
@@ -934,19 +1115,53 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
     return;
   }
 
-  // Las etiquetas largas (países, nombres de PM) se dibujan inclinadas.
-  const etiquetasLargas = datos.some(d => String(d.etiqueta).length > 9);
-  const ancho = svg.clientWidth || 600;
-  const alto = etiquetasLargas ? 340 : 280;
+  const ancho = Math.max(300, svg.clientWidth || 300);
+  const pasoPrevio = Math.max(1, (ancho - 78) / datos.length);
+  const etiquetasLargas = datos.some(d => String(d.etiqueta).length > 9 || String(d.etiqueta).length * 7 > pasoPrevio);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', op.unidad ? `Gráfica de ${op.unidad}` : 'Gráfica de barras');
+  svg.setAttribute('title', op.unidad ? `Gráfica de ${op.unidad}` : 'Gráfica de barras');
+  if (etiquetasLargas) {
+    const fila = 28;
+    const alto = Math.max(120, datos.length * fila + 24);
+    const margen = { top: 12, right: 18, bottom: 12, left: Math.min(190, Math.max(105, Math.round(ancho * 0.34))) };
+    const areaAncho = Math.max(90, ancho - margen.left - margen.right);
+    const maxValor = Math.max(...datos.map(d => d.valor), 0) || 1;
+    const maxCaracteres = Math.max(8, Math.floor((margen.left - 12) / 6.3));
+    svg.style.height = `${alto}px`;
+    svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+    const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
+    datos.forEach((d, i) => {
+      const y = i * fila + 4;
+      const texto = String(d.etiqueta);
+      const label = svgEl('text', { x: -8, y: y + 8, 'font-size': 11, 'text-anchor': 'end', fill: 'var(--text-secondary)' });
+      label.textContent = texto.length > maxCaracteres ? texto.slice(0, maxCaracteres - 1) + '…' : texto;
+      const title = svgEl('title', {}); title.textContent = texto; label.appendChild(title); g.appendChild(label);
+      const barW = Math.max(1, d.valor / maxValor * areaAncho);
+      const bar = svgEl('rect', { x: 0, y, width: barW, height: 14, rx: 2, fill: op.campoColor ? colorDeEntidad(op.campoColor, d.etiqueta) : 'var(--series-1)' });
+      g.appendChild(bar);
+      const cercaDelBorde = barW > areaAncho - 52;
+      const value = svgEl('text', { x: cercaDelBorde ? areaAncho - 3 : Math.min(barW + 5, areaAncho - 2), y: y + 11, 'font-size': 10, 'text-anchor': cercaDelBorde ? 'end' : 'start', fill: 'var(--text-primary)', 'font-variant-numeric': 'tabular-nums' });
+      value.textContent = fmt(d.valor); g.appendChild(value);
+      const hit = svgEl('rect', { x: 0, y: y - 2, width: areaAncho, height: 18, fill: 'transparent' });
+      hit.addEventListener('mouseenter', e => mostrarTooltip(e, texto, [{ color: bar.getAttribute('fill'), etiqueta: op.unidad || 'Valor', valor: d.exacto || fmt(d.valor) }]));
+      hit.addEventListener('mousemove', moverTooltip); hit.addEventListener('mouseleave', ocultarTooltip); g.appendChild(hit);
+    });
+    svg.appendChild(g);
+    return;
+  }
+  // Las categorías cortas conservan las barras verticales.
+  const alto = 280;
   const margen = {
     top: 16, right: 16,
-    bottom: etiquetasLargas ? 112 : 44,
-    left: etiquetasLargas ? 76 : 62,
+    bottom: 44,
+    left: 62,
   };
   const areaAncho = Math.max(80, ancho - margen.left - margen.right);
   const areaAlto = alto - margen.top - margen.bottom;
 
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = `${alto}px`;
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
   const maxValor = Math.max(...datos.map(d => d.valor), 0) || 1;
@@ -962,8 +1177,8 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
       stroke: i === 0 ? 'var(--baseline-color)' : 'var(--grid-color)', 'stroke-width': 1,
     }));
     const lbl = svgEl('text', {
-      x: -9, y: y + 4, 'font-size': 11, 'text-anchor': 'end',
-      fill: 'var(--text-dim)', 'font-variant-numeric': 'tabular-nums',
+      x: -9, y: y + 4, 'font-size': 13, 'text-anchor': 'end',
+      fill: 'var(--text-secondary)', 'font-variant-numeric': 'tabular-nums',
     });
     lbl.textContent = fmt((maxValor / lineas) * i);
     g.appendChild(lbl);
@@ -985,6 +1200,19 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
     });
     g.appendChild(barra);
 
+    // Etiqueta de valor sobre la barra
+    const valorLbl = svgEl('text', {
+      x: x + anchoBarra / 2,
+      y: y - 5,
+      'text-anchor': 'middle',
+      'font-size': 11,
+      'font-weight': 600,
+      fill: 'var(--text-primary)',
+      'font-variant-numeric': 'tabular-nums',
+    });
+    valorLbl.textContent = fmt(d.valor);
+    g.appendChild(valorLbl);
+
     // El área sensible al mouse es toda la columna, no solo la barra.
     const zona = svgEl('rect', {
       x: i * paso, y: 0, width: paso, height: areaAlto, fill: 'transparent',
@@ -1005,14 +1233,9 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
 
     const texto = String(d.etiqueta);
     const lbl = svgEl('text', {
-      'font-size': 11, fill: 'var(--text-dim)',
+      'font-size': 12, fill: 'var(--text-secondary)',
     });
-    if (etiquetasLargas) {
-      const cx = i * paso + paso / 2;
-      lbl.setAttribute('transform', `translate(${cx},${areaAlto + 12}) rotate(-32)`);
-      lbl.setAttribute('text-anchor', 'end');
-      lbl.textContent = texto.length > 19 ? texto.slice(0, 18) + '…' : texto;
-    } else {
+    {
       lbl.setAttribute('x', i * paso + paso / 2);
       lbl.setAttribute('y', areaAlto + 16);
       lbl.setAttribute('text-anchor', 'middle');
@@ -1027,9 +1250,607 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
   svg.appendChild(g);
 }
 
+/**
+ * Gráfica de barras agrupadas horizontal. Para comparar múltiples series por categoría.
+ * datos = [{ etiqueta, zona, series: [{ nombre, valor, color },...] }]
+ */
+function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones));
+  svg.innerHTML = '';
+  svg.style.removeProperty('height');
+
+  const op = opciones || {};
+  const fmt = FORMATOS[op.formato] || FORMATOS.dinero;
+
+  if (!datos.length) {
+    svg.style.height = '120px';
+    svg.setAttribute('viewBox', '0 0 600 120');
+    const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
+      'font-size': 13, fill: 'var(--text-dim)' });
+    t.textContent = 'Sin datos para los filtros aplicados';
+    svg.appendChild(t);
+    return;
+  }
+
+  const ancho = Math.max(300, svg.clientWidth || 300);
+  const nSeriesGlobal = datos[0].series.length;
+  const alturaPorGrupo = Math.max(36, nSeriesGlobal * 10 + (nSeriesGlobal - 1) * 3 + 8);
+  const margenGrupo = 8;      // condensado de 24
+  const zonas = [...new Set(datos.map(d => d.zona ?? null))];
+  const seriesLeyenda = datos[0].series;
+  const margenIzq = Math.min(190, Math.max(110, Math.round(ancho * 0.32)));
+  const anchoMaxLeyenda = ancho - margenIzq - 8;
+  let leyendaFilas = 1, anchoFilaLeyenda = 0;
+  seriesLeyenda.forEach(s => {
+    const w = 34 + s.nombre.length * 6.5;
+    if (anchoFilaLeyenda && anchoFilaLeyenda + w > anchoMaxLeyenda) { leyendaFilas++; anchoFilaLeyenda = 0; }
+    anchoFilaLeyenda += w;
+  });
+  const margenTop = 38 + leyendaFilas * 18;
+  let altoTotal = margenTop;
+  zonas.forEach(z => {
+    const enZona = datos.filter(d => z === null ? d.zona == null : d.zona === z);
+    altoTotal += (z !== null && z !== '' ? 20 : 0) + enZona.length * (alturaPorGrupo + margenGrupo);
+  });
+  const margen = { top: margenTop, right: 80, bottom: 16, left: margenIzq };
+  const alto = Math.max(120, altoTotal + margen.bottom);
+  const areaAncho = Math.max(80, ancho - margen.left - margen.right);
+  const areaAlto = alto - margen.top - margen.bottom;
+
+  svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = alto + 'px';
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', op.unidad || 'Gráfica de barras agrupadas');
+  svg.setAttribute('title', op.unidad || 'Gráfica de barras agrupadas');
+  const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
+
+  const maxValor = Math.max(...datos.flatMap(d => d.series.map(s => s.valor)), 1);
+
+  // Leyenda envuelta dentro del ancho disponible.
+  if (datos.length && datos[0].series.length) {
+    let offsetX = 0, filaLeyenda = 0;
+    seriesLeyenda.forEach(s => {
+      const anchoLeyenda = 34 + s.nombre.length * 6.5;
+      if (offsetX && offsetX + anchoLeyenda > anchoMaxLeyenda) { offsetX = 0; filaLeyenda++; }
+      const gLey = svgEl('g', {});
+      gLey.appendChild(svgEl('rect', {
+        x: offsetX, y: -margenTop + 14 + filaLeyenda * 18, width: 11, height: 11, rx: 2, fill: s.color,
+      }));
+      const t = svgEl('text', {
+        x: offsetX + 16, y: -margenTop + 23 + filaLeyenda * 18, 'font-size': 11, fill: 'var(--text-secondary)',
+      });
+      t.textContent = s.nombre;
+      gLey.appendChild(t);
+      g.appendChild(gLey);
+      offsetX += anchoLeyenda;
+    });
+  }
+
+  // Rejilla
+  const lineas = 4;
+  for (let i = 0; i <= lineas; i++) {
+    const x = (areaAncho / lineas) * i;
+    g.appendChild(svgEl('line', {
+      x1: x, y1: 0, x2: x, y2: areaAlto,
+      stroke: 'var(--grid-color)', 'stroke-width': 1,
+    }));
+    const lbl = svgEl('text', {
+      x, y: -8, 'font-size': 11, 'text-anchor': 'middle',
+      fill: 'var(--text-secondary)', 'font-variant-numeric': 'tabular-nums',
+    });
+    lbl.textContent = fmt((maxValor / lineas) * i);
+    g.appendChild(lbl);
+  }
+
+  // Dibujar grupos por zona
+  let offsetY = 0;
+  zonas.forEach(zona => {
+    const gruposZona = datos.filter(d => zona === null ? d.zona == null : d.zona === zona);
+    if (gruposZona.length === 0) return;  // skip zona with no clients
+
+    // Etiqueta de zona
+    if (zona !== null && zona !== '') {
+      const lblZona = svgEl('text', {
+        x: -10, y: offsetY + 10, 'font-size': 10, 'text-anchor': 'end',
+        fill: 'var(--text-dim)', 'font-weight': 600, 'text-transform': 'uppercase',
+      });
+      lblZona.textContent = zona;
+      g.appendChild(lblZona);
+      offsetY += 20;
+    }
+
+    gruposZona.forEach((grupo) => {
+      const nSeries = grupo.series.length;
+      const alturaBarra = 9;
+      const espacioEntreSeries = 2;
+      const alturaGrupo = nSeries * alturaBarra + (nSeries - 1) * espacioEntreSeries;
+      const yBase = offsetY + (alturaPorGrupo - alturaGrupo) / 2;
+
+      // Etiqueta del cliente
+      const lblCliente = svgEl('text', {
+        x: -10, y: offsetY + alturaPorGrupo / 2, 'font-size': 11,
+        'text-anchor': 'end', fill: 'var(--text-primary)',
+        'dominant-baseline': 'middle',
+      });
+      const textoCliente = String(grupo.etiqueta);
+      lblCliente.textContent = textoCliente.length > 20 ? textoCliente.slice(0, 19) + '…' : textoCliente;
+      const titulo = svgEl('title', {});
+      titulo.textContent = textoCliente;
+      lblCliente.appendChild(titulo);
+      g.appendChild(lblCliente);
+
+      // Barras
+      grupo.series.forEach((serie, si) => {
+        const yBarra = yBase + si * (alturaBarra + espacioEntreSeries);
+        const anchoBarra = Math.max(1, (serie.valor / maxValor) * areaAncho);
+
+        const barra = svgEl('rect', {
+          x: 0, y: yBarra, width: anchoBarra, height: alturaBarra,
+          fill: serie.color, rx: 1.5,
+        });
+        g.appendChild(barra);
+
+        // Valor al final de la barra - only for Booking (si=0) and Backlog (si=3)
+        if (si === 0 || si === 3) {
+          const lblValor = svgEl('text', {
+            x: Math.min(anchoBarra + 4, areaAncho - 2), y: yBarra + alturaBarra / 2,
+            'font-size': 10, 'font-weight': 600,
+            'dominant-baseline': 'middle',
+            fill: 'var(--text-primary)',
+            'font-variant-numeric': 'tabular-nums',
+          });
+          lblValor.textContent = fmt(serie.valor);
+          g.appendChild(lblValor);
+        }
+
+        // Tooltip
+        const zona = svgEl('rect', {
+          x: 0, y: yBarra, width: Math.max(anchoBarra, 30), height: alturaBarra,
+          fill: 'transparent',
+        });
+        zona.style.cursor = 'pointer';
+        if (op.alClickar) {
+          zona.setAttribute('role', 'button'); zona.setAttribute('tabindex', '0');
+          zona.setAttribute('aria-label', `${grupo.etiqueta}: ${serie.nombre}, ${fmt(serie.valor)}. Filtrar por ${grupo.etiqueta}`);
+          zona.addEventListener('click', () => op.alClickar(grupo.etiqueta));
+          zona.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); op.alClickar(grupo.etiqueta); } });
+        }
+        zona.addEventListener('mouseenter', e => {
+          barra.setAttribute('opacity', '0.78');
+          mostrarTooltip(e, grupo.etiqueta, [{
+            color: serie.color,
+            etiqueta: serie.nombre,
+            valor: '$' + serie.valor.toLocaleString('en-US', { maximumFractionDigits: 0 }),
+          }]);
+        });
+        zona.addEventListener('mousemove', moverTooltip);
+        zona.addEventListener('mouseleave', () => {
+          barra.removeAttribute('opacity');
+          ocultarTooltip();
+        });
+        g.appendChild(zona);
+      });
+
+      offsetY += alturaPorGrupo + margenGrupo;
+    });
+  });
+
+  svg.appendChild(g);
+}
+
+/**
+ * Gráfica de barras agrupadas vertical. Similar a horizontal pero con barras verticales.
+ * datos = [{ etiqueta, series: [{ nombre, valor, color },...] }]
+ * opciones.alClickar: callback(etiqueta) cuando se hace clic en un grupo
+ */
+function crearGraficaBarrasAgrupadasVertical(svgId, datos, opciones) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaBarrasAgrupadasVertical(svgId, datos, opciones));
+  svg.innerHTML = '';
+  svg.style.removeProperty('height');
+
+  const op = opciones || {};
+  const fmt = FORMATOS[op.formato] || FORMATOS.dinero;
+
+  if (!datos.length) {
+    svg.style.height = '120px';
+    svg.setAttribute('viewBox', '0 0 600 120');
+    const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
+      'font-size': 13, fill: 'var(--text-dim)' });
+    t.textContent = 'Sin datos para los filtros aplicados';
+    svg.appendChild(t);
+    return;
+  }
+
+  const ancho = svg.clientWidth || 900;
+  const alto = 340;
+  // Arriba: leyenda y, debajo, las etiquetas rotadas de la barra más alta.
+  const margen = { top: 100, right: 16, bottom: 70, left: 70 };
+  const areaAncho = ancho - margen.left - margen.right;
+  const areaAlto = alto - margen.top - margen.bottom;
+
+  svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = alto + 'px';
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Gráfica de barras agrupadas verticales');
+  svg.setAttribute('title', 'Gráfica de barras agrupadas verticales');
+  const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
+
+  const maxValor = Math.max(...datos.flatMap(d => d.series.map(s => s.valor)), 1);
+  const pasoGrupo = areaAncho / datos.length;
+  const nSeries = datos.length ? datos[0].series.length : 0;
+  const anchoBarra = Math.min(16, (pasoGrupo - 16) / nSeries);
+
+  // Rejilla y eje Y
+  const lineas = 4;
+  for (let i = 0; i <= lineas; i++) {
+    const y = areaAlto - (areaAlto / lineas) * i;
+    g.appendChild(svgEl('line', {
+      x1: 0, y1: y, x2: areaAncho, y2: y,
+      stroke: i === 0 ? 'var(--baseline-color)' : 'var(--grid-color)', 'stroke-width': 1,
+    }));
+    const lbl = svgEl('text', {
+      x: -9, y: y + 4, 'font-size': 13, 'text-anchor': 'end',
+      fill: 'var(--text-secondary)', 'font-variant-numeric': 'tabular-nums',
+    });
+    lbl.textContent = fmt((maxValor / lineas) * i);
+    g.appendChild(lbl);
+  }
+
+  // Grupos
+  datos.forEach((grupo, ig) => {
+    const xGrupo = ig * pasoGrupo + pasoGrupo / 2;
+    const anchoTotal = nSeries * anchoBarra + (nSeries - 1) * 3;
+    const xBase = xGrupo - anchoTotal / 2;
+
+    grupo.series.forEach((serie, is) => {
+      const xBarra = xBase + is * (anchoBarra + 3);
+      const altura = Math.max(1, (serie.valor / maxValor) * areaAlto);
+      const yBarra = areaAlto - altura;
+
+      const barra = svgEl('rect', {
+        x: xBarra, y: yBarra, width: anchoBarra, height: altura,
+        fill: serie.color, rx: 2,
+      });
+      g.appendChild(barra);
+
+      // Valor rotado -90, positioned ABOVE bar top
+      const lblValor = svgEl('text', {
+        'font-size': 10, 'font-weight': 600,
+        fill: 'var(--text-primary)',
+        'font-variant-numeric': 'tabular-nums',
+        transform: `translate(${xBarra + anchoBarra / 2},${yBarra - 3}) rotate(-90)`,
+        'text-anchor': 'start',  // start makes text go UP from rotation point
+      });
+      lblValor.textContent = fmt(serie.valor);
+      g.appendChild(lblValor);
+
+      // Tooltip
+      const zona = svgEl('rect', {
+        x: xBarra, y: 0, width: anchoBarra, height: areaAlto,
+        fill: 'transparent',
+      });
+      zona.style.cursor = 'pointer';
+      zona.addEventListener('mouseenter', e => {
+        barra.setAttribute('opacity', '0.78');
+        mostrarTooltip(e, grupo.etiqueta, [{
+          color: serie.color,
+          etiqueta: serie.nombre,
+          valor: '$' + serie.valor.toLocaleString('en-US', { maximumFractionDigits: 0 }),
+        }]);
+      });
+      zona.addEventListener('mousemove', moverTooltip);
+      zona.addEventListener('mouseleave', () => {
+        barra.removeAttribute('opacity');
+        ocultarTooltip();
+      });
+      // El clic va en la misma zona del tooltip: una capa aparte encima del
+      // grupo tapaba los tooltips de cada barra.
+      if (op.alClickar) {
+        zona.setAttribute('role', 'button'); zona.setAttribute('tabindex', '0');
+        zona.setAttribute('aria-label', `Filtrar por vendedor ${grupo.etiqueta}: ${serie.nombre}, ${fmt(serie.valor)}`);
+        zona.addEventListener('click', () => op.alClickar(grupo.etiqueta));
+        zona.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); op.alClickar(grupo.etiqueta); } });
+      }
+      g.appendChild(zona);
+    });
+
+    // Etiqueta del eje X (2 líneas si es largo)
+    const texto = String(grupo.etiqueta);
+    if (texto.length > 10) {
+      const mitad = Math.floor(texto.length / 2);
+      const espacio = texto.lastIndexOf(' ', mitad);
+      const corte = espacio > mitad - 5 && espacio < mitad + 5 ? espacio : mitad;
+      const linea1 = texto.slice(0, corte).trim();
+      const linea2 = texto.slice(corte).trim();
+
+      const lbl1 = svgEl('text', {
+        x: xGrupo, y: areaAlto + 16, 'font-size': 10,
+        'text-anchor': 'middle', fill: 'var(--text-secondary)',
+      });
+      lbl1.textContent = linea1.length > 12 ? linea1.slice(0, 11) + '…' : linea1;
+      g.appendChild(lbl1);
+
+      const lbl2 = svgEl('text', {
+        x: xGrupo, y: areaAlto + 28, 'font-size': 10,
+        'text-anchor': 'middle', fill: 'var(--text-secondary)',
+      });
+      lbl2.textContent = linea2.length > 12 ? linea2.slice(0, 11) + '…' : linea2;
+      const titulo = svgEl('title', {});
+      titulo.textContent = texto;
+      lbl2.appendChild(titulo);
+      g.appendChild(lbl2);
+    } else {
+      const lbl = svgEl('text', {
+        x: xGrupo, y: areaAlto + 16, 'font-size': 10,
+        'text-anchor': 'middle', fill: 'var(--text-secondary)',
+      });
+      lbl.textContent = texto;
+      const titulo = svgEl('title', {});
+      titulo.textContent = texto;
+      lbl.appendChild(titulo);
+      g.appendChild(lbl);
+    }
+  });
+
+  // Leyenda arriba
+  if (datos.length && datos[0].series.length) {
+    let offset = 0;
+    datos[0].series.forEach(s => {
+      const gLey = svgEl('g', {});
+      gLey.appendChild(svgEl('rect', {
+        x: offset, y: -92, width: 11, height: 11, rx: 2, fill: s.color,
+      }));
+      const t = svgEl('text', {
+        x: offset + 16, y: -83, 'font-size': 11, fill: 'var(--text-secondary)',
+      });
+      t.textContent = s.nombre;
+      gLey.appendChild(t);
+      g.appendChild(gLey);
+      offset += 16 + s.nombre.length * 7.2 * escalaTexto() + 18;
+    });
+  }
+
+  svg.appendChild(g);
+}
+
+/**
+ * Gráfica de barras apiladas horizontal. Para mostrar composición por categoría.
+ * datos = [{ etiqueta, segmentos: [{ nombre, valor, color },...] }]
+ */
+function crearGraficaBarrasApiladas(svgId, datos, opciones) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaBarrasApiladas(svgId, datos, opciones));
+  svg.innerHTML = '';
+  svg.style.removeProperty('height');
+
+  const op = opciones || {};
+
+  if (!datos.length) {
+    svg.style.height = '120px';
+    svg.setAttribute('viewBox', '0 0 600 120');
+    const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
+      'font-size': 13, fill: 'var(--text-dim)' });
+    t.textContent = 'Sin datos para los filtros aplicados';
+    svg.appendChild(t);
+    return;
+  }
+
+  const ancho = Math.max(300, svg.clientWidth || 300);
+  const alturaPorBarra = 32;
+  const margenBarra = 12;
+  const segmentosLeyenda = op.todosSegmentos || (datos.length && datos[0].segmentos) || [];
+  const anchoLeyenda = Math.max(120, ancho - 24);
+  let filasLeyenda = 1, anchoFila = 0;
+  segmentosLeyenda.forEach(s => {
+    const w = 34 + s.nombre.length * 7.2 * escalaTexto();
+    if (anchoFila && anchoFila + w > anchoLeyenda) { filasLeyenda++; anchoFila = 0; }
+    anchoFila += w;
+  });
+  const margenTop = 24 + filasLeyenda * 18;
+  const alto = Math.max(160, datos.length * (alturaPorBarra + margenBarra) + margenTop + 36);
+  const margen = { top: margenTop, right: 50, bottom: 20, left: Math.round(140 * escalaTexto()) };  // right margin for total label
+  const espacioTotal = 36;  // reserve space for total label at end of bar
+  const areaAncho = ancho - margen.left - margen.right - espacioTotal;
+  const areaAlto = alto - margen.top - margen.bottom;
+
+  svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = alto + 'px';
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', op.unidad || 'Gráfica de barras apiladas');
+  svg.setAttribute('title', op.unidad || 'Gráfica de barras apiladas');
+  const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
+
+  // Valor máximo = suma de segmentos de cada barra
+  const maxTotal = Math.max(...datos.map(d =>
+    d.segmentos.reduce((a, s) => a + s.valor, 0)), 1);
+
+  // Dibujar barras
+  datos.forEach((fila, i) => {
+    const yBarra = i * (alturaPorBarra + margenBarra);
+    const total = fila.segmentos.reduce((a, s) => a + s.valor, 0);
+
+    // Etiqueta
+    const lbl = svgEl('text', {
+      x: -10, y: yBarra + alturaPorBarra / 2, 'font-size': 12,
+      'text-anchor': 'end', fill: 'var(--text-primary)',
+      'dominant-baseline': 'middle',
+    });
+    const texto = String(fila.etiqueta);
+    lbl.textContent = texto.length > 18 ? texto.slice(0, 17) + '…' : texto;
+    const titulo = svgEl('title', {});
+    titulo.textContent = texto;
+    lbl.appendChild(titulo);
+    g.appendChild(lbl);
+
+    // Segmentos
+    let offsetX = 0;
+    fila.segmentos.forEach((seg, si) => {
+      const ancho = Math.max(0, (seg.valor / maxTotal) * areaAncho);
+
+      const rect = svgEl('rect', {
+        x: offsetX, y: yBarra, width: ancho, height: alturaPorBarra,
+        fill: seg.color, rx: si === 0 ? 2 : 0,
+      });
+      if (si === fila.segmentos.length - 1) rect.setAttribute('rx', 2);
+      g.appendChild(rect);
+
+      // Valor dentro del segmento si cabe
+      if (ancho > 30 && seg.valor > 0) {
+        const lblSeg = svgEl('text', {
+          x: offsetX + ancho / 2, y: yBarra + alturaPorBarra / 2,
+          'font-size': 11, 'font-weight': 600,
+          'text-anchor': 'middle', 'dominant-baseline': 'middle',
+          fill: '#ffffff',
+          'font-variant-numeric': 'tabular-nums',
+        });
+        lblSeg.textContent = String(seg.valor);
+        g.appendChild(lblSeg);
+      }
+
+      // Tooltip
+      const zona = svgEl('rect', {
+        x: offsetX, y: yBarra, width: ancho, height: alturaPorBarra,
+        fill: 'transparent',
+      });
+      zona.style.cursor = 'pointer';
+      zona.addEventListener('mouseenter', e => {
+        rect.setAttribute('opacity', '0.78');
+        mostrarTooltip(e, fila.etiqueta, [{
+          color: seg.color,
+          etiqueta: seg.nombre,
+          valor: `${seg.valor} proyecto${seg.valor === 1 ? '' : 's'}`,
+        }]);
+      });
+      zona.addEventListener('mousemove', moverTooltip);
+      zona.addEventListener('mouseleave', () => {
+        rect.removeAttribute('opacity');
+        ocultarTooltip();
+      });
+      g.appendChild(zona);
+
+      offsetX += ancho;
+    });
+
+    // Total al final
+    const lblTotal = svgEl('text', {
+      x: offsetX + 8, y: yBarra + alturaPorBarra / 2,
+      'font-size': 11, 'font-weight': 600,
+      'dominant-baseline': 'middle',
+      fill: 'var(--text-primary)',
+      'font-variant-numeric': 'tabular-nums',
+    });
+    lblTotal.textContent = String(total);
+    g.appendChild(lblTotal);
+  });
+
+  // Leyenda envuelta arriba, con espacio reservado en el SVG.
+  if (segmentosLeyenda.length) {
+    let offset = -margen.left + 8, filaLeyenda = 0;
+    segmentosLeyenda.forEach(s => {
+      const anchoItem = 34 + s.nombre.length * 7.2 * escalaTexto();
+      if (offset > -margen.left + 8 && offset + anchoItem > ancho - margen.left - 8) { offset = -margen.left + 8; filaLeyenda++; }
+      const gLey = svgEl('g', {});
+      gLey.appendChild(svgEl('rect', {
+        x: offset, y: -margenTop + 12 + filaLeyenda * 18, width: 11, height: 11, rx: 2, fill: s.color,
+      }));
+      const t = svgEl('text', {
+        x: offset + 16, y: -margenTop + 21 + filaLeyenda * 18, 'font-size': 11, fill: 'var(--text-secondary)',
+      });
+      t.textContent = s.nombre;
+      gLey.appendChild(t);
+      g.appendChild(gLey);
+      offset += anchoItem;
+    });
+  }
+
+  svg.appendChild(g);
+}
+
 // ============================================================================
 // ACTUALIZACIÓN DE GRÁFICAS
 // ============================================================================
+
+/**
+ * Semáforo de proyectos: resumen de Red/Yellow/Green/Sin dato como pills
+ * clickables. Clic en uno aplica (o quita) el filtro de Project Status.
+ */
+function renderizarSemaforoProyectos(proyectos) {
+  let contenedor = document.getElementById('card-semaforo-proyectos');
+  if (!contenedor) return;
+
+  // Get the card body, or use the container itself
+  const cardBody = contenedor.querySelector('.pf-v6-c-card__body');
+  if (cardBody) contenedor = cardBody;
+
+  // Contar por status
+  const conteos = { 'Rojo': 0, 'Amarillo': 0, 'Verde': 0, 'Sin dato': 0 };
+  proyectos.forEach(p => {
+    const val = valorDimension(p, 'project_status');
+    if (val === '(sin dato)') conteos['Sin dato']++;
+    else if (conteos[val] !== undefined) conteos[val]++;
+  });
+
+  contenedor.innerHTML = '';
+
+  const titulo = document.createElement('h4');
+  titulo.className = 'semaforo-titulo';
+  titulo.textContent = 'Semáforo de proyectos';
+  contenedor.appendChild(titulo);
+
+  const pills = document.createElement('div');
+  pills.className = 'semaforo-pills';
+
+  const statusConfig = [
+    { key: 'Rojo', color: '#c9190b', internal: 'Rojo' },
+    { key: 'Amarillo', color: '#f0ab00', internal: 'Amarillo' },
+    { key: 'Verde', color: '#3e8635', internal: 'Verde' },
+    { key: 'Sin dato', color: '#8a8d90', internal: SIN_DATO },
+  ];
+
+  statusConfig.forEach(({ key, color, internal }) => {
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'semaforo-pill';
+
+    const activo = estado.filtros.project_status.includes(internal);
+    if (activo) pill.classList.add('activo');
+
+    const dot = document.createElement('span');
+    dot.className = 'semaforo-dot';
+    dot.style.background = color;
+
+    const label = document.createElement('span');
+    label.className = 'semaforo-label';
+    label.textContent = key;
+
+    const count = document.createElement('span');
+    count.className = 'semaforo-count';
+    count.textContent = conteos[key];
+
+    pill.append(dot, label, count);
+    pill.title = `${activo ? 'Quitar' : 'Aplicar'} filtro: Project Status = ${key}`;
+
+    pill.addEventListener('click', () => {
+      const filtro = estado.filtros.project_status;
+      const idx = filtro.indexOf(internal);
+      if (idx >= 0) {
+        filtro.splice(idx, 1);
+      } else {
+        filtro.push(internal);
+      }
+      aplicarFiltros();
+    });
+
+    pills.appendChild(pill);
+  });
+
+  contenedor.appendChild(pills);
+}
 
 function actualizarGraficas() {
   const proyectos = estado.proyectosFiltrados;
@@ -1045,8 +1866,59 @@ function actualizarGraficas() {
   };
   const dinero = v => `$${(v || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
-  // 1. Proyectos por estado. Aquí el color SÍ aporta: son 6 categorías fijas
-  //    que el usuario reconoce de un vistazo en todo el dashboard.
+  // Semáforo de proyectos
+  renderizarSemaforoProyectos(proyectos);
+
+  // Verificar si hay exactamente un vendedor filtrado
+  const vendedorUnico = estado.filtros.vendedor.length === 1 ? estado.filtros.vendedor[0] : null;
+  const cardVendedor = document.getElementById('card-vendedor-resumen');
+  if (vendedorUnico && cardVendedor) {
+    cardVendedor.style.display = 'block';
+    // Calcular estadísticas del vendedor
+    const proysVendedor = proyectos.filter(p => valorDimension(p, 'vendedor') === vendedorUnico);
+    const bookingTotal = proysVendedor.reduce((a, p) => a + (valorBooking(p) || 0), 0);
+    const acum = proysVendedor.reduce((a, p) => a + (acumuladoHoy(p) || 0), 0);
+    const backlogTotal = proysVendedor.reduce((a, p) => a + (backlogHoy(p) || 0), 0);
+    const pctEjec = bookingTotal > 0 ? (acum / bookingTotal * 100).toFixed(1) : '—';
+
+    const porEstado = new Map();
+    proysVendedor.forEach(p => {
+      const est = p.estado || SIN_DATO;
+      porEstado.set(est, (porEstado.get(est) || 0) + 1);
+    });
+
+    const topClientes = new Map();
+    proysVendedor.forEach(p => {
+      const cli = p.cliente || SIN_DATO;
+      topClientes.set(cli, (topClientes.get(cli) || 0) + (valorBooking(p) || 0));
+    });
+    const top5 = Array.from(topClientes, ([cli, val]) => ({ cli, val }))
+      .sort((a, b) => b.val - a.val).slice(0, 5);
+
+    document.getElementById('vendedor-nombre').textContent = vendedorUnico;
+    document.getElementById('vendedor-n-proyectos').textContent = proysVendedor.length;
+    document.getElementById('vendedor-booking').textContent = formatearDinero(bookingTotal);
+    document.getElementById('vendedor-acumulado').textContent = formatearDinero(acum);
+    document.getElementById('vendedor-backlog').textContent = formatearDinero(backlogTotal);
+    document.getElementById('vendedor-pct-ejec').textContent = pctEjec + (pctEjec === '—' ? '' : '%');
+
+    let htmlEstados = '';
+    ['In Progress', 'On Hold', 'Planned', 'Completed'].forEach(est => {
+      const n = porEstado.get(est) || 0;
+      if (n > 0) htmlEstados += `<span class="vendedor-badge">${est}: ${n}</span> `;
+    });
+    document.getElementById('vendedor-por-estado').innerHTML = htmlEstados || '—';
+
+    let htmlClientes = '';
+    top5.forEach(({ cli, val }) => {
+      htmlClientes += `<div class="vendedor-cliente">${cli}: ${formatearDinero(val)}</div>`;
+    });
+    document.getElementById('vendedor-top-clientes').innerHTML = htmlClientes || '—';
+  } else if (cardVendedor) {
+    cardVendedor.style.display = 'none';
+  }
+
+  // 1. Proyectos por estado
   const ordenEstado = (estado.metadataProyectos || {}).orden_estado || [];
   fijarColores('estado', ordenEstado);
   const porEstado = agrupar('estado', () => 1)
@@ -1059,29 +1931,30 @@ function actualizarGraficas() {
     formato: 'conteo', campoColor: 'estado', unidad: 'Proyectos',
   });
 
-  // En el resto, el eje X ya identifica cada barra: pintarlas de colores
-  // distintos sería decorativo y haría creer que el color significa algo.
-  const valorOf = p => (typeof p.valor_of === 'number' ? p.valor_of : 0);
-
-  const porZona = agrupar('zona', valorOf);
+  // 2. Valor Booking por Zona
+  const porZona = agrupar('zona', p => valorBooking(p) || 0);
   porZona.forEach(d => { d.exacto = dinero(d.valor); });
   crearGraficaBarrasSimple('grafica-zona', porZona, {
-    formato: 'dinero', unidad: 'Valor OF',
+    formato: 'dinero', unidad: 'Valor Booking',
   });
 
-  const porPais = agrupar('pais', valorOf).slice(0, 10);
+  // 3. Top 10 Países
+  const porPais = agrupar('pais', p => valorBooking(p) || 0).slice(0, 10);
   porPais.forEach(d => { d.exacto = dinero(d.valor); });
   crearGraficaBarrasSimple('grafica-paises', porPais, {
-    formato: 'dinero', unidad: 'Valor OF',
+    formato: 'dinero', unidad: 'Valor Booking',
   });
 
-  // Ejecución promedio por PM: el promedio simple de los proyectos que
-  // tienen el dato. Los nulos no cuentan como cero, que sesgaría hacia abajo.
+  // 4. Ejecución por PM (recalculado: acumuladoHoy / valorBooking)
   const suma = new Map(), cuenta = new Map();
   proyectos.forEach(p => {
-    if (typeof p.pct_ejecucion_actual !== 'number' || !p.pm_lider) return;
+    if (!p.pm_lider) return;
+    const booking = valorBooking(p);
+    const acum = acumuladoHoy(p);
+    if (booking === null || acum === null || booking <= 0) return;
+    const pct = acum / booking;
     const k = String(p.pm_lider);
-    suma.set(k, (suma.get(k) || 0) + p.pct_ejecucion_actual);
+    suma.set(k, (suma.get(k) || 0) + pct);
     cuenta.set(k, (cuenta.get(k) || 0) + 1);
   });
   const porPM = Array.from(suma, ([etiqueta, s]) => ({
@@ -1093,6 +1966,229 @@ function actualizarGraficas() {
   crearGraficaBarrasSimple('grafica-pm', porPM, {
     formato: 'porcentaje', unidad: 'Ejecución promedio',
   });
+
+  // 5. Ejecutado vs. planeado por cliente (horizontal grouped bars)
+  const porCliente = new Map();
+  proyectos.forEach(p => {
+    const cli = p.cliente || SIN_DATO;
+    const zona = p.zona || SIN_DATO;
+    if (!porCliente.has(cli)) {
+      porCliente.set(cli, { booking: 0, acumulado: 0, proyectada: 0, backlog: 0, zona });
+    }
+    const acc = porCliente.get(cli);
+    acc.booking += valorBooking(p) || 0;
+    acc.acumulado += acumuladoHoy(p) || 0;
+    acc.proyectada += proyectadaAnio(p) || 0;
+    acc.backlog += backlogHoy(p) || 0;
+  });
+  const datosCliente = Array.from(porCliente, ([cli, vals]) => ({
+    etiqueta: cli,
+    zona: vals.zona,
+    booking: vals.booking,
+    series: [
+      { nombre: 'Valor Booking', valor: vals.booking, color: COLORES_SERIES_COMPARACION.booking },
+      { nombre: 'Revenue acumulado a hoy', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
+      { nombre: 'Ejecución proyectada', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
+      { nombre: 'Backlog', valor: vals.backlog, color: COLORES_SERIES_COMPARACION.backlog },
+    ],
+  })).sort((a, b) => b.booking - a.booking).slice(0, 10);
+
+  // Ordenar por zona, luego por booking
+  datosCliente.sort((a, b) => {
+    if (a.zona !== b.zona) return a.zona.localeCompare(b.zona, 'es');
+    return b.booking - a.booking;
+  });
+
+  crearGraficaBarrasAgrupadasHorizontal('grafica-ejecutado-cliente', datosCliente, { formato: 'dinero' });
+
+  // 6. Booking vs. ejecución por vendedor (vertical grouped bars, clickable)
+  const porVendedor = new Map();
+  proyectos.forEach(p => {
+    const vend = valorDimension(p, 'vendedor');
+    if (!porVendedor.has(vend)) {
+      porVendedor.set(vend, { booking: 0, acumulado: 0, proyectada: 0, backlog: 0 });
+    }
+    const acc = porVendedor.get(vend);
+    acc.booking += valorBooking(p) || 0;
+    acc.acumulado += acumuladoHoy(p) || 0;
+    acc.proyectada += proyectadaAnio(p) || 0;
+    acc.backlog += backlogHoy(p) || 0;
+  });
+  const datosVendedor = Array.from(porVendedor, ([vend, vals]) => ({
+    etiqueta: vend,
+    booking: vals.booking,
+    series: [
+      { nombre: 'Valor Booking', valor: vals.booking, color: COLORES_SERIES_COMPARACION.booking },
+      { nombre: 'Revenue acumulado a hoy', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
+      { nombre: 'Ejecución proyectada', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
+      { nombre: 'Backlog', valor: vals.backlog, color: COLORES_SERIES_COMPARACION.backlog },
+    ],
+  })).filter(d => d.etiqueta !== SIN_DATO)
+    .sort((a, b) => b.booking - a.booking).slice(0, 6);
+
+  crearGraficaBarrasAgrupadasHorizontal('grafica-booking-vendedor', datosVendedor, {
+    formato: 'dinero',
+    unidad: 'Booking y ejecución por vendedor',
+    alClickar: (vendedor) => {
+      // Aplicar filtro de vendedor y refrescar
+      DIMENSIONES.forEach(d => { estado.filtros[d.campo] = []; });
+      estado.filtros.texto = '';
+      estado.filtros.vendedor = [vendedor];
+      const texto = document.getElementById('filtro-texto');
+      if (texto) texto.value = '';
+      aplicarFiltros();
+    },
+  });
+
+  // 7. Estado de ejecución por vendedor (stacked horizontal bars)
+  const vendedorEstado = new Map();
+  proyectos.forEach(p => {
+    const vend = valorDimension(p, 'vendedor');
+    const est = p.estado || SIN_DATO;
+    if (!vendedorEstado.has(vend)) vendedorEstado.set(vend, new Map());
+    const mapa = vendedorEstado.get(vend);
+    mapa.set(est, (mapa.get(est) || 0) + 1);
+  });
+  const datosVendedorEstado = Array.from(vendedorEstado, ([vend, mapa]) => {
+    const total = Array.from(mapa.values()).reduce((a, v) => a + v, 0);
+    return { etiqueta: vend, total, mapa };
+  }).filter(d => d.etiqueta !== SIN_DATO)  // excluir (sin dato)
+    .sort((a, b) => b.total - a.total).slice(0, 10);
+
+  // Todos los estados que existen en los datos (para la leyenda)
+  const todosEstados = new Set();
+  datosVendedorEstado.forEach(d => d.mapa.forEach((v, est) => todosEstados.add(est)));
+
+  // Ordenar estados: primero los del orden de negocio, luego los demás
+  const estadosOrdenados = ordenEstado.filter(e => todosEstados.has(e));
+  Array.from(todosEstados).forEach(e => {
+    if (!estadosOrdenados.includes(e)) estadosOrdenados.push(e);
+  });
+
+  datosVendedorEstado.forEach(d => {
+    d.segmentos = estadosOrdenados.map(est => ({
+      nombre: est,
+      valor: d.mapa.get(est) || 0,
+      color: colorDeEntidad('estado', est),
+    })).filter(s => s.valor > 0);  // solo segmentos con valor para ESTE vendedor
+  });
+
+  crearGraficaBarrasApiladas('grafica-estado-vendedor', datosVendedorEstado, {
+    todosSegmentos: estadosOrdenados.map(est => ({
+      nombre: est, color: colorDeEntidad('estado', est)
+    }))
+  });
+
+  // 8. Tabla de proyectos no iniciados / on hold
+  renderizarTablaNoIniciados();
+}
+
+/**
+ * Tabla de proyectos no iniciados o en espera
+ */
+function renderizarTablaNoIniciados() {
+  const tabla = document.getElementById('tabla-no-iniciados');
+  if (!tabla) return;
+
+  const tbody = tabla.querySelector('tbody');
+  const tfoot = tabla.querySelector('tfoot');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  const noIniciados = estado.proyectosFiltrados.filter(p =>
+    p.estado === 'On Hold' || p.estado === 'Planned');
+
+  if (noIniciados.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:var(--spacing-lg);">No hay proyectos On Hold o Planned en los filtros aplicados</td></tr>';
+    if (tfoot) tfoot.innerHTML = '';
+    return;
+  }
+
+  // Ordenar por backlog desc
+  const ordenados = noIniciados.slice().sort((a, b) => {
+    const ba = backlogHoy(a) || 0;
+    const bb = backlogHoy(b) || 0;
+    return bb - ba;
+  });
+
+  let totalBacklog = 0;
+  ordenados.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.className = 'fila-clicable';
+    tr.addEventListener('click', () => abrirDetalle(p));
+
+    const nombre = p.nombre_del_proyecto || identificador(p).valor;
+    const pm = p.pm_lider || '—';
+    const cli = p.cliente || '—';
+    const dias = p.dias_para_vencimiento;
+    const meses = p.meses_transcurridos;
+    const bl = backlogHoy(p) || 0;
+    totalBacklog += bl;
+
+    // Barra inline del backlog
+    const maxBl = Math.max(...ordenados.map(x => backlogHoy(x) || 0), 1);
+    const pctBarra = bl > 0 ? (bl / maxBl * 100) : 0;
+
+    [[nombre, 'celda-nombre'], [pm, ''], [cli, ''],
+      [dias !== null && dias !== undefined ? formatearNumero(dias) : '—', 'celda-numero'],
+      [meses !== null && meses !== undefined ? formatearNumero(meses) : '—', 'celda-numero'],
+    ].forEach(([txt, cls], idx) => {
+      const td = document.createElement('td');
+      td.textContent = txt;
+      if (cls) td.className = cls;
+      if (idx === 0 || idx === 1 || idx === 2) td.title = txt;  // title for Proyecto, PM, Cliente
+      tr.appendChild(td);
+    });
+
+    // Columna de backlog con barra y valor
+    const tdBl = document.createElement('td');
+    tdBl.className = 'celda-backlog-barra';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+    const divBarra = document.createElement('div');
+    divBarra.className = 'inline-backlog-barra-container';
+    divBarra.style.cssText = 'flex:1;min-width:0;position:relative;height:20px;';
+
+    const barraFondo = document.createElement('div');
+    barraFondo.style.cssText = 'position:absolute;inset:0;background:var(--grid-color);border-radius:3px;';
+
+    const relleno = document.createElement('div');
+    relleno.style.cssText = `position:absolute;left:0;top:0;bottom:0;width:${pctBarra}%;background:var(--series-1);border-radius:3px;`;
+
+    divBarra.appendChild(barraFondo);
+    divBarra.appendChild(relleno);
+
+    const lblValor = document.createElement('span');
+    lblValor.className = 'inline-backlog-valor';
+    lblValor.style.cssText = 'font-size:0.8125rem;font-weight:600;white-space:nowrap;flex-shrink:0;';
+    lblValor.textContent = formatearDinero(bl);
+
+    wrapper.appendChild(divBarra);
+    wrapper.appendChild(lblValor);
+    tdBl.appendChild(wrapper);
+    tr.appendChild(tdBl);
+
+    tbody.appendChild(tr);
+  });
+
+  // Fila total
+  if (tfoot) {
+    tfoot.innerHTML = '';
+    const trTotal = document.createElement('tr');
+    const tdEtq = document.createElement('td');
+    tdEtq.colSpan = 5;
+    tdEtq.textContent = `Total (${ordenados.length} proyecto${ordenados.length === 1 ? '' : 's'})`;
+    tdEtq.style.fontWeight = '600';
+    trTotal.appendChild(tdEtq);
+    const tdTotal = document.createElement('td');
+    tdTotal.className = 'celda-numero';
+    tdTotal.style.fontWeight = '600';
+    tdTotal.textContent = formatearDinero(totalBacklog);
+    trTotal.appendChild(tdTotal);
+    tfoot.appendChild(trTotal);
+  }
 }
 
 
@@ -1141,10 +2237,11 @@ function renderizarDetalle() {
   ];
 
   secciones.forEach(seccion => {
-    const div = document.createElement('div');
+    const div = document.createElement('details');
     div.className = 'seccion-detalle';
+    div.open = seccion.titulo === 'Datos Comerciales' || seccion.titulo === 'Estatus';
 
-    const h4 = document.createElement('h4');
+    const h4 = document.createElement('summary');
     h4.textContent = seccion.titulo;
     div.appendChild(h4);
 
@@ -1275,13 +2372,13 @@ function renderizarDetalle() {
       div.style.borderRadius = 'var(--radius-sm)';
 
       const label = document.createElement('div');
-      label.style.fontSize = '11px';
+      label.style.fontSize = '0.8125rem';
       label.style.color = 'var(--text-dim)';
       label.style.textTransform = 'uppercase';
       label.textContent = stat.label;
 
       const valor = document.createElement('div');
-      valor.style.fontSize = '18px';
+      valor.style.fontSize = '1.125rem';
       valor.style.fontWeight = 'bold';
       valor.style.marginTop = 'var(--spacing-sm)';
       valor.style.color = 'var(--series-1)';
@@ -1311,15 +2408,21 @@ function renderizarDetalle() {
  */
 function crearGraficaRevenueProyecto(svg, datos, meses) {
   if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaRevenueProyecto(svg, datos, meses));
   svg.innerHTML = '';
+  svg.style.removeProperty('height');
 
   const SERIES = ['Commit', 'Upside'];
-  const ancho = 900;
+  const ancho = Math.max(300, svg.clientWidth || 300);
   const alto = 320;
   const margen = { top: 34, right: 18, bottom: 46, left: 72 };
   const areaAncho = ancho - margen.left - margen.right;
   const areaAlto = alto - margen.top - margen.bottom;
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = `${alto}px`;
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Revenue mensual del proyecto');
+  svg.setAttribute('title', 'Revenue mensual del proyecto');
 
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
@@ -1415,7 +2518,7 @@ function crearGraficaRevenueProyecto(svg, datos, meses) {
     const t = svgEl('text', { x: off + 16, y: -17, 'font-size': 11, fill: 'var(--text-secondary)' });
     t.textContent = s;
     g.appendChild(t);
-    off += 16 + s.length * 6.6 + 18;
+    off += 16 + s.length * 7.2 * escalaTexto() + 18;
   });
 
   svg.appendChild(g);
@@ -1428,7 +2531,9 @@ function crearGraficaRevenueProyecto(svg, datos, meses) {
  */
 function crearGraficaLinea(svg, datos, opciones) {
   if (!svg) return;
+  registrarGrafica(svg, () => crearGraficaLinea(svg, datos, opciones));
   svg.innerHTML = '';
+  svg.style.removeProperty('height');
   const op = opciones || {};
 
   const puntos = Object.keys(datos);
@@ -1438,6 +2543,8 @@ function crearGraficaLinea(svg, datos, opciones) {
   // Decir "sin historico" se lee como "no hay datos" y manda a buscar un fallo
   // que no esta: se muestran los valores de esa carga y por que falta la linea.
   if (puntos.length === 1 && series.length) {
+    svg.style.height = '130px';
+    svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Valores de la única carga disponible');
     svg.setAttribute('viewBox', '0 0 600 130');
     const etq = svgEl('text', { x: 300, y: 26, 'text-anchor': 'middle',
       'font-size': 12, fill: 'var(--text-dim)' });
@@ -1460,6 +2567,8 @@ function crearGraficaLinea(svg, datos, opciones) {
   }
 
   if (puntos.length < 2 || !series.length) {
+    svg.style.height = '120px';
+    svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Sin histórico disponible');
     svg.setAttribute('viewBox', '0 0 600 120');
     const t = svgEl('text', { x: 300, y: 60, 'text-anchor': 'middle',
       'font-size': 13, fill: 'var(--text-dim)' });
@@ -1468,12 +2577,25 @@ function crearGraficaLinea(svg, datos, opciones) {
     return;
   }
 
-  const ancho = svg.clientWidth || 900;
-  const alto = 340;
-  const margen = { top: 40, right: 22, bottom: 58, left: 70 };
+  const ancho = Math.max(300, svg.clientWidth || 300);
+  // Se calcula el número real de filas de leyenda con el mismo algoritmo que
+  // dibuja los elementos, dejando el área del gráfico libre.
+  const margenIzq = Math.min(100, Math.round(ancho * 0.24));
+  const anchoLeyenda = Math.max(100, ancho - margenIzq - 44);
+  let leyendaFilas = 1, anchoFilaLeyenda = 0;
+  series.forEach(s => {
+    const w = 19 + s.length * 7.2 * escalaTexto() + 16;
+    if (anchoFilaLeyenda && anchoFilaLeyenda + w > anchoLeyenda) { leyendaFilas++; anchoFilaLeyenda = 0; }
+    anchoFilaLeyenda += w;
+  });
+  const margen = { top: 24 + leyendaFilas * 18, right: 44, bottom: 40, left: margenIzq };
+  const alto = Math.max(340, margen.top + margen.bottom + 200);
   const areaAncho = Math.max(120, ancho - margen.left - margen.right);
   const areaAlto = alto - margen.top - margen.bottom;
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+  svg.style.height = `${alto}px`;
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Evolución de revenue');
+  svg.setAttribute('title', 'Evolución de revenue');
 
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
@@ -1500,16 +2622,24 @@ function crearGraficaLinea(svg, datos, opciones) {
     g.appendChild(lbl);
   }
 
-  // Eje X: solo ~7 etiquetas, si no se encabalgan.
-  const salto = Math.max(1, Math.ceil(puntos.length / 7));
+  // Eje X: fecha breve y horizontal; el title conserva la etiqueta exacta.
+  const maxTicks = Math.max(2, Math.min(6, Math.floor(areaAncho / 76)));
+  const salto = Math.max(1, Math.ceil((puntos.length - 1) / (maxTicks - 1)));
   puntos.forEach((p, i) => {
     if (i % salto !== 0 && i !== puntos.length - 1) return;
     const lbl = svgEl('text', {
       'font-size': 10, fill: 'var(--text-dim)',
-      transform: `translate(${x(i)},${areaAlto + 12}) rotate(-28)`,
-      'text-anchor': 'end',
+      x: x(i), y: areaAlto + 24, 'text-anchor': 'middle',
     });
-    lbl.textContent = p.length > 16 ? p.slice(0, 15) + '…' : p;
+    const fecha = new Date(p);
+    const fechaValida = !Number.isNaN(fecha.getTime());
+    const tieneHora = /(?:T|\s)\d{1,2}:\d{2}/.test(p);
+    lbl.textContent = fechaValida
+      ? new Intl.DateTimeFormat('es-CO', tieneHora
+        ? { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }
+        : { day: '2-digit', month: 'short' }).format(fecha).replace(',', '')
+      : (p.length > 12 ? p.slice(0, 11) + '…' : p);
+    const fechaCompleta = svgEl('title', {}); fechaCompleta.textContent = p; lbl.appendChild(fechaCompleta);
     g.appendChild(lbl);
   });
 
@@ -1540,23 +2670,26 @@ function crearGraficaLinea(svg, datos, opciones) {
   });
 
   // Leyenda arriba, fuera del área de datos para no taparlos.
-  const leyenda = svgEl('g', { transform: `translate(0,${-22})` });
+  const leyenda = svgEl('g', {});
   const etiquetasLeyenda = [];
-  let offset = 0;
+  let offset = 0, filaLeyenda = 0;
   series.forEach((s, si) => {
+    const anchoItem = 19 + s.length * 7.2 * escalaTexto() + 16;
+    if (offset && offset + anchoItem > anchoLeyenda) { offset = 0; filaLeyenda++; }
     const item = svgEl('g', {});
+    item.setAttribute('transform', `translate(${offset},${-margen.top + 16 + filaLeyenda * 18})`);
     item.appendChild(svgEl('line', {
-      x1: offset, y1: -4, x2: offset + 14, y2: -4,
+      x1: 0, y1: -4, x2: 14, y2: -4,
       stroke: colorSerie(si), 'stroke-width': 2, 'stroke-linecap': 'round',
     }));
     const t = svgEl('text', {
-      x: offset + 19, y: 0, 'font-size': 11, fill: 'var(--text-secondary)',
+      x: 19, y: 0, 'font-size': 11, fill: 'var(--text-secondary)',
     });
     t.textContent = s;
     item.appendChild(t);
     leyenda.appendChild(item);
     etiquetasLeyenda.push(item);
-    offset += 19 + s.length * 6.6 + 16;
+    offset += anchoItem;
   });
   g.appendChild(leyenda);
 
@@ -1669,12 +2802,11 @@ function chip(texto, clase, titulo) {
  * cuánto se ejecutó y cuánto queda— tiene que verse primero.
  */
 function renderizarEncabezadoProyecto(contenedor, proyecto) {
-  const num = v => (typeof v === 'number' ? v : null);
-  const valorOf = num(proyecto.valor_of);
-  const acum = num(proyecto.acumulado_a_hoy);
-  const backlog = num(proyecto.backlog_2026);
-  const consumido = num(proyecto.consumido_2025);
-  const pct = (valorOf && acum !== null) ? (acum / valorOf) * 100 : null;
+  const booking = valorBooking(proyecto);
+  const acum = acumuladoHoy(proyecto);
+  const backlog = backlogHoy(proyecto);
+  const consumido = acum2025(proyecto);
+  const pct = (booking && acum !== null) ? (acum / booking) * 100 : null;
 
   const hero = document.createElement('div');
   hero.className = 'hero-proyecto';
@@ -1705,6 +2837,15 @@ function renderizarEncabezadoProyecto(contenedor, proyecto) {
   }
   const ec = proyecto.estado_contrato;
   if (ec) chips.appendChild(chip(ec, 'chip-' + (ESTADO_CONTRATO_NIVEL[ec] || '')));
+  // Handover y Project Status
+  if (proyecto.executive_watchlist) chips.appendChild(chip('Handover', 'chip-bueno'));
+  if (proyecto.project_status) {
+    const statusMap = { 'Red': 'Rojo', 'Yellow': 'Amarillo', 'Green': 'Verde' };
+    const statusDisplay = statusMap[proyecto.project_status] || proyecto.project_status;
+    const statusClass = proyecto.project_status === 'Green' ? 'chip-bueno'
+      : proyecto.project_status === 'Yellow' ? 'chip-advertencia' : 'chip-critico';
+    chips.appendChild(chip(statusDisplay, statusClass));
+  }
   cab.appendChild(chips);
   hero.appendChild(cab);
 
@@ -1712,9 +2853,9 @@ function renderizarEncabezadoProyecto(contenedor, proyecto) {
   const cifras = document.createElement('div');
   cifras.className = 'hero-cifras';
   [
-    ['Valor OF', valorOf, 'Por cuánto se vendió el proyecto'],
-    ['Acumulado a hoy', acum, 'Revenue ya ejecutado'],
-    ['Backlog 2026', backlog, 'Lo que queda por ejecutar'],
+    ['Valor Booking', booking, 'Por cuánto se vendió el proyecto'],
+    ['Revenue acumulado a hoy', acum, 'Revenue ya ejecutado'],
+    ['Backlog', backlog, 'Lo que queda por ejecutar'],
     ['Consumido 2025', consumido, 'Revenue ejecutado durante 2025'],
   ].forEach(([et, v, tip]) => {
     const d = document.createElement('div');
@@ -1732,7 +2873,7 @@ function renderizarEncabezadoProyecto(contenedor, proyecto) {
   hero.appendChild(cifras);
 
   // --- barra de ejecución ---
-  if (valorOf && acum !== null) {
+  if (booking && acum !== null) {
     const bloque = document.createElement('div');
     bloque.className = 'hero-avance';
 
@@ -1742,7 +2883,7 @@ function renderizarEncabezadoProyecto(contenedor, proyecto) {
     izq.innerHTML = `Ejecución del contrato · <strong>${pct.toFixed(1)}%</strong>`;
     const der = document.createElement('span');
     der.className = 'hero-avance-nota';
-    der.textContent = `${formatearDinero(acum)} de ${formatearDinero(valorOf)}`;
+    der.textContent = `${formatearDinero(acum)} de ${formatearDinero(booking)}`;
     fila.append(izq, der);
 
     const barra = document.createElement('div');
@@ -1789,33 +2930,34 @@ function renderizarHermanosDeCliente(contenedor, proyecto) {
   div.appendChild(h4);
 
   const totalCliente = [proyecto, ...hermanos]
-    .reduce((a, p) => a + (typeof p.valor_of === 'number' ? p.valor_of : 0), 0);
+    .reduce((a, p) => a + (valorBooking(p) || 0), 0);
   const nota = document.createElement('p');
   nota.className = 'nota-tabla';
-  nota.textContent = `Valor OF de la cuenta completa: ${formatearDinero(totalCliente)}`;
+  nota.textContent = `Valor Booking de la cuenta completa: ${formatearDinero(totalCliente)}`;
   div.appendChild(nota);
 
   const t = document.createElement('table');
   t.className = 'tabla-eventos-proyecto';
   const th = document.createElement('thead');
   const trh = document.createElement('tr');
-  ['PA / PR', 'Proyecto', 'Estado', 'PM/Líder', 'Valor OF', `Revenue · ${periodoActual().etiqueta}`]
+  ['PA / PR', 'Proyecto', 'Estado', 'PM/Líder', 'Valor Booking', `Revenue · ${periodoActual().etiqueta}`]
     .forEach(x => { const e = document.createElement('th'); e.textContent = x; trh.appendChild(e); });
   th.appendChild(trh); t.appendChild(th);
 
   const tb = document.createElement('tbody');
   hermanos
-    .sort((a, b) => (b.valor_of || 0) - (a.valor_of || 0))
+    .sort((a, b) => (valorBooking(b) || 0) - (valorBooking(a) || 0))
     .forEach(h => {
       const tr = document.createElement('tr');
       tr.className = 'fila-clicable';
       tr.addEventListener('click', () => abrirDetalle(h));
       const rev = revenuePeriodo(h);
+      const booking = valorBooking(h);
       [[identificador(h).valor, 'celda-id'],
         [h.nombre_del_proyecto || '—', 'celda-nombre'],
         [h.estado || '—', ''],
         [h.pm_lider || '—', ''],
-        [formatearDinero(h.valor_of), 'celda-numero'],
+        [booking === null ? '—' : formatearDinero(booking), 'celda-numero'],
         [rev === null ? '—' : formatearDinero(rev), 'celda-numero'],
       ].forEach(([txt, c], i) => {
         const td = document.createElement('td');
@@ -1865,7 +3007,7 @@ function renderizarTrazabilidadProyecto(contenedor, proyecto) {
     const notaBVR = document.createElement('p');
     notaBVR.className = 'nota-grafica';
     notaBVR.textContent = 'El Commit es acumulado (enero, enero+febrero, …) y el Backlog es ' +
-      'lo que queda de Valor OF en ese punto del año: Valor OF − Acum 2025 − Commit acumulado.';
+      'lo que queda de Valor Booking en ese punto del año: Valor Booking − Acum 2025 − Commit acumulado.';
     divBVR.appendChild(notaBVR);
     const svgBVR = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svgBVR.setAttribute('class', 'grafica-svg');
@@ -2177,8 +3319,10 @@ function renderizarTrazabilidad() {
         sel.appendChild(o);
       });
     });
-    selA.addEventListener('change', renderizarResumenProyectos);
-    selB.addEventListener('change', renderizarResumenProyectos);
+    // El rango manda sobre las dos tablas: la de proyectos y la de movimientos.
+    const alCambiarRango = () => { renderizarResumenProyectos(); actualizarTablaEventos(); };
+    selA.addEventListener('change', alCambiarRango);
+    selB.addEventListener('change', alCambiarRango);
 
     const chk = document.getElementById('chk-solo-cambios');
     if (chk) chk.addEventListener('change', renderizarResumenProyectos);
@@ -2190,7 +3334,7 @@ function renderizarTrazabilidad() {
         selB.value = b;
         document.querySelectorAll('.atajo-rango').forEach(o => o.classList.remove('activo'));
         btn.classList.add('activo');
-        renderizarResumenProyectos();
+        alCambiarRango();
       });
     });
   }
@@ -2498,11 +3642,13 @@ function renderizarGraficaCambios(filas, snaps, iA, iB) {
   const svg = document.getElementById('grafica-que-cambio');
   const nota = document.getElementById('nota-que-cambio');
   if (!svg) return;
+  registrarGrafica(svg, () => renderizarGraficaCambios(filas, snaps, iA, iB));
   graficaQueCambio = null;
 
   const movidos = filas.filter(f => f.cambio).slice(0, MAX_LINEAS_CAMBIO);
   if (!movidos.length || iB - iA < 1) {
     svg.innerHTML = '';
+    svg.style.height = '110px';
     svg.setAttribute('viewBox', '0 0 600 90');
     const t = svgEl('text', { x: 300, y: 50, 'text-anchor': 'middle',
       'font-size': 13, fill: 'var(--text-dim)' });
@@ -2663,9 +3809,73 @@ function renderizarResumenProyectos() {
   renderizarKpisRango(filas, snaps, iA, iB);
   renderizarGraficaCambios(filas, snaps, iA, iB);
 
+  // Populate PM filter if empty
+  const filtroPM = document.getElementById('filtro-resumen-pm');
+  if (filtroPM && filtroPM.options.length === 1) {
+    const pms = [...new Set(filas.map(f => f.pm).filter(Boolean))].sort();
+    pms.forEach(pm => {
+      const opt = document.createElement('option');
+      opt.value = pm;
+      opt.textContent = pm;
+      filtroPM.appendChild(opt);
+    });
+  }
+
+  // Populate "Qué pasó" filter if empty
+  const filtroQuePaso = document.getElementById('filtro-resumen-que-paso');
+  if (filtroQuePaso && filtroQuePaso.options.length === 1) {
+    const tipos = new Set();
+    filas.forEach(f => {
+      const dir = direccionDe(f);
+      tipos.add(dir.texto);
+    });
+    [...tipos].sort().forEach(tipo => {
+      const opt = document.createElement('option');
+      opt.value = tipo;
+      opt.textContent = tipo;
+      filtroQuePaso.appendChild(opt);
+    });
+
+    // Wire up filter events
+    const filtroTexto = document.getElementById('filtro-resumen-texto');
+    filtroTexto.addEventListener('input', renderizarResumenProyectos);
+    filtroPM.addEventListener('change', renderizarResumenProyectos);
+    filtroQuePaso.addEventListener('change', renderizarResumenProyectos);
+  }
+
+  // Apply filters
+  const textoFiltro = (document.getElementById('filtro-resumen-texto').value || '').trim().toLowerCase();
+  const pmFiltro = document.getElementById('filtro-resumen-pm').value;
+  const quePasoFiltro = document.getElementById('filtro-resumen-que-paso').value;
   const soloCambios = document.getElementById('chk-solo-cambios');
-  const visibles = (soloCambios && soloCambios.checked)
+  
+  let visibles = (soloCambios && soloCambios.checked)
     ? filas.filter(f => f.cambio) : filas;
+
+  // Apply text filter
+  if (textoFiltro) {
+    visibles = visibles.filter(f =>
+      (f.nombre || '').toLowerCase().includes(textoFiltro) ||
+      (f.pa || '').toLowerCase().includes(textoFiltro)
+    );
+  }
+
+  // Apply PM filter
+  if (pmFiltro) {
+    visibles = visibles.filter(f => f.pm === pmFiltro);
+  }
+
+  // Apply "Qué pasó" filter
+  if (quePasoFiltro) {
+    visibles = visibles.filter(f => direccionDe(f).texto === quePasoFiltro);
+  }
+
+  // Update indicator
+  const indicador = document.getElementById('indicador-resumen-proyectos');
+  if (indicador) {
+    const total = soloCambios.checked ? filas.filter(f => f.cambio).length : filas.length;
+    indicador.textContent = `${visibles.length} de ${total}`;
+  }
 
   tbody.innerHTML = '';
   visibles.forEach(f => {
@@ -2756,6 +3966,7 @@ function renderizarResumenProyectos() {
   }
 }
 
+
 function actualizarTablaEventos() {
   const hist = estado.historia;
   const tabla = document.querySelector('#tabla-eventos-cambio tbody');
@@ -2767,13 +3978,60 @@ function actualizarTablaEventos() {
     .trim().toLowerCase();
   const limitar = document.getElementById('limitar-por-proyecto').checked;
 
+  // Initialize PM filter
+  const filtroPMEvento = document.getElementById('filtro-eventos-pm');
+  if (filtroPMEvento && filtroPMEvento.options.length === 1) {
+    const nombreDe = new Map(estado.proyectos.map(
+      p => [claveProyecto(p), p.pm_lider || SIN_DATO]));
+    const pms = [...new Set(hist.eventos.map(e => nombreDe.get(String(e.num_pa))).filter(Boolean))].sort();
+    pms.forEach(pm => {
+      const opt = document.createElement('option');
+      opt.value = pm;
+      opt.textContent = pm;
+      filtroPMEvento.appendChild(opt);
+    });
+    filtroPMEvento.addEventListener('change', actualizarTablaEventos);
+  }
+  const pmEvento = filtroPMEvento ? filtroPMEvento.value : '';
+
+  // Initialize Mes filter
+  const filtroMesEvento = document.getElementById('filtro-eventos-mes');
+  if (filtroMesEvento && filtroMesEvento.options.length === 1) {
+    MESES_ES.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m.charAt(0).toUpperCase() + m.slice(1);
+      filtroMesEvento.appendChild(opt);
+    });
+    filtroMesEvento.addEventListener('change', actualizarTablaEventos);
+  }
+  const mesEvento = filtroMesEvento ? filtroMesEvento.value : '';
+
   const nombreDe = new Map(estado.proyectos.map(
     p => [claveProyecto(p), p.nombre_del_proyecto || identificador(p).valor]));
+  const pmDe = new Map(estado.proyectos.map(
+    p => [claveProyecto(p), p.pm_lider || SIN_DATO]));
 
   const mesesOk = new Set(mesesActivos().map(i => MESES_ES[i]));
-  let eventos = hist.eventos.filter(e => {
+  // Solo los movimientos del rango "Desde / hasta": cada evento lleva la fecha
+  // del snapshot que lo detectó, así que entra si cae en (Desde, hasta].
+  const [iA, iB] = rangoSnapshots();
+  const desde = new Date(hist.snapshots[iA].timestamp);
+  const hasta = new Date(hist.snapshots[iB].timestamp);
+  const enRango = hist.eventos.filter(e => {
+    const t = new Date(e.timestamp);
+    return t > desde && t <= hasta;
+  });
+  // Base del contador "N de M": los movimientos del rango y del periodo, sin los filtros de la tabla.
+  const totalPeriodo = enRango.filter(e => !e.campo || mesesOk.has(e.campo)).length;
+  let eventos = enRango.filter(e => {
     if (e.campo && !mesesOk.has(e.campo)) return false;   // mes fuera del periodo
     if (tipo && e.tipo !== tipo) return false;
+    if (pmEvento) {
+      const pmProyecto = pmDe.get(String(e.num_pa));
+      if (pmProyecto !== pmEvento) return false;
+    }
+    if (mesEvento && e.campo !== mesEvento) return false;
     if (!busca) return true;
     const nombre = nombreDe.get(String(e.num_pa)) || e.nombre || '';
     return (nombre + ' ' + e.num_pa).toLowerCase().includes(busca);
@@ -2825,12 +4083,13 @@ function actualizarTablaEventos() {
       tr.addEventListener('click', () => abrirDetalle(proy));
     }
     const nombre = (proy && proy.nombre_del_proyecto) || ev.nombre || '—';
+    const pm = (proy && proy.pm_lider) || pmDe.get(String(ev.num_pa)) || '—';
     const fecha = new Date(ev.timestamp).toLocaleDateString('es-CO',
       { day: '2-digit', month: 'short', year: 'numeric' });
     const d = ev.delta || 0;
     const signo = Math.abs(d) < 0.5 ? '—' : (d > 0 ? '+' : '−') + formatearDinero(Math.abs(d));
 
-    [[fecha, ''], [nombre, 'celda-nombre'],
+    [[fecha, ''], [nombre, 'celda-nombre'], [pm, ''],
       [(TIPO_MOVIMIENTO[ev.tipo] || { texto: ev.tipo || '' }).texto, ''],
       [ev.campo ? ev.campo.charAt(0).toUpperCase() + ev.campo.slice(1) : '—', ''],
       [formatearDinero(ev.valor_anterior), 'celda-numero'],
@@ -2840,13 +4099,17 @@ function actualizarTablaEventos() {
       const td = document.createElement('td');
       td.textContent = txt;
       td.className = c;
-      if (i === 1) td.title = txt;
+      if (i === 1 || i === 2) td.title = txt;  // title for Proyecto and PM columns
       tr.appendChild(td);
     });
     tabla.appendChild(tr);
   });
 
   const distintos = new Set(mostrados.map(e => e.num_pa)).size;
+  const indicador = document.getElementById('indicador-eventos');
+  if (indicador) {
+    indicador.textContent = `${mostrados.length} de ${totalPeriodo}`;
+  }
   let pie = document.getElementById('pie-eventos');
   if (!pie) {
     pie = document.createElement('p');
@@ -2858,7 +4121,7 @@ function actualizarTablaEventos() {
     `de ${distintos} proyectos distintos · revenue de ${periodoActual().etiqueta}.`;
 }
 
-// ============================================================================
+
 // PMs
 // ============================================================================
 
@@ -2870,7 +4133,7 @@ function actualizarTablaEventos() {
  * Commit, Upside y Total Ejecutado sí cuentan TODOS los proyectos activos
  * del PM: ahí no se trata de backlog pendiente sino de cuánto ha movido.
  */
-const CLAVE_ESTADO_PM = { 'In Progress': 'inProgreso', 'On Hold': 'onHold', 'Planned': 'planned' };
+const CLAVE_ESTADO_PM = { 'In Progress': 'inProgreso', 'On Hold': 'onHold', 'Planned': 'planned', 'Completed': 'completed' };
 
 function calcularPMs() {
   const porPM = new Map();
@@ -2883,6 +4146,7 @@ function calcularPMs() {
         inProgresoN: 0, inProgresoBacklog: 0,
         onHoldN: 0, onHoldBacklog: 0,
         plannedN: 0, plannedBacklog: 0,
+        completedN: 0,
         totalN: 0, totalBacklog: 0,
         commit: 0, upside: 0, totalEjecutado: 0,
         proyectos: [],
@@ -2900,11 +4164,16 @@ function calcularPMs() {
     const estadoBacklog = (fila && fila.estado) || p.estado;
     const clave = CLAVE_ESTADO_PM[estadoBacklog];
     if (clave) {
-      const backlogValor = fila && typeof fila.backlog === 'number' ? fila.backlog : 0;
-      acc[clave + 'N'] += 1;
-      acc[clave + 'Backlog'] += backlogValor;
-      acc.totalN += 1;
-      acc.totalBacklog += backlogValor;
+      if (clave === 'completed') {
+        // Completed no tiene backlog, solo cuenta
+        acc.completedN += 1;
+      } else {
+        const backlogValor = backlogHoy(p);
+        acc[clave + 'N'] += 1;
+        acc[clave + 'Backlog'] += (typeof backlogValor === 'number' ? backlogValor : 0);
+        acc.totalN += 1;
+        acc.totalBacklog += (typeof backlogValor === 'number' ? backlogValor : 0);
+      }
     }
   });
 
@@ -2918,6 +4187,7 @@ function calcularPMs() {
 }
 
 const COLUMNAS_PM_DINERO = new Set([
+  // completedN is NOT money, it's a count
   'inProgresoBacklog', 'onHoldBacklog', 'plannedBacklog', 'totalBacklog',
   'commit', 'upside', 'totalEjecutado', 'promedioMensual', 'promedioProyecto',
 ]);
@@ -2964,7 +4234,7 @@ function renderizarPMs() {
     anfitrion.appendChild(construirSelectorPeriodo(renderizarPMs));
   }
 
-  const thead = document.querySelector('#tabla-pms thead tr');
+  const thead = document.querySelector('#tabla-pms > thead tr');
   if (thead && !thead.dataset.wireado) {
     thead.dataset.wireado = '1';
     thead.querySelectorAll('th[data-columna]').forEach(th => {
@@ -2975,6 +4245,25 @@ function renderizarPMs() {
   }
 
   let filas = calcularPMs();
+
+  // Renderizar KPIs resumen
+  const kpisData = {
+    totalPMs: filas.length,
+    inProgress: filas.reduce((a, f) => a + f.inProgresoN, 0),
+    onHold: filas.reduce((a, f) => a + f.onHoldN, 0),
+    planned: filas.reduce((a, f) => a + f.plannedN, 0),
+    completed: filas.reduce((a, f) => a + f.completedN, 0),
+    totalBooking: filas.reduce((a, f) => a + f.proyectos.reduce((s, p) => s + (valorBooking(p) || 0), 0), 0),
+    // Total Backlog KPI: sum backlogHoy over all projects (same as main tab)
+    totalBacklog: filas.reduce((a, f) => a + f.proyectos.reduce((s, p) => s + (backlogHoy(p) || 0), 0), 0),
+  };
+  document.getElementById('kpi-pms-total').textContent = kpisData.totalPMs;
+  document.getElementById('kpi-pms-in-progress').textContent = kpisData.inProgress;
+  document.getElementById('kpi-pms-on-hold').textContent = kpisData.onHold;
+  document.getElementById('kpi-pms-planned').textContent = kpisData.planned;
+  document.getElementById('kpi-pms-completed').textContent = kpisData.completed;
+  document.getElementById('kpi-pms-total-booking').textContent = formatearDinero(kpisData.totalBooking);
+  document.getElementById('kpi-pms-total-backlog').textContent = formatearDinero(kpisData.totalBacklog);
 
   renderizarGraficasPMs(filas);
 
@@ -2997,21 +4286,39 @@ function renderizarPMs() {
 
   const fmt = (col, v) => (COLUMNAS_PM_DINERO.has(col) ? formatearDinero(v) : formatearNumero(v));
 
-  const tbody = document.querySelector('#tabla-pms tbody');
+  const tbody = document.querySelector('#tabla-pms > tbody');
   tbody.innerHTML = '';
   const columnas = ['inProgresoN', 'inProgresoBacklog', 'onHoldN', 'onHoldBacklog',
-    'plannedN', 'plannedBacklog', 'totalN', 'totalBacklog',
+    'plannedN', 'plannedBacklog', 'completedN', 'totalN', 'totalBacklog',
     'commit', 'upside', 'totalEjecutado', 'promedioMensual', 'promedioProyecto'];
 
   filas.forEach(f => {
     const tr = document.createElement('tr');
-    tr.className = 'fila-clicable';
-    tr.title = `Ver los proyectos de ${f.pm} en Listado de Proyectos`;
-    tr.addEventListener('click', () => irAProyectosDePM(f.pm));
+    tr.className = 'fila-pm-principal';
+    tr.dataset.pm = f.pm;
 
+    // Toggle button column
+    const tdToggle = document.createElement('td');
+    tdToggle.className = 'celda-toggle';
+    const btnToggle = document.createElement('button');
+    btnToggle.type = 'button';
+    btnToggle.className = 'btn-toggle-pm pf-v6-c-button pf-m-plain pf-m-small';
+    btnToggle.innerHTML = '<span class="chevron-pm">›</span>';
+    btnToggle.title = 'Ver proyectos de este PM';
+    btnToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleProyectosPM(f.pm);
+    });
+    tdToggle.appendChild(btnToggle);
+    tr.appendChild(tdToggle);
+
+    // PM name column - clickable for navigation to listado
     const tdPM = document.createElement('td');
     tdPM.textContent = f.pm;
-    tdPM.className = 'celda-nombre';
+    tdPM.className = 'celda-nombre celda-pm-nombre';
+    tdPM.title = `Ver los proyectos de ${f.pm} en Listado de Proyectos`;
+    tdPM.style.cursor = 'pointer';
+    tdPM.addEventListener('click', () => irAProyectosDePM(f.pm));
     tr.appendChild(tdPM);
 
     columnas.forEach(col => {
@@ -3023,13 +4330,22 @@ function renderizarPMs() {
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
+
+    // If this PM is expanded, render the sub-table
+    if (estado.expandedPMs.has(f.pm)) {
+      tbody.appendChild(crearFilaProyectosPM(f));
+      btnToggle.classList.add('expandido');
+      btnToggle.querySelector('.chevron-pm').textContent = '▾';
+    }
   });
 
   // Fila de totales, igual a "Total Result" de la tabla de negocio.
-  const tfoot = document.querySelector('#tabla-pms tfoot');
+  const tfoot = document.querySelector('#tabla-pms > tfoot');
   tfoot.innerHTML = '';
   if (filas.length) {
     const trTotal = document.createElement('tr');
+    const tdVacio = document.createElement('td'); // toggle column
+    trTotal.appendChild(tdVacio);
     const tdEtq = document.createElement('td');
     tdEtq.textContent = `Total (${filas.length} PM${filas.length === 1 ? '' : 's'})`;
     tdEtq.className = 'celda-nombre';
@@ -3051,9 +4367,171 @@ function renderizarPMs() {
   }
 }
 
-/** Clic en un PM: filtra Listado de Proyectos a sus proyectos y cambia de
- * pestaña. Reusa el filtro que ya existe en vez de construir una vista de
- * proyectos nueva. */
+function toggleProyectosPM(pm) {
+  if (estado.expandedPMs.has(pm)) {
+    estado.expandedPMs.delete(pm);
+  } else {
+    estado.expandedPMs.add(pm);
+  }
+  renderizarPMs();
+}
+
+function crearFilaProyectosPM(filaPM) {
+  const tr = document.createElement('tr');
+  tr.className = 'fila-proyectos-pm-expandida';
+  const td = document.createElement('td');
+  td.colSpan = 16; // all columns
+
+  const cont = document.createElement('div');
+  cont.className = 'contenedor-proyectos-pm';
+
+  const tabla = document.createElement('table');
+  tabla.className = 'tabla-proyectos-pm pf-v6-c-table pf-m-compact';
+
+  // Header
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  ['PA', 'Proyecto', 'Cliente', 'Estado', 'Handover', 'Status', 'Valor Booking', 'Revenue acum.', 'Backlog', '% ejecución']
+    .forEach(txt => {
+      const th = document.createElement('th');
+      th.textContent = txt;
+      trh.appendChild(th);
+    });
+  thead.appendChild(trh);
+  tabla.appendChild(thead);
+
+  // Sort projects: by estado order, then backlog desc
+  const ordenEstado = (estado.metadataProyectos || {}).orden_estado || [];
+  const proyectos = filaPM.proyectos.slice().sort((a, b) => {
+    const iaEst = ordenEstado.indexOf(a.estado);
+    const ibEst = ordenEstado.indexOf(b.estado);
+    const estCmp = (iaEst < 0 ? 99 : iaEst) - (ibEst < 0 ? 99 : ibEst);
+    if (estCmp !== 0) return estCmp;
+    const blA = backlogHoy(a) || 0;
+    const blB = backlogHoy(b) || 0;
+    return blB - blA;
+  });
+
+  const tbody = document.createElement('tbody');
+  proyectos.forEach(p => {
+    const trp = document.createElement('tr');
+    trp.className = 'fila-proyecto-pm';
+    trp.addEventListener('click', () => abrirDetalle(p));
+
+    const booking = valorBooking(p) || 0;
+    const acum = acumuladoHoy(p) || 0;
+    const backlog = backlogHoy(p) || 0;
+    const pctEjec = booking > 0 ? (acum / booking * 100) : 0;
+
+    // PA
+    const tdPA = document.createElement('td');
+    tdPA.textContent = identificador(p).valor;
+    tdPA.className = 'celda-id';
+    trp.appendChild(tdPA);
+
+    // Proyecto name - ellipsis + title
+    const tdNom = document.createElement('td');
+    tdNom.textContent = p.nombre_del_proyecto || '—';
+    tdNom.className = 'celda-nombre';
+    tdNom.title = p.nombre_del_proyecto || '';
+    trp.appendChild(tdNom);
+
+    // Cliente
+    const tdCli = document.createElement('td');
+    tdCli.textContent = p.cliente || '—';
+    trp.appendChild(tdCli);
+
+    // Estado - colored chip
+    const tdEst = document.createElement('td');
+    const chipEst = document.createElement('span');
+    chipEst.className = 'chip-estado-pm';
+    chipEst.textContent = p.estado || '—';
+    chipEst.style.color = colorDeEntidad('estado', p.estado || '—');
+    tdEst.appendChild(chipEst);
+    trp.appendChild(tdEst);
+
+    // Handover
+    const tdHandover = document.createElement('td');
+    tdHandover.style.textAlign = 'center';
+    if (p.executive_watchlist) {
+      const span = document.createElement('span');
+      span.className = 'chip-dato chip-bueno';
+      span.textContent = '✓';
+      span.style.fontSize = '0.875rem';
+      tdHandover.appendChild(span);
+    }
+    trp.appendChild(tdHandover);
+
+    // Project Status
+    const tdStatus = document.createElement('td');
+    if (p.project_status) {
+      const statusMap = { 'Red': 'Rojo', 'Yellow': 'Amarillo', 'Green': 'Verde' };
+      const statusColor = { 'Red': '#c9190b', 'Yellow': '#f0ab00', 'Green': '#3e8635' };
+      const dot = document.createElement('span');
+      dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${statusColor[p.project_status] || '#8a8d90'};margin-right:4px;`;
+      tdStatus.appendChild(dot);
+      tdStatus.appendChild(document.createTextNode(statusMap[p.project_status] || p.project_status));
+    } else {
+      tdStatus.textContent = '—';
+    }
+    tdStatus.style.fontSize = '0.8125rem';
+    trp.appendChild(tdStatus);
+
+    // Valor Booking
+    const tdBooking = document.createElement('td');
+    tdBooking.textContent = formatearDinero(booking);
+    tdBooking.className = 'celda-numero';
+    trp.appendChild(tdBooking);
+
+    // Revenue acum
+    const tdAcum = document.createElement('td');
+    tdAcum.textContent = formatearDinero(acum);
+    tdAcum.className = 'celda-numero';
+    trp.appendChild(tdAcum);
+
+    // Backlog
+    const tdBacklog = document.createElement('td');
+    tdBacklog.textContent = formatearDinero(backlog);
+    tdBacklog.className = 'celda-numero';
+    trp.appendChild(tdBacklog);
+
+    // % ejecución
+    const tdPct = document.createElement('td');
+    tdPct.textContent = pctEjec.toFixed(1) + '%';
+    tdPct.className = 'celda-numero';
+    trp.appendChild(tdPct);
+
+    tbody.appendChild(trp);
+  });
+  tabla.appendChild(tbody);
+
+  // Footer with link to Listado
+  const tfoot = document.createElement('tfoot');
+  const trf = document.createElement('tr');
+  const tdf = document.createElement('td');
+  tdf.colSpan = 10;  // updated for new columns
+  tdf.style.textAlign = 'center';
+  tdf.style.padding = 'var(--spacing-sm)';
+  const link = document.createElement('button');
+  link.type = 'button';
+  link.className = 'pf-v6-c-button pf-m-link pf-m-small';
+  link.textContent = 'Ver en Listado de Proyectos';
+  link.addEventListener('click', (e) => {
+    e.stopPropagation();
+    irAProyectosDePM(filaPM.pm);
+  });
+  tdf.appendChild(link);
+  trf.appendChild(tdf);
+  tfoot.appendChild(trf);
+  tabla.appendChild(tfoot);
+
+  cont.appendChild(tabla);
+  td.appendChild(cont);
+  tr.appendChild(td);
+  return tr;
+}
+
+
 function irAProyectosDePM(pm) {
   DIMENSIONES.forEach(d => { estado.filtros[d.campo] = []; });
   estado.filtros.texto = '';
@@ -3065,8 +4543,458 @@ function irAProyectosDePM(pm) {
 }
 
 // ============================================================================
+// COLUMNAS REDIMENSIONABLES
+// ============================================================================
+
+// Storage: Map<tableKey + '|' + colIndex, width>
+const anchosColumnasGuardados = new Map();
+// Control de drag
+let dragInfo = null;
+// Hasta cuándo se ignora el click en encabezados que sigue a un arrastre
+let suprimirClickHasta = 0;
+// Debounce para MutationObserver
+let mutationTimeout;
+
+/**
+ * Extrae una clave única para una tabla (id o su primera clase)
+ */
+function obtenerTabllaKey(tabla) {
+  return tabla.id || (tabla.className.split(' ')[0] || 'tabla-sin-id');
+}
+
+/**
+ * Carga los anchos guardados de localStorage
+ */
+function cargarAnchosDeStorage() {
+  const stored = localStorage.getItem('anchosColumnas');
+  if (!stored) return;
+  try {
+    const obj = JSON.parse(stored);
+    for (const [k, v] of Object.entries(obj)) {
+      anchosColumnasGuardados.set(k, v);
+    }
+  } catch (e) {
+    console.warn('Error cargando anchosColumnas:', e);
+  }
+}
+
+/**
+ * Guarda los anchos en localStorage
+ */
+function guardarAnchosEnStorage() {
+  const obj = {};
+  for (const [k, v] of anchosColumnasGuardados) {
+    obj[k] = v;
+  }
+  localStorage.setItem('anchosColumnas', JSON.stringify(obj));
+}
+
+/**
+ * Añade resizers a los th de una tabla y reaplica anchos guardados
+ */
+function asegurarResizers(tabla) {
+  if (!tabla || !tabla.tagName || tabla.tagName !== 'TABLE') return;
+
+  const tableKey = obtenerTabllaKey(tabla);
+  const thead = tabla.querySelector('thead');
+  if (!thead) return;
+
+  // Buscar la última fila de headers
+  const headerRows = thead.querySelectorAll('tr');
+  if (!headerRows.length) return;
+  const lastHeaderRow = headerRows[headerRows.length - 1];
+
+  // Añadir resizers a los th que no los tengan
+  lastHeaderRow.querySelectorAll('th').forEach((th, colIndex) => {
+    if (!th.querySelector('.col-resizer')) {
+      const resizer = document.createElement('span');
+      resizer.className = 'col-resizer';
+      th.appendChild(resizer);
+    }
+  });
+
+  // Reaplica los anchos guardados
+  const tBodyRows = tabla.querySelectorAll('tbody tr');
+  lastHeaderRow.querySelectorAll('th').forEach((th, colIndex) => {
+    const key = `${tableKey}|${colIndex}`;
+    const savedWidth = anchosColumnasGuardados.get(key);
+    if (savedWidth) {
+      th.style.width = savedWidth + 'px';
+      th.style.minWidth = savedWidth + 'px';
+      th.style.maxWidth = savedWidth + 'px';
+
+      // Aplicar el mismo ancho a las celdas del tbody
+      tBodyRows.forEach(row => {
+        const cells = row.querySelectorAll('td, th');
+        if (cells.length === lastHeaderRow.children.length && cells[colIndex]) {
+          cells[colIndex].style.width = savedWidth + 'px';
+          cells[colIndex].style.minWidth = savedWidth + 'px';
+          cells[colIndex].style.maxWidth = savedWidth + 'px';
+        }
+      });
+    }
+  });
+}
+
+/**
+ * Evento delegado: pointerdown en .col-resizer
+ */
+document.addEventListener('pointerdown', (e) => {
+  if (!e.target.classList.contains('col-resizer')) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const th = e.target.closest('th');
+  if (!th) return;
+
+  const tabla = th.closest('table');
+  if (!tabla) return;
+
+  const thead = tabla.querySelector('thead');
+  const lastHeaderRow = thead.querySelector('tr:last-child');
+  const headerCells = lastHeaderRow.querySelectorAll('th');
+  let colIndex = -1;
+  for (let i = 0; i < headerCells.length; i++) {
+    if (headerCells[i] === th) { colIndex = i; break; }
+  }
+  if (colIndex === -1) return;
+
+  const startX = e.clientX;
+  const startWidth = th.offsetWidth;
+
+  dragInfo = {
+    tabla,
+    tableKey: obtenerTabllaKey(tabla),
+    colIndex,
+    startX,
+    startWidth,
+    th,
+    lastHeaderRow,
+    headerCells,
+  };
+
+  document.body.classList.add('dragging-col-resizer');
+
+  const onMove = (e) => {
+    if (!dragInfo) return;
+    const delta = e.clientX - dragInfo.startX;
+    const newWidth = Math.max(60, dragInfo.startWidth + delta);
+
+    // Actualizar header
+    dragInfo.th.style.width = newWidth + 'px';
+    dragInfo.th.style.minWidth = newWidth + 'px';
+    dragInfo.th.style.maxWidth = newWidth + 'px';
+
+    // Actualizar celdas del tbody
+    const tbody = dragInfo.tabla.querySelector('tbody');
+    if (tbody) {
+      const rows = tbody.querySelectorAll('tr');
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td, th');
+        if (cells.length === dragInfo.headerCells.length && cells[dragInfo.colIndex]) {
+          cells[dragInfo.colIndex].style.width = newWidth + 'px';
+          cells[dragInfo.colIndex].style.minWidth = newWidth + 'px';
+          cells[dragInfo.colIndex].style.maxWidth = newWidth + 'px';
+        }
+      });
+    }
+  };
+
+  const onUp = (e) => {
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.body.classList.remove('dragging-col-resizer');
+
+    if (!dragInfo) return;
+
+    const finalWidth = Math.max(60, dragInfo.startWidth + (e.clientX - dragInfo.startX));
+    const key = `${dragInfo.tableKey}|${dragInfo.colIndex}`;
+    anchosColumnasGuardados.set(key, finalWidth);
+    guardarAnchosEnStorage();
+
+    // El click que el navegador dispara al soltar no debe ordenar la columna.
+    suprimirClickHasta = Date.now() + 400;
+
+    dragInfo = null;
+  };
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+});
+
+document.addEventListener('click', (e) => {
+  if (Date.now() < suprimirClickHasta && e.target.closest('th')) {
+    e.preventDefault();
+    e.stopPropagation();
+    suprimirClickHasta = 0;
+  }
+}, true);
+
+/**
+ * Double-click en resizer: resetea el ancho de la columna
+ */
+document.addEventListener('dblclick', (e) => {
+  if (!e.target.classList.contains('col-resizer')) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const th = e.target.closest('th');
+  if (!th) return;
+
+  const tabla = th.closest('table');
+  if (!tabla) return;
+
+  const thead = tabla.querySelector('thead');
+  const lastHeaderRow = thead.querySelector('tr:last-child');
+  const headerCells = lastHeaderRow.querySelectorAll('th');
+  let colIndex = -1;
+  for (let i = 0; i < headerCells.length; i++) {
+    if (headerCells[i] === th) { colIndex = i; break; }
+  }
+  if (colIndex === -1) return;
+
+  const tableKey = obtenerTabllaKey(tabla);
+  const key = `${tableKey}|${colIndex}`;
+
+  // Quitar estilos inline
+  th.style.width = '';
+  th.style.minWidth = '';
+  th.style.maxWidth = '';
+
+  const tbody = tabla.querySelector('tbody');
+  if (tbody) {
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('td, th');
+      if (cells[colIndex]) {
+        cells[colIndex].style.width = '';
+        cells[colIndex].style.minWidth = '';
+        cells[colIndex].style.maxWidth = '';
+      }
+    });
+  }
+
+  // Quitar del storage
+  anchosColumnasGuardados.delete(key);
+  guardarAnchosEnStorage();
+});
+
+/**
+ * MutationObserver para detectar cambios en el DOM y reaplica resizers
+ */
+function setupMutationObserver() {
+  const observer = new MutationObserver(() => {
+    if (mutationTimeout) clearTimeout(mutationTimeout);
+    mutationTimeout = requestAnimationFrame(() => {
+      document.querySelectorAll('table').forEach(tabla => {
+        asegurarResizers(tabla);
+      });
+    });
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+// ============================================================================
 // NAVEGACIÓN
 // ============================================================================
+
+// Cada SVG conserva su función de dibujo. El observador solo reacciona al
+// ancho: abrir un panel o cambiar su altura no crea un bucle de renderizado.
+const graficasRegistradas = new WeakMap();
+const graficasPendientes = new Set();
+let ajusteGraficasPendiente = 0;
+const observadorGraficas = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entradas => {
+  entradas.forEach(({ target, contentRect }) => {
+    if (!target.isConnected) {
+      observadorGraficas.unobserve(target);
+      graficasRegistradas.delete(target);
+      return;
+    }
+    const registro = graficasRegistradas.get(target);
+    if (registro && contentRect.width > 0 && Math.abs(target.clientWidth - registro.ancho) > 1) {
+      graficasPendientes.add(target);
+    }
+  });
+  if (!graficasPendientes.size || ajusteGraficasPendiente) return;
+  ajusteGraficasPendiente = requestAnimationFrame(() => {
+    ajusteGraficasPendiente = 0;
+    const pendientes = [...graficasPendientes];
+    graficasPendientes.clear();
+    pendientes.forEach(svg => {
+      if (svg.isConnected && svg.clientWidth > 0) graficasRegistradas.get(svg)?.pintar();
+    });
+  });
+});
+
+function registrarGrafica(svg, pintar) {
+  if (!svg) return;
+  svg.style.minHeight = '0';
+  const nuevo = !graficasRegistradas.has(svg);
+  graficasRegistradas.set(svg, {
+    pintar: () => {
+      const controlador = pintar();
+      if (svg.id === 'grafica-que-cambio' && controlador) graficaQueCambio = controlador;
+    },
+    ancho: svg.clientWidth,
+  });
+  if (nuevo) observadorGraficas?.observe(svg);
+}
+
+function ajustarGraficasVisibles() {
+  ocultarTooltip();
+  document.querySelectorAll('.pestana-contenido.activa svg').forEach(svg => {
+    if (svg.clientWidth > 0 && svg.getClientRects().length) graficasRegistradas.get(svg)?.pintar();
+  });
+}
+
+// Reporte independiente del layout del dashboard. Los SVG siguen siendo
+// vectoriales al guardar el resultado desde la impresión del navegador.
+let detallesAntesDeImprimir = [];
+let scrollAntesDelReporte = 0;
+
+function prepararReporteGraficas() {
+  const vista = document.querySelector('.pestana-contenido.activa');
+  if (!vista) return;
+  cerrarDropdowns();
+  document.body.classList.add('preparando-reporte');
+  detallesAntesDeImprimir = [...vista.querySelectorAll('details:not([open])')];
+  detallesAntesDeImprimir.forEach(detalle => { detalle.open = true; });
+  ajustarGraficasVisibles();
+
+  const reporte = document.getElementById('reporte-graficas') || document.createElement('section');
+  reporte.id = 'reporte-graficas';
+  reporte.replaceChildren();
+  const barra = document.createElement('div');
+  barra.className = 'reporte-acciones';
+  const volver = document.createElement('button');
+  volver.type = 'button';
+  volver.className = 'pf-v6-c-button pf-m-secondary';
+  volver.textContent = 'Volver al dashboard';
+  volver.addEventListener('click', cerrarReporteGraficas);
+  const imprimir = document.createElement('button');
+  imprimir.type = 'button';
+  imprimir.className = 'pf-v6-c-button pf-m-primary';
+  imprimir.textContent = 'Imprimir / guardar como PDF';
+  imprimir.addEventListener('click', () => window.print());
+  barra.append(volver, imprimir);
+  reporte.appendChild(barra);
+
+  const cabecera = document.createElement('header');
+  cabecera.className = 'reporte-cabecera';
+  const titulo = document.createElement('h1');
+  const nombreVista = document.querySelector('.pestana-btn.activa')?.textContent.trim() || 'Dashboard';
+  titulo.textContent = `${nombreVista} · Gráficas`;
+  const contexto = document.createElement('p');
+  contexto.className = 'reporte-contexto';
+  const partes = [new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }), `Periodo de revenue: ${periodoActual().etiqueta}`];
+  if (vista.id === 'pestana-listado') {
+    DIMENSIONES.forEach(dim => {
+      if (estado.filtros[dim.campo].length) partes.push(`${dim.etiqueta}: ${estado.filtros[dim.campo].join(', ')}`);
+    });
+    if (estado.filtros.texto) partes.push(`Búsqueda: ${estado.filtros.texto}`);
+    partes.push(estado.incluirCancelados ? 'Incluye cancelados' : 'Excluye cancelados');
+    partes.push(document.getElementById('indicador-proyectos').textContent);
+  } else if (vista.id === 'pestana-trazabilidad') {
+    ['select-snap-a', 'select-snap-b'].forEach((id, i) => {
+      const selector = document.getElementById(id);
+      if (selector?.selectedOptions.length) partes.push(`${i ? 'Hasta' : 'Desde'}: ${selector.selectedOptions[0].textContent}`);
+    });
+  } else if (vista.id === 'pestana-detalle' && estado.proyectoSeleccionado) {
+    partes.push(estado.proyectoSeleccionado.nombre_del_proyecto || identificador(estado.proyectoSeleccionado).valor);
+  }
+  contexto.textContent = partes.join(' · ');
+  cabecera.append(titulo, contexto);
+  const ayuda = document.createElement('p');
+  ayuda.className = 'reporte-nota';
+  ayuda.textContent = 'En el diálogo de impresión elige Guardar como PDF. Cada gráfica conserva su proporción y se imprime en una página.';
+  cabecera.appendChild(ayuda);
+  reporte.appendChild(cabecera);
+
+  vista.querySelectorAll('svg').forEach(svg => {
+    if (!graficasRegistradas.has(svg) || !svg.children.length) return;
+    const figura = document.createElement('figure');
+    figura.className = 'reporte-grafica';
+    const contenedor = svg.closest('.grafica-contenedor, .detalle-revenue, .detalle-trazabilidad');
+    const caption = document.createElement('figcaption');
+    caption.textContent = contenedor?.querySelector('h3, h4')?.textContent || 'Revenue';
+    figura.appendChild(caption);
+    if (svg.id === 'grafica-backlog-vs-revenue') {
+      const selector = document.querySelector('#selector-backlog-vs-revenue select');
+      if (selector?.selectedOptions.length) {
+        const alcance = document.createElement('p');
+        alcance.className = 'reporte-nota';
+        alcance.textContent = `Mes a mes del año actual · ${selector.selectedOptions[0].textContent} · independiente del periodo superior y los snapshots.`;
+        figura.appendChild(alcance);
+      }
+    }
+    const copia = svg.cloneNode(true);
+    copia.removeAttribute('id');
+    copia.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+    copia.querySelectorAll('[tabindex]').forEach(el => el.removeAttribute('tabindex'));
+    copia.querySelectorAll('[role="button"]').forEach(el => el.removeAttribute('role'));
+    copia.style.width = '100%';
+    copia.style.height = 'auto';
+    copia.style.minHeight = '0';
+    figura.appendChild(copia);
+    const nota = contenedor?.querySelector('.nota-grafica');
+    if (nota && svg.id !== 'grafica-booking-vendedor') {
+      const texto = document.createElement('p');
+      texto.className = 'reporte-nota';
+      texto.textContent = nota.textContent;
+      figura.appendChild(texto);
+    }
+    reporte.appendChild(figura);
+  });
+  if (!reporte.querySelector('figure')) {
+    const vacio = document.createElement('p');
+    vacio.textContent = 'No hay gráficas disponibles en esta vista.';
+    reporte.appendChild(vacio);
+  }
+  document.body.appendChild(reporte);
+  document.body.classList.remove('preparando-reporte');
+}
+
+function cerrarReporteGraficas() {
+  document.body.classList.remove('modo-reporte');
+  detallesAntesDeImprimir.forEach(detalle => { detalle.open = false; });
+  detallesAntesDeImprimir = [];
+  document.getElementById('reporte-graficas')?.remove();
+  window.scrollTo(0, scrollAntesDelReporte);
+  document.querySelector('.btn-exportar-graficas')?.focus({ preventScroll: true });
+}
+
+function inicializarReporteGraficas() {
+  const boton = document.createElement('button');
+  boton.type = 'button';
+  boton.className = 'btn-exportar-graficas pf-v6-c-button pf-m-secondary';
+  boton.textContent = 'Exportar gráficas';
+  boton.addEventListener('click', () => {
+    scrollAntesDelReporte = window.scrollY;
+    prepararReporteGraficas();
+    document.body.classList.add('modo-reporte');
+    window.scrollTo(0, 0);
+    document.querySelector('#reporte-graficas button')?.focus({ preventScroll: true });
+  });
+  document.querySelector('.encabezado').appendChild(boton);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.body.classList.contains('modo-reporte')) cerrarReporteGraficas();
+  });
+  window.addEventListener('beforeprint', () => {
+    if (!document.body.classList.contains('modo-reporte')) {
+      scrollAntesDelReporte = window.scrollY;
+      prepararReporteGraficas();
+    }
+  });
+  window.addEventListener('afterprint', () => {
+    if (!document.body.classList.contains('modo-reporte')) cerrarReporteGraficas();
+  });
+}
 
 function cambiarPestana(nombre, omitirHash) {
   // La pestaña queda en el hash de la URL: así se puede compartir un enlace
@@ -3109,6 +5037,8 @@ function cambiarPestana(nombre, omitirHash) {
   } else if (nombre === 'pms') {
     renderizarPMs();
   }
+  if (nombre === 'detalle') window.scrollTo(0, 0);
+  requestAnimationFrame(ajustarGraficasVisibles);
 }
 
 // ============================================================================
@@ -3116,6 +5046,7 @@ function cambiarPestana(nombre, omitirHash) {
 // ============================================================================
 
 function actualizarUI() {
+  ocultarTooltip();
   calcularKPIs();
   renderizarTabla();
   actualizarGraficas();
@@ -3139,6 +5070,15 @@ async function inicializar() {
 
   // Inicializar filtros
   inicializarFiltros();
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    document.querySelector('.panel-filtros').open = false;
+  }
+  inicializarReporteGraficas();
+  window.addEventListener('scroll', ocultarTooltip, { capture: true, passive: true });
+  document.addEventListener('toggle', ocultarTooltip, true);
+  document.getElementById('mostrar-columnas-completas').addEventListener('change', e => {
+    document.getElementById('tabla-proyectos').classList.toggle('vista-completa', e.target.checked);
+  });
 
   // Configurar eventos de pestañas
   document.querySelectorAll('.pestana-btn').forEach(btn => {
@@ -3158,6 +5098,13 @@ async function inicializar() {
   // Renderizar inicial
   actualizarUI();
 
+  // Inicializar sistema de redimensionamiento de columnas
+  cargarAnchosDeStorage();
+  document.querySelectorAll('table').forEach(tabla => {
+    asegurarResizers(tabla);
+  });
+  setupMutationObserver();
+
   // Abrir la pestaña que venga en la URL (#trazabilidad, #detalle/65085...).
   const [vista, pa] = decodeURIComponent(location.hash.slice(1)).split('/');
   if (vista === 'detalle' && pa) {
@@ -3167,9 +5114,13 @@ async function inicializar() {
     cambiarPestana(vista, true);
   }
 
-  // Ajustar tamaño de gráficas en resize
+  // Ajustar tamaño de gráficas en resize (con debounce de 200ms)
+  let resizeTimeout;
   window.addEventListener('resize', () => {
-    actualizarGraficas();
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      ajustarGraficasVisibles();
+    }, 200);
   });
 }
 

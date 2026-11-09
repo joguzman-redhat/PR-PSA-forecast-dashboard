@@ -78,10 +78,19 @@ case "${1:-up}" in
     echo "✓ Cache de historia invalidada"
     ;;
 
+  migrate)
+    # Aplica todas las migraciones en orden (idempotentes)
+    for sql in db/migraciones/*.sql; do
+      [ -f "$sql" ] || continue
+      echo "Aplicando $(basename "$sql")..."
+      podman exec -i forecast-postgres psql -U "${POSTGRES_USER:-forecast}" -d "${POSTGRES_DB:-forecast}" < "$sql"
+    done
+    echo "✓ Migraciones aplicadas"
+    ;;
   logs)    podman-compose logs -f api ;;
   psql)    podman exec -it forecast-postgres psql -U "${POSTGRES_USER:-forecast}" -d "${POSTGRES_DB:-forecast}" ;;
   # --profile public para que tambien apague/borre ngrok si estaba arriba.
   down)    podman-compose --profile public down ;;
   destroy) podman-compose --profile public down -v ;;   # borra tambien el historico
-  *)       echo "uso: $0 {up|public|rebuild|seed|logs|psql|down|destroy|clean}" >&2; exit 1 ;;
+  *)       echo "uso: $0 {up|public|rebuild|seed|migrate|logs|psql|down|destroy|clean}" >&2; exit 1 ;;
 esac

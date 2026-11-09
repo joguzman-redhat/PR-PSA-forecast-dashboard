@@ -30,3 +30,7 @@ conectar n8n: `infra/README.md`.
 Para los hallazgos sobre la calidad del Excel, las reglas de negocio
 confirmadas y cómo se validaron los números, ver
 [`docs/HALLAZGOS_Y_VALIDACION.md`](docs/HALLAZGOS_Y_VALIDACION.md).
+
+Cómo se calcula cada cifra de dinero (Booking, Revenue acumulado, Backlog), de
+qué hoja sale y qué significan Handover y el semáforo:
+[`docs/REGLAS_DE_DATOS.md`](docs/REGLAS_DE_DATOS.md).

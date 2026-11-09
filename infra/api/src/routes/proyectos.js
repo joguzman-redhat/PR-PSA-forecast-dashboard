@@ -51,6 +51,8 @@ function proyectoBase(f) {
     q_del_clawback: f.q_del_clawback,
     estatus: f.estatus,
     start_at_risk: f.start_at_risk,
+    executive_watchlist: f.executive_watchlist,
+    project_status: f.project_status,
     _errores: f.campos_con_error || {},
     _recalculado: f.campos_recalculados || {},
     _tipo_fila: 'proyecto',
@@ -106,7 +108,8 @@ router.get('/', async (_req, res, next) => {
                             THEN acumulado_a_hoy / valor_of END) AS pct_ejecucion_actual,
               pct_peso_contrato, estado_contrato, dias_para_vencimiento,
               meses_transcurridos, tipo_de_ejecucion, q_del_clawback, estatus,
-              start_at_risk, campos_con_error, campos_recalculados, datos_info,
+              start_at_risk, executive_watchlist, project_status,
+              campos_con_error, campos_recalculados, datos_info,
               to_char(fecha_fin, 'FMMM/FMDD/YYYY') AS fecha_fin
          FROM proyecto
         WHERE ultima_carga_id = $1
