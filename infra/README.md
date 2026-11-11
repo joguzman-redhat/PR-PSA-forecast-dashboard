@@ -18,6 +18,11 @@ exposición pública):
 ./forecast.sh public    # lo mismo + ngrok
 ```
 
+`up` y `public` reconstruyen la imagen de la API y reemplazan su contenedor
+para servir el codigo de la rama que tengas activa, incluidos los archivos del
+dashboard. El build reutiliza cache y conserva los volumenes de Postgres y n8n.
+Despues de cambiar de rama o actualizar el codigo, vuelve a ejecutar el comando.
+
 - Dashboard: <http://localhost:3000/>
 - n8n: <http://localhost:8080/> (vía nginx) o <http://localhost:5678/> (directo)
 - n8n público (solo con `public`): `./forecast.sh public` la imprime en la
@@ -43,7 +48,7 @@ credencial Postgres (host `postgres`, puerto `5432`, mismas credenciales de
 
 | Comando | Qué hace |
 |---|---|
-| `up` | Levanta postgres + api + n8n + nginx |
+| `up` | Actualiza la API/dashboard y levanta postgres + api + n8n + nginx |
 | `public` | Lo mismo + ngrok (perfil `public`) |
 | `seed` | Carga datos a Postgres e invalida caché — ver aviso abajo |
 | `migrate` | Aplica migraciones de esquema (`db/migraciones/*.sql`, idempotentes) |
@@ -68,3 +73,15 @@ esto de la máquina local.
 <http://localhost:3000/api/docs/> (Swagger, sin CDN). Spec crudo en
 `api/src/openapi.yaml`. Esquema de Postgres (tablas y vistas) en
 `db/init/01_schema.sql`.
+
+## Pruebas del SQL del ETL
+
+Desde la raiz del repo, con Node.js y Podman disponibles:
+
+```bash
+node --test n8n/test/carga-sql.test.js
+```
+
+Las pruebas levantan y eliminan un Postgres temporal sin red, puertos ni
+volumenes del stack real. Verifican los encabezados actuales y anteriores de
+BackLog NOLA, montos exactos y columnas completamente vacias.

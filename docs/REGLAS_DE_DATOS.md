@@ -42,6 +42,21 @@ estado). Verificado el 22 de oct 2026: In Progress 142 · 5.244.100, On Hold
 > 7,09M en In Progress en vez de 5,24M, porque no restaba el commit de
 > noviembre y diciembre. No volver a esa fórmula.
 
+## Proyección de Backlog vs. Revenue después de 2026
+
+El calendario mensual disponible comienza en enero de 2026. `Fecha fin` viene
+de Info Proyectos. La fecha de inicio de CCProjects todavía no se importa.
+
+Para proyectos que terminan después de diciembre de 2026, la gráfica reparte
+el **Backlog de BackLog NOLA** uniformemente entre enero de 2027 y el mes de
+finalización, ambos incluidos. Ese importe aumenta el Commit acumulado y
+reduce el saldo pendiente. El tramo aparece como **proyección estimada**, con
+líneas discontinuas. Es una estimación de la vista, no un cambio a los datos
+del calendario fuente ni al Backlog almacenado.
+
+Los proyectos con saldo y sin fecha fin futura válida conservan ese pendiente;
+la gráfica no les asigna un calendario de ejecución estimado.
+
 ## Campos de Info Proyectos que sí se usan
 
 Info Proyectos es la fuente de lo descriptivo (cliente, PM, zona, vendedor,

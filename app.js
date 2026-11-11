@@ -32,6 +32,7 @@ const estado = {
   // Los cancelados se esconden por defecto: ensucian conteos y gráficas, y
   // los 24 que hay valen $0 de Valor OF. El interruptor los trae de vuelta.
   incluirCancelados: false,
+  incluirCompletados: false,
   proyectosFiltrados: [],
   proyectoSeleccionado: null,
   expandedPMs: new Set(),
@@ -295,25 +296,41 @@ function proyectadaAnio(proyecto) {
   return acum2025 + totalFijo;
 }
 
-/**
- * Backlog vs Revenue, mes a mes, del estado actual (no de los snapshots
- * históricos). El Backlog no es un dato aparte: en cada mes es lo que queda
- * por ejecutar del contrato, así que se recalcula en cada punto como
- * Valor OF − Acum 2025 − Commit acumulado hasta ese mes. En diciembre da
- * exactamente el Backlog que ya está guardado en BackLog NOLA, porque es la
- * misma cuenta (Valor OF − Acum 2025 − Q1..Q4).
- *
- * El Valor OF de BackLog NOLA (`fila.valor_of`) llega null en null en las 291
- * filas de la carga actual — el ETL de n8n no lo está escribiendo todavía.
- * Se reconstruye con los dos números que sí llegan siempre y que son,
- * literalmente, cómo se calculó el Backlog en origen: Valor OF = Backlog +
- * Total Ejecutado Acumulado (Total Ejecutado = Acum 2025 + Q1..Q4).
- * Verificado contra las 278 filas con dato completo: coincide exacto.
- */
+// El calendario fuente trae Acum 2025 y los doce meses de 2026.
+const ANIO_REVENUE = 2026;
+
+/** Fecha fin de Info Proyectos, sin desplazar días/meses por la zona horaria. */
+function mesFinalizacion(proyecto) {
+  const valor = proyecto.fecha_fin;
+  let anio, mes, dia;
+  if (typeof valor === 'number' && Number.isFinite(valor)) {
+    const fecha = new Date(Date.UTC(1899, 11, 30) + Math.floor(valor) * 86400000);
+    anio = fecha.getUTCFullYear(); mes = fecha.getUTCMonth() + 1; dia = fecha.getUTCDate();
+  } else if (typeof valor === 'string') {
+    const iso = valor.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:T.*)?$/);
+    const americana = valor.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (iso) [, anio, mes, dia] = iso.map(Number);
+    else if (americana) { mes = +americana[1]; dia = +americana[2]; anio = +americana[3]; }
+    else return null;
+  } else return null;
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  if (fecha.getUTCFullYear() !== anio || fecha.getUTCMonth() !== mes - 1 || fecha.getUTCDate() !== dia) return null;
+  return anio * 12 + mes - 1;
+}
+
+function etiquetaMesRevenue(indice) {
+  const mes = MESES_ES[indice % 12];
+  return `${mes.charAt(0).toUpperCase() + mes.slice(1, 3)} ${Math.floor(indice / 12)}`;
+}
+
+/** Calendario de 2026 y reparto uniforme del Backlog fuente hasta cada fecha fin futura. */
 function serieBacklogRevenuePorMes(proyectos) {
   let valorOfTotal = 0;
   let acum2025Total = 0;
   const commitPorMes = new Array(12).fill(0);
+  const diciembre = ANIO_REVENUE * 12 + 11;
+  const proyecciones = [];
+  let ultimoMes = diciembre;
   proyectos.forEach(p => {
     const booking = valorBooking(p);
     const acum = acum2025(p);
@@ -321,6 +338,12 @@ function serieBacklogRevenuePorMes(proyectos) {
     acum2025Total += acum || 0;
     const fila = backlogDe(p);
     if (!fila) return;
+    const fin = mesFinalizacion(p);
+    if (fin !== null && fin > diciembre) {
+      ultimoMes = Math.max(ultimoMes, fin);
+      const saldo = backlogHoy(p);
+      if (Number.isFinite(saldo)) proyecciones.push({ saldo, meses: fin - diciembre });
+    }
     MESES_ES.forEach((m, i) => {
       const v = fila[m + '_fijo'];
       commitPorMes[i] += typeof v === 'number' ? v : 0;
@@ -331,10 +354,38 @@ function serieBacklogRevenuePorMes(proyectos) {
   let acumulado = 0;
   MESES_ES.forEach((m, i) => {
     acumulado += commitPorMes[i];
-    const etiqueta = m.charAt(0).toUpperCase() + m.slice(1);
+    const etiqueta = etiquetaMesRevenue(ANIO_REVENUE * 12 + i);
     datos[etiqueta] = { Commit: acumulado, Backlog: valorOfTotal - acum2025Total - acumulado };
   });
+  const commitAnual = acumulado;
+  const backlogDiciembre = valorOfTotal - acum2025Total - commitAnual;
+  for (let mes = diciembre + 1; mes <= ultimoMes; mes++) {
+    const transcurridos = mes - diciembre;
+    const estimado = proyecciones.reduce((suma, p) => suma +
+      (transcurridos >= p.meses ? p.saldo : p.saldo * transcurridos / p.meses), 0);
+    datos[etiquetaMesRevenue(mes)] = {
+      Commit: commitAnual + estimado,
+      Backlog: backlogDiciembre - estimado,
+    };
+  }
   return datos;
+}
+
+function pintarProyeccionBacklogRevenue(svg, proyectos, nota) {
+  const datos = serieBacklogRevenuePorMes(proyectos);
+  const tieneEstimacion = Object.keys(datos).length > 12;
+  crearGraficaLinea(svg, datos, {
+    ejeX: 'categoria', desdeEstimado: tieneEstimacion ? 12 : null,
+    unidad: 'Backlog y Commit acumulado desde enero de 2026',
+  });
+  if (nota) {
+    nota.textContent = 'Fecha de inicio aún no cargada: calendario desde enero de 2026. '
+      + 'El Commit es acumulado y el Backlog de diciembre corresponde al de BackLog NOLA. '
+      + (tieneEstimacion ? 'Desde enero de 2027, las líneas discontinuas muestran el reparto uniforme estimado del backlog hasta la fecha fin de cada proyecto. ' : '')
+      + (proyectos.some(p => Number.isFinite(backlogHoy(p)) && backlogHoy(p) !== 0 &&
+        (mesFinalizacion(p) === null || mesFinalizacion(p) <= ANIO_REVENUE * 12 + 11))
+        ? 'Los proyectos sin fecha fin posterior a 2026 conservan su backlog pendiente.' : '');
+  }
 }
 
 function calcularKPIs() {
@@ -550,8 +601,34 @@ function pasaTexto(proyecto) {
   ].map(v => String(v ?? '')).join(' ').toLowerCase().includes(texto);
 }
 
+function pasaFiltroCompletados(proyecto) {
+  return estado.incluirCompletados || proyecto?.estado !== 'Completed';
+}
+
+function clavesCompletadosOcultos() {
+  return new Set(estado.incluirCompletados ? [] : estado.proyectos
+    .filter(p => !pasaFiltroCompletados(p)).map(claveProyecto));
+}
+
+function sincronizarMostrarCompletados() {
+  document.querySelectorAll('[data-mostrar-completados]').forEach(chk => {
+    chk.checked = estado.incluirCompletados;
+  });
+}
+
+function cambiarMostrarCompletados(incluir) {
+  estado.incluirCompletados = incluir;
+  sincronizarMostrarCompletados();
+  aplicarFiltros();
+  const vista = document.querySelector('.pestana-contenido.activa')?.id;
+  if (vista === 'pestana-detalle') renderizarDetalle();
+  if (vista === 'pestana-trazabilidad') renderizarTrazabilidad();
+  if (vista === 'pestana-pms') renderizarPMs();
+}
+
 function aplicarFiltros() {
   estado.proyectosFiltrados = estado.proyectos.filter(p => {
+    if (!pasaFiltroCompletados(p)) return false;
     if (!estado.incluirCancelados && p.estado === 'Canceled') return false;
     return DIMENSIONES.every(d => pasaDimension(p, d.campo)) && pasaTexto(p);
   });
@@ -569,6 +646,7 @@ function aplicarFiltros() {
 function conteosDe(campo) {
   const conteos = new Map();
   estado.proyectos.forEach(p => {
+    if (!pasaFiltroCompletados(p)) return;
     if (!estado.incluirCancelados && p.estado === 'Canceled' && campo !== 'estado') return;
     const pasa = DIMENSIONES.every(d => d.campo === campo || pasaDimension(p, d.campo));
     if (!pasa || !pasaTexto(p)) return;
@@ -610,6 +688,15 @@ function inicializarFiltros() {
   });
 
   document.getElementById('btn-limpiar-filtros').addEventListener('click', limpiarFiltros);
+
+  sincronizarMostrarCompletados();
+  // Delegación para incluir el control que se crea al abrir Otros proyectos del cliente.
+  document.addEventListener('change', e => {
+    if (!e.target.matches('[data-mostrar-completados]')) return;
+    const id = e.target.id;
+    cambiarMostrarCompletados(e.target.checked);
+    document.getElementById(id)?.focus({ preventScroll: true });
+  });
 
   const chk = document.getElementById('incluir-cancelados');
   if (chk) {
@@ -933,7 +1020,7 @@ function renderizarTabla() {
 
   // Actualizar indicador
   document.getElementById('indicador-proyectos').textContent =
-    `${estado.proyectosFiltrados.length} de ${estado.proyectos.length} proyectos`;
+    `${estado.proyectosFiltrados.length} de ${estado.proyectos.filter(pasaFiltroCompletados).length} proyectos`;
 }
 
 function ordenarTabla(columna) {
@@ -1068,6 +1155,7 @@ function fijarColores(campo, valores) {
 
 /** Escala del tamaño de fuente en gráficas respecto al root (16px). */
 function escalaTexto() {
+  if (document.body.classList.contains('preparando-reporte')) return 1;
   return parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
 }
 
@@ -1125,6 +1213,8 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
     const fila = 28;
     const alto = Math.max(120, datos.length * fila + 24);
     const margen = { top: 12, right: 18, bottom: 12, left: Math.min(190, Math.max(105, Math.round(ancho * 0.34))) };
+    svg.dataset.reporteCabecera = String(margen.top);
+    svg.dataset.reporteCortes = JSON.stringify(datos.map((_, i) => ({ inicio: margen.top + i * fila, fin: margen.top + (i + 1) * fila })));
     const areaAncho = Math.max(90, ancho - margen.left - margen.right);
     const maxValor = Math.max(...datos.map(d => d.valor), 0) || 1;
     const maxCaracteres = Math.max(8, Math.floor((margen.left - 12) / 6.3));
@@ -1252,7 +1342,7 @@ function crearGraficaBarrasSimple(svgId, datos, opciones) {
 
 /**
  * Gráfica de barras agrupadas horizontal. Para comparar múltiples series por categoría.
- * datos = [{ etiqueta, zona, series: [{ nombre, valor, color },...] }]
+ * datos = [{ etiqueta, lineasEtiqueta?, zona, series: [{ nombre, valor, color },...] }]
  */
 function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
   const svg = document.getElementById(svgId);
@@ -1263,6 +1353,9 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
 
   const op = opciones || {};
   const fmt = FORMATOS[op.formato] || FORMATOS.dinero;
+  const fmtValor = op.formato === 'dinero' ? formatearDineroExacto : fmt;
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', op.unidad || 'Gráfica de barras agrupadas');
 
   if (!datos.length) {
     svg.style.height = '120px';
@@ -1275,28 +1368,47 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
   }
 
   const ancho = Math.max(300, svg.clientWidth || 300);
-  const nSeriesGlobal = datos[0].series.length;
-  const alturaPorGrupo = Math.max(36, nSeriesGlobal * 10 + (nSeriesGlobal - 1) * 3 + 8);
-  const margenGrupo = 8;      // condensado de 24
+  const escala = escalaTexto();
+  const fuente = 12 * escala;
+  const contextoTexto = document.createElement('canvas').getContext('2d');
+  const familia = getComputedStyle(svg).fontFamily;
+  const medirTexto = (texto, peso = 400) => {
+    contextoTexto.font = `${peso} ${fuente}px ${familia}`;
+    return contextoTexto.measureText(String(texto)).width;
+  };
+  const recortarTexto = (texto, maxAncho, peso = 400) => {
+    let corto = String(texto);
+    if (medirTexto(corto, peso) <= maxAncho) return corto;
+    while (corto && medirTexto(corto + '…', peso) > maxAncho) corto = corto.slice(0, -1);
+    return corto + '…';
+  };
+  const nSeriesGlobal = Math.max(...datos.map(d => d.series.length));
+  const alturaBarra = Math.ceil(fuente + 2);
+  const espacioEntreSeries = Math.ceil(7 * escala);
+  const alturaPorGrupo = nSeriesGlobal * (alturaBarra + espacioEntreSeries) - espacioEntreSeries;
+  const margenGrupo = Math.ceil(24 * escala);
+  const alturaZona = Math.ceil(24 * escala);
   const zonas = [...new Set(datos.map(d => d.zona ?? null))];
   const seriesLeyenda = datos[0].series;
-  const margenIzq = Math.min(190, Math.max(110, Math.round(ancho * 0.32)));
-  const anchoMaxLeyenda = ancho - margenIzq - 8;
+  const margenIzq = Math.min(230, Math.max(95, Math.round(ancho * 0.28)));
+  const anchoValor = Math.max(...datos.flatMap(d => d.series.map(s => medirTexto(fmtValor(s.valor), 600))));
+  const anchoMaxLeyenda = ancho - 16;
+  const altoFilaLeyenda = Math.ceil(24 * escala);
   let leyendaFilas = 1, anchoFilaLeyenda = 0;
   seriesLeyenda.forEach(s => {
-    const w = 34 + s.nombre.length * 6.5;
+    const w = 40 + medirTexto(s.nombre);
     if (anchoFilaLeyenda && anchoFilaLeyenda + w > anchoMaxLeyenda) { leyendaFilas++; anchoFilaLeyenda = 0; }
     anchoFilaLeyenda += w;
   });
-  const margenTop = 38 + leyendaFilas * 18;
+  const margenTop = Math.ceil(40 * escala) + leyendaFilas * altoFilaLeyenda;
   let altoTotal = margenTop;
   zonas.forEach(z => {
     const enZona = datos.filter(d => z === null ? d.zona == null : d.zona === z);
-    altoTotal += (z !== null && z !== '' ? 20 : 0) + enZona.length * (alturaPorGrupo + margenGrupo);
+    altoTotal += (z !== null && z !== '' ? alturaZona : 0) + enZona.length * (alturaPorGrupo + margenGrupo);
   });
-  const margen = { top: margenTop, right: 80, bottom: 16, left: margenIzq };
+  const margen = { top: margenTop, right: Math.ceil(anchoValor + 16), bottom: 16, left: margenIzq };
   const alto = Math.max(120, altoTotal + margen.bottom);
-  const areaAncho = Math.max(80, ancho - margen.left - margen.right);
+  const areaAncho = Math.max(40, ancho - margen.left - margen.right);
   const areaAlto = alto - margen.top - margen.bottom;
 
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
@@ -1306,30 +1418,36 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
   svg.setAttribute('title', op.unidad || 'Gráfica de barras agrupadas');
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
-  const maxValor = Math.max(...datos.flatMap(d => d.series.map(s => s.valor)), 1);
+  const valores = datos.flatMap(d => d.series.map(s => s.valor)).filter(Number.isFinite);
+  const minValor = Math.min(0, ...valores);
+  const maxValor = Math.max(0, ...valores) || 1;
+  const escalaX = valor => (valor - minValor) / (maxValor - minValor) * areaAncho;
 
   // Leyenda envuelta dentro del ancho disponible.
   if (datos.length && datos[0].series.length) {
     let offsetX = 0, filaLeyenda = 0;
+    const leyenda = svgEl('g', { class: 'leyenda-comparacion', transform: 'translate(8,12)' });
     seriesLeyenda.forEach(s => {
-      const anchoLeyenda = 34 + s.nombre.length * 6.5;
+      const anchoLeyenda = 40 + medirTexto(s.nombre);
       if (offsetX && offsetX + anchoLeyenda > anchoMaxLeyenda) { offsetX = 0; filaLeyenda++; }
       const gLey = svgEl('g', {});
       gLey.appendChild(svgEl('rect', {
-        x: offsetX, y: -margenTop + 14 + filaLeyenda * 18, width: 11, height: 11, rx: 2, fill: s.color,
+        x: offsetX, y: filaLeyenda * altoFilaLeyenda, width: 11, height: 11, rx: 2, fill: s.color,
       }));
       const t = svgEl('text', {
-        x: offsetX + 16, y: -margenTop + 23 + filaLeyenda * 18, 'font-size': 11, fill: 'var(--text-secondary)',
+        x: offsetX + 16, y: filaLeyenda * altoFilaLeyenda + 10, 'font-size': 12, fill: 'var(--text-secondary)',
       });
       t.textContent = s.nombre;
       gLey.appendChild(t);
-      g.appendChild(gLey);
+      leyenda.appendChild(gLey);
       offsetX += anchoLeyenda;
     });
+    svg.appendChild(leyenda);
   }
 
   // Rejilla
-  const lineas = 4;
+  const anchoTick = Math.max(medirTexto(fmt(minValor)), medirTexto(fmt(maxValor))) + 20;
+  const lineas = Math.max(1, Math.min(4, Math.floor(areaAncho / anchoTick)));
   for (let i = 0; i <= lineas; i++) {
     const x = (areaAncho / lineas) * i;
     g.appendChild(svgEl('line', {
@@ -1340,74 +1458,83 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
       x, y: -8, 'font-size': 11, 'text-anchor': 'middle',
       fill: 'var(--text-secondary)', 'font-variant-numeric': 'tabular-nums',
     });
-    lbl.textContent = fmt((maxValor / lineas) * i);
+    lbl.textContent = fmt(minValor + (maxValor - minValor) / lineas * i);
     g.appendChild(lbl);
   }
 
   // Dibujar grupos por zona
   let offsetY = 0;
+  const cortesReporte = [];
   zonas.forEach(zona => {
     const gruposZona = datos.filter(d => zona === null ? d.zona == null : d.zona === zona);
-    if (gruposZona.length === 0) return;  // skip zona with no clients
+    if (gruposZona.length === 0) return;
 
     // Etiqueta de zona
     if (zona !== null && zona !== '') {
       const lblZona = svgEl('text', {
-        x: -10, y: offsetY + 10, 'font-size': 10, 'text-anchor': 'end',
+        x: -10, y: offsetY + fuente, 'font-size': 12, 'text-anchor': 'end',
         fill: 'var(--text-dim)', 'font-weight': 600, 'text-transform': 'uppercase',
       });
-      lblZona.textContent = zona;
+      lblZona.textContent = recortarTexto(zona, margen.left - 20, 600);
+      const tituloZona = svgEl('title', {});
+      tituloZona.textContent = zona;
+      lblZona.appendChild(tituloZona);
       g.appendChild(lblZona);
-      offsetY += 20;
+      offsetY += alturaZona;
     }
 
-    gruposZona.forEach((grupo) => {
+    gruposZona.forEach((grupo, indiceGrupo) => {
+      cortesReporte.push({
+        inicio: margen.top + offsetY - (indiceGrupo === 0 && zona !== null && zona !== '' ? alturaZona : 0),
+        fin: margen.top + offsetY + alturaPorGrupo + margenGrupo,
+        zona,
+      });
       const nSeries = grupo.series.length;
-      const alturaBarra = 9;
-      const espacioEntreSeries = 2;
       const alturaGrupo = nSeries * alturaBarra + (nSeries - 1) * espacioEntreSeries;
       const yBase = offsetY + (alturaPorGrupo - alturaGrupo) / 2;
 
-      // Etiqueta del cliente
-      const lblCliente = svgEl('text', {
-        x: -10, y: offsetY + alturaPorGrupo / 2, 'font-size': 11,
-        'text-anchor': 'end', fill: 'var(--text-primary)',
-        'dominant-baseline': 'middle',
+      // PA y nombre van en líneas separadas para distinguir proyectos de una misma cuenta.
+      const lineasEtiqueta = grupo.lineasEtiqueta || [grupo.etiqueta];
+      lineasEtiqueta.forEach((linea, i) => {
+        const peso = grupo.lineasEtiqueta && i === 0 ? 600 : 400;
+        const lblGrupo = svgEl('text', {
+          class: 'etiqueta-grupo', x: -10,
+          y: offsetY + alturaPorGrupo / 2 + (i - (lineasEtiqueta.length - 1) / 2) * (fuente + 5),
+          'font-size': 12, 'font-weight': peso,
+          'text-anchor': 'end', fill: 'var(--text-primary)', 'dominant-baseline': 'middle',
+        });
+        lblGrupo.textContent = recortarTexto(linea, margen.left - 20, peso);
+        const titulo = svgEl('title', {});
+        titulo.textContent = grupo.etiqueta;
+        lblGrupo.appendChild(titulo);
+        g.appendChild(lblGrupo);
       });
-      const textoCliente = String(grupo.etiqueta);
-      lblCliente.textContent = textoCliente.length > 20 ? textoCliente.slice(0, 19) + '…' : textoCliente;
-      const titulo = svgEl('title', {});
-      titulo.textContent = textoCliente;
-      lblCliente.appendChild(titulo);
-      g.appendChild(lblCliente);
 
       // Barras
       grupo.series.forEach((serie, si) => {
         const yBarra = yBase + si * (alturaBarra + espacioEntreSeries);
-        const anchoBarra = Math.max(1, (serie.valor / maxValor) * areaAncho);
+        const valor = Number.isFinite(serie.valor) ? serie.valor : 0;
+        const xBarra = escalaX(Math.min(0, valor));
+        const anchoBarra = Math.abs(escalaX(valor) - escalaX(0));
 
         const barra = svgEl('rect', {
-          x: 0, y: yBarra, width: anchoBarra, height: alturaBarra,
+          x: xBarra, y: yBarra, width: anchoBarra, height: alturaBarra,
           fill: serie.color, rx: 1.5,
         });
         g.appendChild(barra);
 
-        // Valor al final de la barra - only for Booking (si=0) and Backlog (si=3)
-        if (si === 0 || si === 3) {
-          const lblValor = svgEl('text', {
-            x: Math.min(anchoBarra + 4, areaAncho - 2), y: yBarra + alturaBarra / 2,
-            'font-size': 10, 'font-weight': 600,
-            'dominant-baseline': 'middle',
-            fill: 'var(--text-primary)',
-            'font-variant-numeric': 'tabular-nums',
-          });
-          lblValor.textContent = fmt(serie.valor);
-          g.appendChild(lblValor);
-        }
+        // Las cuatro series muestran el importe completo, también acumulado y proyectada.
+        const lblValor = svgEl('text', {
+          class: 'valor-serie', x: xBarra + anchoBarra + 6, y: yBarra + alturaBarra / 2,
+          'font-size': 12, 'font-weight': 600, 'dominant-baseline': 'middle',
+          fill: 'var(--text-primary)', 'font-variant-numeric': 'tabular-nums',
+        });
+        lblValor.textContent = fmtValor(serie.valor);
+        g.appendChild(lblValor);
 
         // Tooltip
         const zona = svgEl('rect', {
-          x: 0, y: yBarra, width: Math.max(anchoBarra, 30), height: alturaBarra,
+          x: xBarra, y: yBarra, width: Math.max(anchoBarra, 30), height: alturaBarra,
           fill: 'transparent',
         });
         zona.style.cursor = 'pointer';
@@ -1422,7 +1549,7 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
           mostrarTooltip(e, grupo.etiqueta, [{
             color: serie.color,
             etiqueta: serie.nombre,
-            valor: '$' + serie.valor.toLocaleString('en-US', { maximumFractionDigits: 0 }),
+            valor: fmtValor(serie.valor),
           }]);
         });
         zona.addEventListener('mousemove', moverTooltip);
@@ -1438,6 +1565,8 @@ function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
   });
 
   svg.appendChild(g);
+  svg.dataset.reporteCabecera = String(margen.top);
+  svg.dataset.reporteCortes = JSON.stringify(cortesReporte);
 }
 
 /**
@@ -1654,6 +1783,11 @@ function crearGraficaBarrasApiladas(svgId, datos, opciones) {
   const margenTop = 24 + filasLeyenda * 18;
   const alto = Math.max(160, datos.length * (alturaPorBarra + margenBarra) + margenTop + 36);
   const margen = { top: margenTop, right: 50, bottom: 20, left: Math.round(140 * escalaTexto()) };  // right margin for total label
+  svg.dataset.reporteCabecera = String(margen.top);
+  svg.dataset.reporteCortes = JSON.stringify(datos.map((_, i) => ({
+    inicio: margen.top + i * (alturaPorBarra + margenBarra),
+    fin: margen.top + (i + 1) * (alturaPorBarra + margenBarra),
+  })));
   const espacioTotal = 36;  // reserve space for total label at end of bar
   const areaAncho = ancho - margen.left - margen.right - espacioTotal;
   const areaAlto = alto - margen.top - margen.bottom;
@@ -1852,6 +1986,73 @@ function renderizarSemaforoProyectos(proyectos) {
   contenedor.appendChild(pills);
 }
 
+/** Resumen del único PM seleccionado, usando el mismo conjunto filtrado que el listado. */
+function renderizarResumenPM(proyectos) {
+  const tarjeta = document.getElementById('card-pm-resumen');
+  if (!tarjeta) return;
+  const pm = estado.filtros.pm_lider.length === 1 ? estado.filtros.pm_lider[0] : null;
+  tarjeta.style.display = pm === null ? 'none' : 'block';
+  if (pm === null) return;
+
+  const portafolio = proyectos.filter(p => valorDimension(p, 'pm_lider') === pm);
+  const sumar = medida => {
+    const valores = portafolio.map(medida).filter(Number.isFinite);
+    // Una selección vacía suma cero; proyectos sin cifras disponibles muestran ausencia.
+    return valores.length || !portafolio.length ? valores.reduce((a, b) => a + b, 0) : null;
+  };
+  const booking = sumar(valorBooking);
+  const acumulado = sumar(acumuladoHoy);
+  const backlog = sumar(backlogHoy);
+  const porcentaje = booking > 0 && acumulado !== null ? acumulado / booking * 100 : null;
+
+  document.getElementById('pm-nombre').textContent = pm;
+  document.getElementById('pm-n-proyectos').textContent = formatearNumero(portafolio.length);
+  [['booking', booking], ['acumulado', acumulado], ['backlog', backlog]].forEach(([campo, valor]) => {
+    const el = document.getElementById(`pm-${campo}`);
+    el.textContent = formatearDinero(valor);
+    el.title = formatearDineroExacto(valor);
+  });
+  const ejecucion = document.getElementById('pm-pct-ejec');
+  ejecucion.textContent = porcentaje === null ? '—' : porcentaje.toFixed(1) + '%';
+  ejecucion.title = 'Revenue acumulado / Booking total; ponderado por monto, no promedio de porcentajes.';
+
+  const estados = new Map();
+  const semaforo = new Map([['Rojo', 0], ['Amarillo', 0], ['Verde', 0], [SIN_DATO, 0]]);
+  portafolio.forEach(p => {
+    const est = valorDimension(p, 'estado');
+    estados.set(est, (estados.get(est) || 0) + 1);
+    const status = valorDimension(p, 'project_status');
+    const clave = semaforo.has(status) ? status : SIN_DATO;
+    semaforo.set(clave, semaforo.get(clave) + 1);
+  });
+  const contenedorEstados = document.getElementById('pm-por-estado');
+  contenedorEstados.replaceChildren();
+  contenedorEstados.className = 'hero-chips';
+  const orden = estado.metadataProyectos?.orden_estado || [];
+  [...estados].sort(([a], [b]) => {
+    const ia = orden.indexOf(a), ib = orden.indexOf(b);
+    return (ia < 0 ? orden.length : ia) - (ib < 0 ? orden.length : ib) || a.localeCompare(b, 'es');
+  }).forEach(([est, n]) => contenedorEstados.appendChild(chip(`${est}: ${n}`, 'chip-estado')));
+  if (!estados.size) contenedorEstados.textContent = '—';
+
+  const contenedorSemaforo = document.getElementById('pm-semaforo');
+  contenedorSemaforo.replaceChildren();
+  contenedorSemaforo.className = 'hero-chips';
+  const clases = { Rojo: 'chip-critico', Amarillo: 'chip-advertencia', Verde: 'chip-bueno' };
+  semaforo.forEach((n, status) => {
+    const etiqueta = status === SIN_DATO ? 'Sin dato' : status;
+    contenedorSemaforo.appendChild(chip(`${etiqueta}: ${n}`, clases[status]));
+  });
+
+  const completos = portafolio.filter(p =>
+    [valorBooking(p), acumuladoHoy(p), backlogHoy(p)].every(Number.isFinite)).length;
+  const faltantes = portafolio.length - completos;
+  document.getElementById('pm-cobertura').textContent = !portafolio.length
+    ? 'No hay proyectos para este PM con los filtros activos.'
+    : `${completos} de ${portafolio.length} proyectos con cifras completas de BackLog NOLA.`
+      + (faltantes ? ` ${faltantes} sin backlog o con cifras incompletas; los totales incluyen solo los importes disponibles.` : '');
+}
+
 function actualizarGraficas() {
   const proyectos = estado.proyectosFiltrados;
 
@@ -1917,6 +2118,8 @@ function actualizarGraficas() {
   } else if (cardVendedor) {
     cardVendedor.style.display = 'none';
   }
+
+  renderizarResumenPM(proyectos);
 
   // 1. Proyectos por estado
   const ordenEstado = (estado.metadataProyectos || {}).orden_estado || [];
@@ -1999,9 +2202,33 @@ function actualizarGraficas() {
     return b.booking - a.booking;
   });
 
-  crearGraficaBarrasAgrupadasHorizontal('grafica-ejecutado-cliente', datosCliente, { formato: 'dinero' });
+  crearGraficaBarrasAgrupadasHorizontal('grafica-ejecutado-cliente', datosCliente, {
+    formato: 'dinero', unidad: 'Ejecutado vs. planeado por cliente',
+  });
 
-  // 6. Booking vs. ejecución por vendedor (vertical grouped bars, clickable)
+  // Cada proyecto conserva sus cifras, aunque comparta cliente con otros.
+  const datosProyecto = proyectos.map(p => {
+    const id = identificador(p);
+    const nombre = p.nombre_del_proyecto || 'Proyecto sin nombre';
+    return {
+      etiqueta: id.tipo ? `${id.valor} · ${nombre}` : nombre,
+      lineasEtiqueta: id.tipo ? [id.valor, nombre] : [nombre],
+      zona: p.zona || SIN_DATO,
+      booking: valorBooking(p),
+      series: [
+        { nombre: 'Valor Booking', valor: valorBooking(p), color: COLORES_SERIES_COMPARACION.booking },
+        { nombre: 'Revenue acumulado a hoy', valor: acumuladoHoy(p), color: COLORES_SERIES_COMPARACION.acumulado },
+        { nombre: 'Ejecución proyectada', valor: proyectadaAnio(p), color: COLORES_SERIES_COMPARACION.proyectada },
+        { nombre: 'Backlog', valor: backlogHoy(p), color: COLORES_SERIES_COMPARACION.backlog },
+      ],
+    };
+  }).sort((a, b) => (b.booking || 0) - (a.booking || 0)).slice(0, 10);
+  datosProyecto.sort((a, b) => a.zona.localeCompare(b.zona, 'es') || (b.booking || 0) - (a.booking || 0));
+  crearGraficaBarrasAgrupadasHorizontal('grafica-ejecutado-proyecto', datosProyecto, {
+    formato: 'dinero', unidad: 'Ejecutado vs. planeado por proyecto',
+  });
+
+  // 6. Booking vs. ejecución por vendedor (barras horizontales, con filtro al hacer clic)
   const porVendedor = new Map();
   proyectos.forEach(p => {
     const vend = valorDimension(p, 'vendedor');
@@ -2095,12 +2322,19 @@ function renderizarTablaNoIniciados() {
   if (!tbody) return;
 
   tbody.innerHTML = '';
+  if (tfoot) tfoot.replaceChildren();
+  const estadoElegido = document.getElementById('filtro-no-iniciados-estado')?.value || '';
   const noIniciados = estado.proyectosFiltrados.filter(p =>
-    p.estado === 'On Hold' || p.estado === 'Planned');
+    (p.estado === 'On Hold' || p.estado === 'Planned') && (!estadoElegido || p.estado === estadoElegido));
 
   if (noIniciados.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:var(--spacing-lg);">No hay proyectos On Hold o Planned en los filtros aplicados</td></tr>';
-    if (tfoot) tfoot.innerHTML = '';
+    const fila = document.createElement('tr');
+    const celda = document.createElement('td');
+    celda.colSpan = 7;
+    celda.className = 'tabla-no-iniciados-vacia';
+    celda.textContent = 'No hay proyectos para el estado y los filtros seleccionados';
+    fila.appendChild(celda);
+    tbody.appendChild(fila);
     return;
   }
 
@@ -2111,7 +2345,10 @@ function renderizarTablaNoIniciados() {
     return bb - ba;
   });
 
-  let totalBacklog = 0;
+  // El denominador es el total de esta tabla, después del selector y los filtros globales.
+  const importes = ordenados.map(backlogHoy).filter(Number.isFinite);
+  const totalBacklog = importes.length ? importes.reduce((a, b) => a + b, 0) : null;
+  const sinCifra = ordenados.length - importes.length;
   ordenados.forEach(p => {
     const tr = document.createElement('tr');
     tr.className = 'fila-clicable';
@@ -2122,12 +2359,15 @@ function renderizarTablaNoIniciados() {
     const cli = p.cliente || '—';
     const dias = p.dias_para_vencimiento;
     const meses = p.meses_transcurridos;
-    const bl = backlogHoy(p) || 0;
-    totalBacklog += bl;
+    const bl = backlogHoy(p);
+    const porcentaje = Number.isFinite(bl) && totalBacklog !== null && totalBacklog !== 0
+      ? bl / totalBacklog * 100 : null;
+    const etiquetaPorcentaje = porcentaje === null ? '—' : porcentaje.toFixed(1) + '%';
 
-    // Barra inline del backlog
-    const maxBl = Math.max(...ordenados.map(x => backlogHoy(x) || 0), 1);
-    const pctBarra = bl > 0 ? (bl / maxBl * 100) : 0;
+    const tdEstado = document.createElement('td');
+    tdEstado.appendChild(chip(p.estado, p.estado === 'On Hold' ? 'chip-advertencia' : 'chip-estado',
+      p.estado === 'Planned' ? 'Planned: proyecto no iniciado' : 'On Hold: proyecto en espera'));
+    tr.appendChild(tdEstado);
 
     [[nombre, 'celda-nombre'], [pm, ''], [cli, ''],
       [dias !== null && dias !== undefined ? formatearNumero(dias) : '—', 'celda-numero'],
@@ -2145,25 +2385,38 @@ function renderizarTablaNoIniciados() {
     tdBl.className = 'celda-backlog-barra';
 
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    wrapper.className = 'backlog-participacion';
 
     const divBarra = document.createElement('div');
     divBarra.className = 'inline-backlog-barra-container';
-    divBarra.style.cssText = 'flex:1;min-width:0;position:relative;height:20px;';
-
-    const barraFondo = document.createElement('div');
-    barraFondo.style.cssText = 'position:absolute;inset:0;background:var(--grid-color);border-radius:3px;';
+    const contexto = porcentaje === null
+      ? (bl === null ? 'Sin cifra de BackLog NOLA.' : 'El backlog total visible es cero; no se puede calcular la participación.')
+      : `${etiquetaPorcentaje} del backlog total visible (${formatearDineroExacto(bl)} / ${formatearDineroExacto(totalBacklog)}).`;
+    divBarra.title = contexto;
+    divBarra.setAttribute('aria-label', `Participación de ${nombre} en el backlog visible. ${contexto}`);
+    if (porcentaje !== null) {
+      divBarra.setAttribute('role', 'meter');
+      divBarra.setAttribute('aria-valuemin', '0');
+      divBarra.setAttribute('aria-valuemax', '100');
+      divBarra.setAttribute('aria-valuenow', String(Math.max(0, Math.min(100, porcentaje))));
+      divBarra.setAttribute('aria-valuetext', contexto);
+    } else {
+      divBarra.setAttribute('role', 'img');
+    }
 
     const relleno = document.createElement('div');
-    relleno.style.cssText = `position:absolute;left:0;top:0;bottom:0;width:${pctBarra}%;background:var(--series-1);border-radius:3px;`;
+    relleno.className = 'inline-backlog-relleno';
+    relleno.style.width = `${porcentaje === null ? 0 : Math.max(0, Math.min(100, porcentaje))}%`;
+    const lblPorcentaje = document.createElement('span');
+    lblPorcentaje.className = 'inline-backlog-porcentaje';
+    lblPorcentaje.textContent = etiquetaPorcentaje;
 
-    divBarra.appendChild(barraFondo);
-    divBarra.appendChild(relleno);
+    divBarra.append(relleno, lblPorcentaje);
 
     const lblValor = document.createElement('span');
     lblValor.className = 'inline-backlog-valor';
-    lblValor.style.cssText = 'font-size:0.8125rem;font-weight:600;white-space:nowrap;flex-shrink:0;';
     lblValor.textContent = formatearDinero(bl);
+    lblValor.title = bl === null ? 'Sin cifra de BackLog NOLA' : formatearDineroExacto(bl);
 
     wrapper.appendChild(divBarra);
     wrapper.appendChild(lblValor);
@@ -2178,14 +2431,15 @@ function renderizarTablaNoIniciados() {
     tfoot.innerHTML = '';
     const trTotal = document.createElement('tr');
     const tdEtq = document.createElement('td');
-    tdEtq.colSpan = 5;
+    trTotal.className = 'no-iniciados-total';
+    tdEtq.colSpan = 6;
     tdEtq.textContent = `Total (${ordenados.length} proyecto${ordenados.length === 1 ? '' : 's'})`;
-    tdEtq.style.fontWeight = '600';
+    if (sinCifra) tdEtq.textContent += ` · ${sinCifra} sin cifra de backlog`;
     trTotal.appendChild(tdEtq);
     const tdTotal = document.createElement('td');
     tdTotal.className = 'celda-numero';
-    tdTotal.style.fontWeight = '600';
     tdTotal.textContent = formatearDinero(totalBacklog);
+    tdTotal.title = formatearDineroExacto(totalBacklog);
     trTotal.appendChild(tdTotal);
     tfoot.appendChild(trTotal);
   }
@@ -2212,12 +2466,16 @@ function renderizarDetalle() {
   // Buscar datos de backlog asociados
   const datosBacklog = backlogDe(proyecto);
 
-  // Secciones de detalle
+  // La información secundaria ocupa una sola franja plegable, por debajo del resumen.
+  const informacion = document.createElement('details');
+  informacion.className = 'detalle-informacion';
+  const tituloInformacion = document.createElement('summary');
+  tituloInformacion.textContent = 'Información del proyecto';
+  informacion.appendChild(tituloInformacion);
+  const filaSecciones = document.createElement('div');
+  filaSecciones.className = 'detalle-secciones-inline';
+
   const secciones = [
-    {
-      titulo: 'Identificación',
-      campos: ['project_id', 'num_pa', 'num_opp'],
-    },
     {
       titulo: 'Datos Comerciales',
       campos: ['pm_lider', 'vendedor', 'tsm', 'zona', 'pais', 'billing_type', 'billing_arrangement', 'estado_contrato'],
@@ -2232,70 +2490,99 @@ function renderizarDetalle() {
     },
     {
       titulo: 'Estatus',
-      campos: ['estado', 'estatus', 'actions'],
+      campos: ['estado', 'project_status', 'estatus', 'actions'],
     },
   ];
 
-  secciones.forEach(seccion => {
-    const div = document.createElement('details');
-    div.className = 'seccion-detalle';
-    div.open = seccion.titulo === 'Datos Comerciales' || seccion.titulo === 'Estatus';
+  const crearCampo = campo => {
+    const col = estado.metadataProyectos.columnas.find(c => c.key === campo)
+      || (campo === 'project_status' ? { label: 'Semáforo' } : null);
+    if (!col) return null;
 
-    const h4 = document.createElement('summary');
+    const divCampo = document.createElement('div');
+    divCampo.className = 'campo-detalle';
+
+    const etiqueta = document.createElement('div');
+    etiqueta.className = 'etiqueta-campo';
+    etiqueta.textContent = campo === 'project_status' ? 'Semáforo' : col.label;
+
+    const valor = document.createElement('div');
+    valor.className = 'valor-campo';
+
+    const contenido = proyecto[campo];
+
+    // Formateos especiales
+    if (campo === 'project_status') {
+      const status = valorDimension(proyecto, campo);
+      const clases = { Rojo: 'chip-critico', Amarillo: 'chip-advertencia', Verde: 'chip-bueno' };
+      valor.appendChild(chip(status === SIN_DATO ? 'Sin dato' : status, clases[status]));
+    } else if (CAMPOS_DINERO.has(campo)) {
+      valor.textContent = formatearDinero(contenido);
+    } else if (CAMPOS_PORCENTAJE.has(campo)) {
+      valor.textContent = formatearPorcentaje(contenido);
+    } else if (campo === 'finalizacion' || campo === 'fecha_fin') {
+      valor.textContent = formatearFecha(contenido);
+    } else if (campo === 'meses_transcurridos') {
+      valor.textContent = formatearNumero(contenido);
+    } else {
+      valor.textContent = obtenerEtiquetaValor(contenido);
+    }
+
+    // Verificar si es recalculado
+    if (col.recalculado && proyecto._recalculado && proyecto._recalculado[campo]) {
+      const badge = document.createElement('span');
+      badge.className = 'badge-recalculado';
+      badge.title = 'El Excel traía un error aquí. Este valor se recalculó a partir de Fecha fin.';
+      badge.textContent = 'recalculado';
+      valor.appendChild(badge);
+    }
+
+    // Verificar si hubo error
+    if (proyecto._errores && proyecto._errores[campo]) {
+      const badge = document.createElement('span');
+      badge.className = 'badge-error';
+      badge.title = 'Error original: ' + proyecto._errores[campo];
+      badge.textContent = 'error';
+      valor.appendChild(badge);
+    }
+
+    if (normalizarValor(contenido) === null) {
+      valor.classList.add('nulo');
+    }
+
+    divCampo.appendChild(etiqueta);
+    divCampo.appendChild(valor);
+    return divCampo;
+  };
+
+  secciones.forEach(seccion => {
+    const div = document.createElement('section');
+    div.className = 'seccion-detalle';
+    const h4 = document.createElement('h4');
     h4.textContent = seccion.titulo;
     div.appendChild(h4);
-
     seccion.campos.forEach(campo => {
-      const col = estado.metadataProyectos.columnas.find(c => c.key === campo);
-      if (!col) return;
-
-      const divCampo = document.createElement('div');
-      divCampo.className = 'campo-detalle';
-
-      const etiqueta = document.createElement('div');
-      etiqueta.className = 'etiqueta-campo';
-      etiqueta.textContent = col.label;
-
-      const valor = document.createElement('div');
-      valor.className = 'valor-campo';
-
-      let contenido = proyecto[campo];
-      let html = '';
-
-      // Formateos especiales
-      if (CAMPOS_DINERO.has(campo)) {
-        html = formatearDinero(contenido);
-      } else if (CAMPOS_PORCENTAJE.has(campo)) {
-        html = formatearPorcentaje(contenido);
-      } else if (campo === 'finalizacion' || campo === 'fecha_fin') {
-        html = formatearFecha(contenido);
-      } else {
-        html = obtenerEtiquetaValor(contenido);
-      }
-
-      // Verificar si es recalculado
-      if (col.recalculado && proyecto._recalculado && proyecto._recalculado[campo]) {
-        html += ' <span class="badge-recalculado" title="El Excel traía un error aquí. ' +
-          'Este valor se recalculó a partir de Fecha fin.">recalculado</span>';
-      }
-
-      // Verificar si hubo error
-      if (proyecto._errores && proyecto._errores[campo]) {
-        html += ' <span class="badge-error" title="Error original: ' + proyecto._errores[campo] + '">error</span>';
-      }
-
-      valor.innerHTML = html;
-      if (!normalizarValor(contenido)) {
-        valor.classList.add('nulo');
-      }
-
-      divCampo.appendChild(etiqueta);
-      divCampo.appendChild(valor);
-      div.appendChild(divCampo);
+      const divCampo = crearCampo(campo);
+      if (divCampo) div.appendChild(divCampo);
     });
-
-    contenedor.appendChild(div);
+    filaSecciones.appendChild(div);
   });
+  informacion.appendChild(filaSecciones);
+
+  const identificacion = document.createElement('details');
+  identificacion.className = 'detalle-identificacion';
+  const tituloIdentificacion = document.createElement('summary');
+  tituloIdentificacion.textContent = 'Identificación y referencias';
+  identificacion.appendChild(tituloIdentificacion);
+  const camposIdentificacion = document.createElement('div');
+  camposIdentificacion.className = 'detalle-identificacion-campos';
+  ['project_id', 'num_pa', 'num_opp'].forEach(campo => {
+    const divCampo = crearCampo(campo);
+    if (divCampo) camposIdentificacion.appendChild(divCampo);
+  });
+  identificacion.appendChild(camposIdentificacion);
+  informacion.appendChild(identificacion);
+  contenedor.appendChild(informacion);
 
   // Sección de Revenue (si existe backlog)
   if (datosBacklog) {
@@ -2318,7 +2605,25 @@ function renderizarDetalle() {
       };
     });
 
+    const tendencia = document.createElement('figure');
+    tendencia.className = 'revenue-tendencia';
+    const tituloTendencia = document.createElement('figcaption');
+    tituloTendencia.textContent = 'Tendencia mensual de Commit y Upside';
+    tendencia.appendChild(tituloTendencia);
+    const svgTendencia = svgEl('svg', { id: 'grafica-revenue-tendencia', class: 'grafica-svg' });
+    svgTendencia.dataset.tituloReporte = `${tituloTendencia.textContent} · ${periodoActual().etiqueta}`;
+    tendencia.appendChild(svgTendencia);
+    divRevenue.appendChild(tendencia);
+    const datosTendencia = Object.fromEntries(meses.map(mes => [
+      mes.charAt(0).toUpperCase() + mes.slice(1), datosGrafica[mes],
+    ]));
+    crearGraficaLinea(svgTendencia, datosTendencia, {
+      ejeX: 'categoria', unidad: 'Tendencia mensual de Commit y Upside',
+    });
+
     const svgRevenue = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgRevenue.id = 'grafica-revenue-barras';
+    svgRevenue.dataset.tituloReporte = `Revenue mensual · barras de Commit y Upside · ${periodoActual().etiqueta}`;
     svgRevenue.setAttribute('class', 'grafica-revenue-proyecto');
     svgRevenue.setAttribute('viewBox', '0 0 800 300');
     svgRevenue.style.width = '100%';
@@ -2542,7 +2847,7 @@ function crearGraficaLinea(svg, datos, opciones) {
   // Con una sola carga no hay linea que dibujar, pero el dato SI existe.
   // Decir "sin historico" se lee como "no hay datos" y manda a buscar un fallo
   // que no esta: se muestran los valores de esa carga y por que falta la linea.
-  if (puntos.length === 1 && series.length) {
+  if (puntos.length === 1 && series.length && op.ejeX !== 'categoria') {
     svg.style.height = '130px';
     svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Valores de la única carga disponible');
     svg.setAttribute('viewBox', '0 0 600 130');
@@ -2566,7 +2871,7 @@ function crearGraficaLinea(svg, datos, opciones) {
     return;
   }
 
-  if (puntos.length < 2 || !series.length) {
+  if (!puntos.length || !series.length) {
     svg.style.height = '120px';
     svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Sin histórico disponible');
     svg.setAttribute('viewBox', '0 0 600 120');
@@ -2594,17 +2899,32 @@ function crearGraficaLinea(svg, datos, opciones) {
   const areaAlto = alto - margen.top - margen.bottom;
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
   svg.style.height = `${alto}px`;
-  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Evolución de revenue');
-  svg.setAttribute('title', 'Evolución de revenue');
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', op.unidad || 'Evolución de revenue');
+  svg.setAttribute('title', op.unidad || 'Evolución de revenue');
 
   const g = svgEl('g', { transform: `translate(${margen.left},${margen.top})` });
 
   const todos = puntos.flatMap(p => series.map(s => datos[p][s] || 0));
   const maxV = Math.max(...todos, 0) || 1;
   const minV = Math.min(...todos, 0);
-  const x = i => (areaAncho / Math.max(1, puntos.length - 1)) * i;
+  const x = i => puntos.length === 1 ? areaAncho / 2 : (areaAncho / (puntos.length - 1)) * i;
   const y = v => areaAlto - ((v - minV) / (maxV - minV || 1)) * areaAlto;
   const colorSerie = i => `var(--series-${Math.min(i + 1, 8)})`;
+  const desdeEstimado = Number.isInteger(op.desdeEstimado) && op.desdeEstimado >= 0 && op.desdeEstimado < puntos.length
+    ? op.desdeEstimado : null;
+  const esEstimado = i => desdeEstimado !== null && i >= desdeEstimado;
+  if (desdeEstimado !== null) {
+    const inicio = desdeEstimado ? (x(desdeEstimado - 1) + x(desdeEstimado)) / 2 : 0;
+    g.appendChild(svgEl('rect', {
+      x: inicio, y: 0, width: areaAncho - inicio, height: areaAlto,
+      fill: 'var(--series-1)', opacity: 0.06,
+    }));
+    const aviso = svgEl('text', {
+      x: areaAncho, y: -8, 'font-size': 12, 'text-anchor': 'end', fill: 'var(--text-secondary)',
+    });
+    aviso.textContent = 'Proyección estimada';
+    g.appendChild(aviso);
+  }
 
   // Rejilla + eje Y
   const lineas = 4;
@@ -2634,7 +2954,7 @@ function crearGraficaLinea(svg, datos, opciones) {
     const fecha = new Date(p);
     const fechaValida = !Number.isNaN(fecha.getTime());
     const tieneHora = /(?:T|\s)\d{1,2}:\d{2}/.test(p);
-    lbl.textContent = fechaValida
+    lbl.textContent = op.ejeX === 'categoria' ? p : fechaValida
       ? new Intl.DateTimeFormat('es-CO', tieneHora
         ? { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }
         : { day: '2-digit', month: 'short' }).format(fecha).replace(',', '')
@@ -2646,13 +2966,23 @@ function crearGraficaLinea(svg, datos, opciones) {
   // Líneas
   const trazos = {};
   series.forEach((s, si) => {
-    const d = puntos.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(datos[p][s] || 0)}`).join(' ');
-    const trazo = svgEl('path', {
-      d, fill: 'none', stroke: colorSerie(si), 'stroke-width': 2,
-      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+    const segmentos = desdeEstimado === null
+      ? [{ inicio: 0, fin: puntos.length, estimado: false }]
+      : [{ inicio: 0, fin: desdeEstimado, estimado: false },
+        { inicio: Math.max(0, desdeEstimado - 1), fin: puntos.length, estimado: true }];
+    trazos[s] = [];
+    segmentos.forEach(segmento => {
+      if (segmento.fin <= segmento.inicio) return;
+      const d = puntos.slice(segmento.inicio, segmento.fin)
+        .map((p, i) => `${i ? 'L' : 'M'}${x(i + segmento.inicio)},${y(datos[p][s] || 0)}`).join(' ');
+      const trazo = svgEl('path', {
+        d, fill: 'none', stroke: colorSerie(si), 'stroke-width': 2,
+        'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+      });
+      if (segmento.estimado) { trazo.setAttribute('stroke-dasharray', '6 4'); trazo.dataset.estimado = 'true'; }
+      trazos[s].push(trazo);
+      g.appendChild(trazo);
     });
-    trazos[s] = [trazo];
-    g.appendChild(trazo);
     // Con `soloCambios`, el punto se dibuja unicamente donde el valor se
     // movio. Es lo que hace legible "aqui cambio": entre un cambio y otro la
     // linea va limpia, y cada marca es una fecha en la que paso algo.
@@ -2662,7 +2992,8 @@ function crearGraficaLinea(svg, datos, opciones) {
       if (op.soloCambios && !cambio) return;
       const punto = svgEl('circle', {
         cx: x(i), cy: y(v), r: op.soloCambios ? 5 : 4,
-        fill: colorSerie(si), stroke: 'var(--surface-1)', 'stroke-width': 2,
+        fill: esEstimado(i) ? 'var(--surface-1)' : colorSerie(si),
+        stroke: esEstimado(i) ? colorSerie(si) : 'var(--surface-1)', 'stroke-width': 2,
       });
       trazos[s].push(punto);
       g.appendChild(punto);
@@ -2728,7 +3059,7 @@ function crearGraficaLinea(svg, datos, opciones) {
       marcas[si].setAttribute('cy', y(datos[puntos[i]][s] || 0));
       marcas[si].setAttribute('opacity', 1);
     });
-    mostrarTooltip(ev, puntos[i], series.map((s, si) => ({
+    mostrarTooltip(ev, puntos[i] + (esEstimado(i) ? ' · Estimado' : ''), series.map((s, si) => ({
       color: colorSerie(si),
       etiqueta: s,
       valor: '$' + (datos[puntos[i]][s] || 0).toLocaleString('en-US', { maximumFractionDigits: 0 }),
@@ -2919,21 +3250,33 @@ function renderizarEncabezadoProyecto(contenedor, proyecto) {
 
 function renderizarHermanosDeCliente(contenedor, proyecto) {
   if (!proyecto.cliente) return;
-  const hermanos = estado.proyectos.filter(
+  const todosHermanos = estado.proyectos.filter(
     p => p.cliente === proyecto.cliente && p !== proyecto);
-  if (!hermanos.length) return;
+  // Mantener el bloque si todos los hermanos están ocultos para poder mostrarlos.
+  if (!todosHermanos.length) return;
+  const hermanos = todosHermanos.filter(pasaFiltroCompletados);
 
   const div = document.createElement('div');
-  div.className = 'detalle-trazabilidad';
+  div.className = 'detalle-trazabilidad otros-proyectos-cliente';
   const h4 = document.createElement('h4');
   h4.textContent = `Otros proyectos de ${proyecto.cliente} (${hermanos.length})`;
   div.appendChild(h4);
 
-  const totalCliente = [proyecto, ...hermanos]
+  const control = document.createElement('label');
+  control.className = 'check-inline';
+  const chk = document.createElement('input');
+  chk.type = 'checkbox';
+  chk.id = 'chk-completados-detalle';
+  chk.dataset.mostrarCompletados = '';
+  chk.checked = estado.incluirCompletados;
+  control.append(chk, document.createTextNode('Mostrar completados'));
+  div.appendChild(control);
+
+  const totalCliente = [proyecto, ...todosHermanos].filter(pasaFiltroCompletados)
     .reduce((a, p) => a + (valorBooking(p) || 0), 0);
   const nota = document.createElement('p');
   nota.className = 'nota-tabla';
-  nota.textContent = `Valor Booking de la cuenta completa: ${formatearDinero(totalCliente)}`;
+  nota.textContent = `Valor Booking de la cuenta con los estados visibles: ${formatearDinero(totalCliente)}`;
   div.appendChild(nota);
 
   const t = document.createElement('table');
@@ -2945,6 +3288,14 @@ function renderizarHermanosDeCliente(contenedor, proyecto) {
   th.appendChild(trh); t.appendChild(th);
 
   const tb = document.createElement('tbody');
+  if (!hermanos.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    td.textContent = 'No hay otros proyectos con los estados visibles. Activa Mostrar completados para incluirlos.';
+    tr.appendChild(td);
+    tb.appendChild(tr);
+  }
   hermanos
     .sort((a, b) => (valorBooking(b) || 0) - (valorBooking(a) || 0))
     .forEach(h => {
@@ -3006,13 +3357,12 @@ function renderizarTrazabilidadProyecto(contenedor, proyecto) {
     divBVR.appendChild(h4bvr);
     const notaBVR = document.createElement('p');
     notaBVR.className = 'nota-grafica';
-    notaBVR.textContent = 'El Commit es acumulado (enero, enero+febrero, …) y el Backlog es ' +
-      'lo que queda de Valor Booking en ese punto del año: Valor Booking − Acum 2025 − Commit acumulado.';
     divBVR.appendChild(notaBVR);
     const svgBVR = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgBVR.id = 'grafica-backlog-proyecto';
     svgBVR.setAttribute('class', 'grafica-svg');
     divBVR.appendChild(svgBVR);
-    crearGraficaLinea(svgBVR, serieBacklogRevenuePorMes([proyecto]));
+    pintarProyeccionBacklogRevenue(svgBVR, [proyecto], notaBVR);
     div.appendChild(divBVR);
   }
 
@@ -3217,12 +3567,50 @@ function renderizarTrazabilidadProyecto(contenedor, proyecto) {
   contenedor.appendChild(div);
 }
 
+/** Meses de cada corte sin los proyectos actualmente Completed; conserva el histórico original. */
+function mesesVisiblesPorSnapshot() {
+  const hist = estado.historia;
+  const porSnapshot = new Map(hist.snapshots.map(s => [s.id,
+    Object.fromEntries(Object.entries(s.por_mes).map(([mes, valores]) => [mes, { ...valores }]))]));
+  clavesCompletadosOcultos().forEach(clave => {
+    (hist.series_por_proyecto[clave] || []).forEach(entrada => {
+      const meses = porSnapshot.get(entrada.snapshot_id);
+      if (!meses) return;
+      MESES_ES.forEach((mes, i) => {
+        if (!meses[mes]) return;
+        meses[mes].fijo -= entrada.meses?.[i]?.[0] || 0;
+        meses[mes].upside -= entrada.meses?.[i]?.[1] || 0;
+      });
+    });
+  });
+  return porSnapshot;
+}
+
+/** Refresca opciones dependientes del conjunto visible, conservando la selección del usuario. */
+function actualizarOpcionesFiltro(selector, valores) {
+  const seleccion = selector.value;
+  const unicos = new Set(valores);
+  if (seleccion) unicos.add(seleccion);
+  const inicial = selector.options[0].cloneNode(true);
+  inicial.selected = false;
+  selector.replaceChildren(inicial);
+  [...unicos].sort((a, b) => a.localeCompare(b, 'es')).forEach(valor => {
+    const opt = document.createElement('option');
+    opt.value = valor;
+    opt.textContent = valor;
+    selector.appendChild(opt);
+  });
+  selector.value = seleccion;
+}
+
 function renderizarTrazabilidad() {
   if (!estado.historia) {
     const panel = document.getElementById('pestana-trazabilidad');
     const notificacion = panel.querySelector('.panel-trazabilidad') || panel;
+    const control = panel.querySelector('[data-mostrar-completados]')?.closest('label');
     notificacion.innerHTML = '<div style="padding: var(--spacing-lg); color: var(--text-secondary);">' +
       'Historial de revenue no disponible (aún no generado).</div>';
+    if (control) notificacion.prepend(control);
     return;
   }
 
@@ -3233,6 +3621,7 @@ function renderizarTrazabilidad() {
   }
 
   const snaps = estado.historia.snapshots;
+  const mesesPorSnapshot = mesesVisiblesPorSnapshot();
   const meses = mesesActivos();
   const periodo = periodoActual();
 
@@ -3241,7 +3630,7 @@ function renderizarTrazabilidad() {
   snaps.forEach(snap => {
     let fijo = 0, upside = 0;
     meses.forEach(i => {
-      const m = snap.por_mes[MESES_ES[i]];
+      const m = mesesPorSnapshot.get(snap.id)[MESES_ES[i]];
       if (!m) return;
       fijo += m.fijo || 0;
       upside += m.upside || 0;
@@ -3262,7 +3651,7 @@ function renderizarTrazabilidad() {
   snaps.forEach(snap => {
     const fila = {};
     desglose.forEach(([nombre, idxs]) => {
-      fila[nombre] = idxs.reduce((acc, i) => acc + ((snap.por_mes[MESES_ES[i]] || {}).fijo || 0), 0);
+      fila[nombre] = idxs.reduce((acc, i) => acc + ((mesesPorSnapshot.get(snap.id)[MESES_ES[i]] || {}).fijo || 0), 0);
     });
     serieDesglose[snap.etiqueta] = fila;
   });
@@ -3291,6 +3680,8 @@ function renderizarTrazabilidad() {
     sel.addEventListener('change', renderizarTrazabilidad);
     selectorBVR.append(lbl, sel);
   }
+  actualizarOpcionesFiltro(document.getElementById('select-pm-backlog-revenue'),
+    estado.proyectos.filter(pasaFiltroCompletados).map(p => p.pm_lider).filter(Boolean));
   renderizarGraficaBacklogVsRevenue();
 
   const tituloDesglose = document.getElementById('titulo-desglose');
@@ -3364,7 +3755,7 @@ function renderizarTrazabilidad() {
 }
 
 /**
- * Backlog vs Revenue, mes a mes del año actual (no por snapshot/movimiento:
+ * Backlog vs Revenue, calendario de ejecución (no por snapshot/movimiento:
  * eso ya lo muestran las otras gráficas de esta pestaña). Global por
  * defecto; si se elige un PM, solo entre sus proyectos. Ver
  * serieBacklogRevenuePorMes() para la cuenta exacta.
@@ -3375,10 +3766,8 @@ function renderizarGraficaBacklogVsRevenue() {
   const sel = document.getElementById('select-pm-backlog-revenue');
   const pmElegido = sel ? sel.value : '';
 
-  const proyectos = pmElegido
-    ? estado.proyectos.filter(p => p.pm_lider === pmElegido)
-    : estado.proyectos;
-  crearGraficaLinea(svg, serieBacklogRevenuePorMes(proyectos));
+  const proyectos = estado.proyectos.filter(p => pasaFiltroCompletados(p) && (!pmElegido || p.pm_lider === pmElegido));
+  pintarProyeccionBacklogRevenue(svg, proyectos, document.getElementById('nota-backlog-vs-revenue'));
 
   const titulo = document.getElementById('titulo-backlog-vs-revenue');
   if (titulo) {
@@ -3421,7 +3810,8 @@ function rangoPredefinido(clave, snaps) {
     return [Math.max(0, desde - 1), ultimo];
   }
   // 'ultimo': el par de snapshots más reciente en el que de verdad pasó algo.
-  const conEventos = new Set(estado.historia.eventos.map(e => e.snapshot_id));
+  const ocultos = clavesCompletadosOcultos();
+  const conEventos = new Set(estado.historia.eventos.filter(e => !ocultos.has(String(e.num_pa))).map(e => e.snapshot_id));
   for (let i = ultimo; i > 0; i--) {
     if (conEventos.has(snaps[i].id)) return [i - 1, i];
   }
@@ -3453,6 +3843,7 @@ function calcularCambios() {
   const idA = snaps[iA].id, idB = snaps[iB].id;
 
   const porProyecto = new Map(estado.proyectos.map(p => [claveProyecto(p), p]));
+  const ocultos = clavesCompletadosOcultos();
   const mesesOk = new Set(mesesActivos().map(i => MESES_ES[i]));
 
   // Eventos del rango, agrupados por proyecto. Commit y Upside se tratan
@@ -3460,6 +3851,7 @@ function calcularCambios() {
   // resta entre snapshots), no de sumar montos de eventos por "dirección".
   const porPA = new Map();
   hist.eventos.forEach(e => {
+    if (ocultos.has(String(e.num_pa))) return;
     if (e.campo && !mesesOk.has(e.campo)) return;
     const i = snaps.findIndex(s => s.id === e.snapshot_id);
     if (i <= iA || i > iB) return;
@@ -3473,6 +3865,7 @@ function calcularCambios() {
 
   const filas = [];
   Object.entries(hist.series_por_proyecto).forEach(([pa, serie]) => {
+    if (ocultos.has(pa)) return;
     const a = serie.find(s => s.snapshot_id === idA);
     const b = serie.find(s => s.snapshot_id === idB);
     if (!b) return;
@@ -3809,33 +4202,14 @@ function renderizarResumenProyectos() {
   renderizarKpisRango(filas, snaps, iA, iB);
   renderizarGraficaCambios(filas, snaps, iA, iB);
 
-  // Populate PM filter if empty
+  // Los Completed pueden revelar PMs y movimientos nuevos al activar el control.
   const filtroPM = document.getElementById('filtro-resumen-pm');
-  if (filtroPM && filtroPM.options.length === 1) {
-    const pms = [...new Set(filas.map(f => f.pm).filter(Boolean))].sort();
-    pms.forEach(pm => {
-      const opt = document.createElement('option');
-      opt.value = pm;
-      opt.textContent = pm;
-      filtroPM.appendChild(opt);
-    });
-  }
+  actualizarOpcionesFiltro(filtroPM, filas.map(f => f.pm).filter(Boolean));
 
-  // Populate "Qué pasó" filter if empty
   const filtroQuePaso = document.getElementById('filtro-resumen-que-paso');
-  if (filtroQuePaso && filtroQuePaso.options.length === 1) {
-    const tipos = new Set();
-    filas.forEach(f => {
-      const dir = direccionDe(f);
-      tipos.add(dir.texto);
-    });
-    [...tipos].sort().forEach(tipo => {
-      const opt = document.createElement('option');
-      opt.value = tipo;
-      opt.textContent = tipo;
-      filtroQuePaso.appendChild(opt);
-    });
-
+  actualizarOpcionesFiltro(filtroQuePaso, filas.map(f => direccionDe(f).texto));
+  if (!filtroQuePaso.dataset.wireado) {
+    filtroQuePaso.dataset.wireado = '1';
     // Wire up filter events
     const filtroTexto = document.getElementById('filtro-resumen-texto');
     filtroTexto.addEventListener('input', renderizarResumenProyectos);
@@ -3977,20 +4351,19 @@ function actualizarTablaEventos() {
   const busca = (document.getElementById('buscar-evento-proyecto').value || '')
     .trim().toLowerCase();
   const limitar = document.getElementById('limitar-por-proyecto').checked;
+  const ocultos = clavesCompletadosOcultos();
 
   // Initialize PM filter
   const filtroPMEvento = document.getElementById('filtro-eventos-pm');
-  if (filtroPMEvento && filtroPMEvento.options.length === 1) {
+  if (filtroPMEvento) {
     const nombreDe = new Map(estado.proyectos.map(
       p => [claveProyecto(p), p.pm_lider || SIN_DATO]));
-    const pms = [...new Set(hist.eventos.map(e => nombreDe.get(String(e.num_pa))).filter(Boolean))].sort();
-    pms.forEach(pm => {
-      const opt = document.createElement('option');
-      opt.value = pm;
-      opt.textContent = pm;
-      filtroPMEvento.appendChild(opt);
-    });
-    filtroPMEvento.addEventListener('change', actualizarTablaEventos);
+    actualizarOpcionesFiltro(filtroPMEvento, hist.eventos.filter(e => !ocultos.has(String(e.num_pa)))
+      .map(e => nombreDe.get(String(e.num_pa))).filter(Boolean));
+    if (!filtroPMEvento.dataset.wireado) {
+      filtroPMEvento.dataset.wireado = '1';
+      filtroPMEvento.addEventListener('change', actualizarTablaEventos);
+    }
   }
   const pmEvento = filtroPMEvento ? filtroPMEvento.value : '';
 
@@ -4019,6 +4392,7 @@ function actualizarTablaEventos() {
   const desde = new Date(hist.snapshots[iA].timestamp);
   const hasta = new Date(hist.snapshots[iB].timestamp);
   const enRango = hist.eventos.filter(e => {
+    if (ocultos.has(String(e.num_pa))) return false;
     const t = new Date(e.timestamp);
     return t > desde && t <= hasta;
   });
@@ -4138,6 +4512,7 @@ const CLAVE_ESTADO_PM = { 'In Progress': 'inProgreso', 'On Hold': 'onHold', 'Pla
 function calcularPMs() {
   const porPM = new Map();
   estado.proyectos.forEach(p => {
+    if (!pasaFiltroCompletados(p)) return;
     if (!estado.incluirCancelados && p.estado === 'Canceled') return;
     const pm = p.pm_lider || SIN_DATO;
     if (!porPM.has(pm)) {
@@ -4834,6 +5209,8 @@ const observadorGraficas = typeof ResizeObserver === 'undefined' ? null : new Re
 
 function registrarGrafica(svg, pintar) {
   if (!svg) return;
+  delete svg.dataset.reporteCabecera;
+  delete svg.dataset.reporteCortes;
   svg.style.minHeight = '0';
   const nuevo = !graficasRegistradas.has(svg);
   graficasRegistradas.set(svg, {
@@ -4857,6 +5234,187 @@ function ajustarGraficasVisibles() {
 // vectoriales al guardar el resultado desde la impresión del navegador.
 let detallesAntesDeImprimir = [];
 let scrollAntesDelReporte = 0;
+
+const ANCHO_GRAFICA_REPORTE = 960;
+const ALTO_GRAFICA_REPORTE = 440;
+let identificadorRecorteReporte = 0;
+
+function crearPaginaReporte() {
+  const pagina = document.createElement('section');
+  pagina.className = 'reporte-pagina';
+  const marca = document.createElement('header');
+  marca.className = 'reporte-marca';
+  const identidad = document.createElement('div');
+  identidad.className = 'reporte-marca-identidad';
+  const logo = document.querySelector('.rh-masthead .rh-logo')?.cloneNode(true);
+  if (logo) {
+    logo.setAttribute('class', 'reporte-logo');
+    logo.removeAttribute('style');
+    identidad.appendChild(logo);
+  }
+  const nombre = document.createElement('strong');
+  nombre.textContent = 'Red Hat';
+  identidad.appendChild(nombre);
+  const producto = document.createElement('span');
+  producto.className = 'reporte-producto';
+  producto.textContent = 'LATAM Projects' + (estado.metadataProyectos?.demo ? ' - DEMO' : '');
+  marca.append(identidad, producto);
+  const contenido = document.createElement('main');
+  contenido.className = 'reporte-contenido';
+  const pie = document.createElement('footer');
+  pie.className = 'reporte-pie';
+  const periodo = document.createElement('span');
+  periodo.textContent = `Revenue: ${periodoActual().etiqueta} - USD`;
+  pie.append(periodo, document.createElement('span'));
+  pagina.append(marca, contenido, pie);
+  return { pagina, contenido };
+}
+
+function construirResumenReporte(contenido, vista, nombreVista, partes) {
+  const titulo = document.createElement('h1');
+  titulo.textContent = `${nombreVista} - Informe de revenue`;
+  const contexto = document.createElement('p');
+  contexto.className = 'reporte-contexto';
+  contexto.textContent = partes.join(' · ');
+  contenido.append(titulo, contexto);
+
+  const proyectos = vista.id === 'pestana-listado' ? estado.proyectosFiltrados
+    : vista.id === 'pestana-detalle' ? [estado.proyectoSeleccionado].filter(Boolean)
+    : vista.id === 'pestana-pms' ? calcularPMs().flatMap(f => f.proyectos)
+    : estado.proyectos.filter(pasaFiltroCompletados);
+  const sumar = fn => {
+    const valores = proyectos.map(fn).filter(Number.isFinite);
+    return valores.length || !proyectos.length ? valores.reduce((s, v) => s + v, 0) : null;
+  };
+  const booking = sumar(valorBooking), acumulado = sumar(acumuladoHoy);
+  const perfiles = [];
+  if (vista.id === 'pestana-listado') {
+    if (estado.filtros.pm_lider.length === 1) perfiles.push(`PM: ${estado.filtros.pm_lider[0]}`);
+    if (estado.filtros.vendedor.length === 1) perfiles.push(`Vendedor: ${estado.filtros.vendedor[0]}`);
+  } else if (vista.id === 'pestana-detalle') {
+    const p = estado.proyectoSeleccionado;
+    perfiles.push(`${identificador(p).valor} - ${p.nombre_del_proyecto || 'Proyecto'}`);
+    perfiles.push(`PM: ${p.pm_lider || 'Sin dato'} · Vendedor: ${p.vendedor || 'Sin dato'}`);
+  } else if (vista.id === 'pestana-pms') {
+    perfiles.push(`${new Set(proyectos.map(p => p.pm_lider || SIN_DATO)).size} PMs en el portafolio`);
+  }
+  if (perfiles.length) {
+    const perfil = document.createElement('h2');
+    perfil.className = 'reporte-perfiles';
+    perfil.textContent = perfiles.join(' · ');
+    contenido.appendChild(perfil);
+  }
+  const kpis = document.createElement('div');
+  kpis.className = 'reporte-kpis';
+  const metricas = [
+    ['Proyectos', formatearNumero(proyectos.length)],
+    ['Booking', formatearDineroExacto(booking)],
+    ['Revenue acumulado', formatearDineroExacto(acumulado)],
+    ['Backlog', formatearDineroExacto(sumar(backlogHoy))],
+    ['Ejecución', booking > 0 && acumulado !== null ? (acumulado / booking * 100).toFixed(1) + '%' : '—'],
+    [`Commit · ${periodoActual().etiqueta}`, formatearDineroExacto(sumar(revenuePeriodo))],
+  ];
+  metricas.forEach(([etiqueta, valor]) => {
+    const celda = document.createElement('div');
+    celda.className = 'reporte-kpi';
+    const cifra = document.createElement('strong');
+    cifra.textContent = valor;
+    const label = document.createElement('span');
+    label.textContent = etiqueta;
+    celda.append(cifra, label);
+    kpis.appendChild(celda);
+  });
+  contenido.appendChild(kpis);
+
+  const desglose = document.createElement('div');
+  desglose.className = 'reporte-desglose';
+  const bloque = (titulo, lineas) => {
+    const seccion = document.createElement('section');
+    const h2 = document.createElement('h2');
+    h2.textContent = titulo;
+    seccion.appendChild(h2);
+    lineas.forEach(texto => {
+      const p = document.createElement('p');
+      p.textContent = texto;
+      seccion.appendChild(p);
+    });
+    desglose.appendChild(seccion);
+  };
+  const estados = new Map();
+  const status = new Map();
+  proyectos.forEach(p => {
+    const e = valorDimension(p, 'estado'), s = valorDimension(p, 'project_status');
+    estados.set(e, (estados.get(e) || 0) + 1);
+    status.set(s, (status.get(s) || 0) + 1);
+  });
+  bloque('Proyectos por estado', [...estados].map(([e, n]) => `${e}: ${n}`));
+  const completos = proyectos.filter(p => [valorBooking(p), acumuladoHoy(p), backlogHoy(p)].every(Number.isFinite)).length;
+  bloque('Semáforo y cobertura del dato', [
+    ...[...status].map(([s, n]) => `${s === SIN_DATO ? 'Sin semáforo' : s}: ${n}`),
+    `${completos} de ${proyectos.length} proyectos con cifras completas de BackLog NOLA.`,
+  ]);
+  contenido.appendChild(desglose);
+  if (vista.id === 'pestana-trazabilidad' && estado.historia) {
+    const { filas } = calcularCambios();
+    const p = document.createElement('p');
+    p.className = 'reporte-nota';
+    p.textContent = `Variación neta del Commit en el rango seleccionado: ${formatearDineroExacto(filas.reduce((s, f) => s + f.dFijo, 0))}. Los indicadores superiores describen el portafolio actual.`;
+    contenido.appendChild(p);
+  }
+}
+
+/** Mantener el mismo tamaño de texto, repartiendo gráficas altas por filas completas. */
+function paginarGraficaReporte(svg) {
+  const base = svg.cloneNode(true);
+  base.removeAttribute('id');
+  base.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+  base.querySelectorAll('[tabindex]').forEach(el => el.removeAttribute('tabindex'));
+  base.querySelectorAll('[role="button"]').forEach(el => el.removeAttribute('role'));
+  const caja = svg.viewBox.baseVal;
+  const ancho = caja.width || ANCHO_GRAFICA_REPORTE;
+  const alto = ALTO_GRAFICA_REPORTE * ancho / ANCHO_GRAFICA_REPORTE;
+  const cabecera = Number(svg.dataset.reporteCabecera) || 0;
+  const espacioCuerpo = alto - cabecera;
+  const cortes = JSON.parse(svg.dataset.reporteCortes || '[]');
+  const segmentos = [];
+  if (caja.height <= alto) segmentos.push({ inicio: cabecera, fin: caja.height });
+  else if (cortes.length) {
+    cortes.forEach(corte => {
+      const anterior = segmentos[segmentos.length - 1];
+      if (anterior && corte.fin - anterior.inicio <= espacioCuerpo) anterior.fin = corte.fin;
+      else segmentos.push({ inicio: corte.inicio, fin: corte.fin });
+    });
+  } else {
+    for (let inicio = cabecera; inicio < caja.height; inicio += espacioCuerpo) {
+      segmentos.push({ inicio, fin: Math.min(inicio + espacioCuerpo, caja.height) });
+    }
+  }
+  return segmentos.map(segmento => {
+    const copia = svgEl('svg', {
+      viewBox: `0 0 ${ancho} ${alto}`, preserveAspectRatio: 'xMidYMid meet',
+      role: 'img', 'aria-label': svg.getAttribute('aria-label') || 'Gráfica de revenue',
+    });
+    const uid = `recorte-reporte-${++identificadorRecorteReporte}`;
+    const defs = svgEl('defs');
+    [['cabecera', 0, cabecera], ['cuerpo', cabecera, Math.min(espacioCuerpo, segmento.fin - segmento.inicio)]].forEach(([nombre, y, altura]) => {
+      const recorte = svgEl('clipPath', { id: `${uid}-${nombre}` });
+      recorte.appendChild(svgEl('rect', { x: 0, y, width: ancho, height: Math.max(0, altura) }));
+      defs.appendChild(recorte);
+    });
+    copia.appendChild(defs);
+    if (cabecera) {
+      const superior = svgEl('g', { 'clip-path': `url(#${uid}-cabecera)` });
+      [...base.childNodes].forEach(el => superior.appendChild(el.cloneNode(true)));
+      copia.appendChild(superior);
+    }
+    const cuerpo = svgEl('g', { 'clip-path': `url(#${uid}-cuerpo)` });
+    const interior = svgEl('g', { transform: `translate(0,${cabecera - segmento.inicio})` });
+    [...base.childNodes].forEach(el => interior.appendChild(el.cloneNode(true)));
+    cuerpo.appendChild(interior);
+    copia.appendChild(cuerpo);
+    return copia;
+  });
+}
 
 function prepararReporteGraficas() {
   const vista = document.querySelector('.pestana-contenido.activa');
@@ -4885,14 +5443,9 @@ function prepararReporteGraficas() {
   barra.append(volver, imprimir);
   reporte.appendChild(barra);
 
-  const cabecera = document.createElement('header');
-  cabecera.className = 'reporte-cabecera';
-  const titulo = document.createElement('h1');
   const nombreVista = document.querySelector('.pestana-btn.activa')?.textContent.trim() || 'Dashboard';
-  titulo.textContent = `${nombreVista} · Gráficas`;
-  const contexto = document.createElement('p');
-  contexto.className = 'reporte-contexto';
   const partes = [new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }), `Periodo de revenue: ${periodoActual().etiqueta}`];
+  partes.push(estado.incluirCompletados ? 'Incluye completados' : 'Excluye completados');
   if (vista.id === 'pestana-listado') {
     DIMENSIONES.forEach(dim => {
       if (estado.filtros[dim.campo].length) partes.push(`${dim.etiqueta}: ${estado.filtros[dim.campo].join(', ')}`);
@@ -4908,56 +5461,65 @@ function prepararReporteGraficas() {
   } else if (vista.id === 'pestana-detalle' && estado.proyectoSeleccionado) {
     partes.push(estado.proyectoSeleccionado.nombre_del_proyecto || identificador(estado.proyectoSeleccionado).valor);
   }
-  contexto.textContent = partes.join(' · ');
-  cabecera.append(titulo, contexto);
-  const ayuda = document.createElement('p');
-  ayuda.className = 'reporte-nota';
-  ayuda.textContent = 'En el diálogo de impresión elige Guardar como PDF. Cada gráfica conserva su proporción y se imprime en una página.';
-  cabecera.appendChild(ayuda);
-  reporte.appendChild(cabecera);
-
-  vista.querySelectorAll('svg').forEach(svg => {
-    if (!graficasRegistradas.has(svg) || !svg.children.length) return;
-    const figura = document.createElement('figure');
-    figura.className = 'reporte-grafica';
-    const contenedor = svg.closest('.grafica-contenedor, .detalle-revenue, .detalle-trazabilidad');
-    const caption = document.createElement('figcaption');
-    caption.textContent = contenedor?.querySelector('h3, h4')?.textContent || 'Revenue';
-    figura.appendChild(caption);
-    if (svg.id === 'grafica-backlog-vs-revenue') {
-      const selector = document.querySelector('#selector-backlog-vs-revenue select');
-      if (selector?.selectedOptions.length) {
-        const alcance = document.createElement('p');
-        alcance.className = 'reporte-nota';
-        alcance.textContent = `Mes a mes del año actual · ${selector.selectedOptions[0].textContent} · independiente del periodo superior y los snapshots.`;
-        figura.appendChild(alcance);
-      }
-    }
-    const copia = svg.cloneNode(true);
-    copia.removeAttribute('id');
-    copia.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-    copia.querySelectorAll('[tabindex]').forEach(el => el.removeAttribute('tabindex'));
-    copia.querySelectorAll('[role="button"]').forEach(el => el.removeAttribute('role'));
-    copia.style.width = '100%';
-    copia.style.height = 'auto';
-    copia.style.minHeight = '0';
-    figura.appendChild(copia);
-    const nota = contenedor?.querySelector('.nota-grafica');
-    if (nota && svg.id !== 'grafica-booking-vendedor') {
-      const texto = document.createElement('p');
-      texto.className = 'reporte-nota';
-      texto.textContent = nota.textContent;
-      figura.appendChild(texto);
-    }
-    reporte.appendChild(figura);
-  });
-  if (!reporte.querySelector('figure')) {
+  const paginas = [];
+  const portada = crearPaginaReporte();
+  construirResumenReporte(portada.contenido, vista, nombreVista, partes);
+  paginas.push(portada.pagina);
+  const estilosAnteriores = [];
+  try {
+    vista.querySelectorAll('svg').forEach(svg => {
+      if (!graficasRegistradas.has(svg) || !svg.children.length) return;
+      estilosAnteriores.push({ svg, width: svg.style.width, maxWidth: svg.style.maxWidth });
+      svg.style.width = `${ANCHO_GRAFICA_REPORTE}px`;
+      svg.style.maxWidth = 'none';
+      graficasRegistradas.get(svg).pintar();
+      const contenedor = svg.closest('.grafica-contenedor, .detalle-revenue, .detalle-trazabilidad');
+      const titulo = svg.dataset.tituloReporte || contenedor?.querySelector('h3, h4')?.textContent || 'Revenue';
+      const copias = paginarGraficaReporte(svg);
+      copias.forEach((copia, i) => {
+        const pagina = crearPaginaReporte();
+        const figura = document.createElement('figure');
+        figura.className = 'reporte-grafica';
+        const caption = document.createElement('figcaption');
+        caption.textContent = titulo + (copias.length > 1 ? ` - Parte ${i + 1} de ${copias.length}` : '');
+        figura.append(caption, copia);
+        if (svg.id === 'grafica-backlog-vs-revenue') {
+          const selector = document.querySelector('#selector-backlog-vs-revenue select');
+          if (selector?.selectedOptions.length) {
+            const alcance = document.createElement('p');
+            alcance.className = 'reporte-nota';
+            alcance.textContent = `Calendario de ejecución - ${selector.selectedOptions[0].textContent}.`;
+            figura.appendChild(alcance);
+          }
+        }
+        const nota = contenedor?.querySelector('.nota-grafica');
+        if (nota && svg.id !== 'grafica-booking-vendedor') {
+          const texto = document.createElement('p');
+          texto.className = 'reporte-nota';
+          texto.textContent = nota.textContent;
+          figura.appendChild(texto);
+        }
+        pagina.contenido.appendChild(figura);
+        paginas.push(pagina.pagina);
+      });
+    });
+  } finally {
+    estilosAnteriores.forEach(({ svg, width, maxWidth }) => {
+      svg.style.width = width;
+      svg.style.maxWidth = maxWidth;
+    });
+    document.body.classList.remove('preparando-reporte');
+  }
+  if (paginas.length === 1) {
     const vacio = document.createElement('p');
     vacio.textContent = 'No hay gráficas disponibles en esta vista.';
-    reporte.appendChild(vacio);
+    portada.contenido.appendChild(vacio);
   }
+  paginas.forEach((pagina, i) => {
+    pagina.querySelector('.reporte-pie span:last-child').textContent = `Página ${i + 1} de ${paginas.length}`;
+    reporte.appendChild(pagina);
+  });
   document.body.appendChild(reporte);
-  document.body.classList.remove('preparando-reporte');
 }
 
 function cerrarReporteGraficas() {
@@ -4965,6 +5527,7 @@ function cerrarReporteGraficas() {
   detallesAntesDeImprimir.forEach(detalle => { detalle.open = false; });
   detallesAntesDeImprimir = [];
   document.getElementById('reporte-graficas')?.remove();
+  ajustarGraficasVisibles();
   window.scrollTo(0, scrollAntesDelReporte);
   document.querySelector('.btn-exportar-graficas')?.focus({ preventScroll: true });
 }
@@ -4973,7 +5536,7 @@ function inicializarReporteGraficas() {
   const boton = document.createElement('button');
   boton.type = 'button';
   boton.className = 'btn-exportar-graficas pf-v6-c-button pf-m-secondary';
-  boton.textContent = 'Exportar gráficas';
+  boton.textContent = 'Exportar informe PDF';
   boton.addEventListener('click', () => {
     scrollAntesDelReporte = window.scrollY;
     prepararReporteGraficas();
@@ -5051,7 +5614,7 @@ function actualizarUI() {
   renderizarTabla();
   actualizarGraficas();
   document.getElementById('indicador-proyectos').textContent =
-    `${estado.proyectosFiltrados.length} de ${estado.proyectos.length} proyectos`;
+    `${estado.proyectosFiltrados.length} de ${estado.proyectos.filter(pasaFiltroCompletados).length} proyectos`;
 }
 
 // ============================================================================
@@ -5079,6 +5642,7 @@ async function inicializar() {
   document.getElementById('mostrar-columnas-completas').addEventListener('change', e => {
     document.getElementById('tabla-proyectos').classList.toggle('vista-completa', e.target.checked);
   });
+  document.getElementById('filtro-no-iniciados-estado').addEventListener('change', renderizarTablaNoIniciados);
 
   // Configurar eventos de pestañas
   document.querySelectorAll('.pestana-btn').forEach(btn => {

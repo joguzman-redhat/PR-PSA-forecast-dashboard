@@ -2,7 +2,7 @@
 # Manejo del stack de Cloud Forecast: Postgres + API/dashboard + n8n + nginx.
 # Todo vive en el mismo docker-compose.yml, un solo comando.
 #
-#   ./forecast.sh up       levanta postgres, api, n8n, nginx
+#   ./forecast.sh up       actualiza la API y levanta postgres, api, n8n, nginx
 #   ./forecast.sh public   lo mismo + ngrok (tunel publico para n8n)
 #   ./forecast.sh seed     carga los JSON del PoC a Postgres
 #   ./forecast.sh clean    borra todos los registros (schema y volumen intactos)
@@ -17,8 +17,20 @@ cd "$(dirname "$0")"
 # podman-compose (que lee .env solo), lo cargamos tambien aqui.
 [ -f .env ] && set -a && source .env && set +a
 
+construir_api() {
+  # El dashboard y el backend viven dentro de la imagen. Cambiar de rama no
+  # actualiza una imagen existente; el build usa cache para lo que no cambio.
+  podman-compose build api
+  # podman-compose puede reutilizar el contenedor anterior aun con --build.
+  # Reemplazar solo la API despues de un build exitoso conserva los volumenes.
+  if podman container exists forecast-api; then
+    podman rm -f forecast-api >/dev/null
+  fi
+}
+
 case "${1:-up}" in
   up)
+    construir_api
     podman-compose up -d
     echo
     echo "Dashboard -> http://localhost:${API_PORT:-3000}/"
@@ -28,6 +40,7 @@ case "${1:-up}" in
     ;;
 
   public)
+    construir_api
     podman-compose --profile public up -d
     echo
     echo "Dashboard -> http://localhost:${API_PORT:-3000}/"
@@ -55,11 +68,7 @@ case "${1:-up}" in
     ;;
 
   rebuild)
-    podman-compose build api
-    # `podman-compose up --build` reusa el contenedor viejo aunque la imagen
-    # cambie, y uno termina probando codigo que ya no existe. Recrear es la
-    # unica forma de que el cambio entre.
-    podman rm -f forecast-api >/dev/null 2>&1 || true
+    construir_api
     podman-compose up -d api
     ;;
 
