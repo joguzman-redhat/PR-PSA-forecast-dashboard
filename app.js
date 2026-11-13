@@ -871,34 +871,80 @@ function limpiarFiltros() {
 // RENDERIZADO DE TABLA
 // ============================================================================
 
+function abrirLecturaEstatus(proyecto) {
+  let dialogo = document.getElementById('dialogo-estatus');
+  if (!dialogo) {
+    dialogo = document.createElement('dialog');
+    dialogo.id = 'dialogo-estatus';
+    dialogo.className = 'dialogo-estatus';
+    dialogo.setAttribute('aria-labelledby', 'titulo-dialogo-estatus');
+    dialogo.setAttribute('aria-describedby', 'proyecto-dialogo-estatus');
+    const cabecera = document.createElement('div');
+    cabecera.className = 'dialogo-estatus-cabecera';
+    const titulo = document.createElement('h2');
+    titulo.id = 'titulo-dialogo-estatus';
+    titulo.textContent = 'Estatus del proyecto';
+    const cerrar = document.createElement('button');
+    cerrar.type = 'button';
+    cerrar.className = 'pf-v6-c-button pf-m-secondary';
+    cerrar.textContent = 'Cerrar';
+    cerrar.autofocus = true;
+    cerrar.addEventListener('click', () => dialogo.close());
+    cabecera.append(titulo, cerrar);
+    const nombre = document.createElement('p');
+    nombre.id = 'proyecto-dialogo-estatus';
+    nombre.className = 'dialogo-estatus-proyecto';
+    const texto = document.createElement('div');
+    texto.id = 'texto-dialogo-estatus';
+    texto.className = 'dialogo-estatus-texto';
+    texto.tabIndex = 0;
+    texto.setAttribute('aria-label', 'Estatus completo');
+    dialogo.append(cabecera, nombre, texto);
+    document.body.appendChild(dialogo);
+  }
+  document.getElementById('proyecto-dialogo-estatus').textContent =
+    `${identificador(proyecto).valor} · ${proyecto.nombre_del_proyecto || 'Proyecto sin nombre'}`;
+  const texto = document.getElementById('texto-dialogo-estatus');
+  texto.textContent = obtenerEtiquetaValor(proyecto.estatus);
+  texto.scrollTop = 0;
+  dialogo.showModal();
+}
+
 function renderizarTabla() {
   const tabla = document.getElementById('tabla-proyectos');
   const thead = tabla.querySelector('thead tr');
   const tbody = tabla.querySelector('tbody');
+  const vistaVendedor = estado.filtros.vendedor.length > 0;
+  tabla.classList.toggle('vista-vendedor', vistaVendedor);
 
   // Limpiar
   thead.innerHTML = '';
   tbody.innerHTML = '';
 
-  // Determinar columnas verdes
+  // Mantener el orden habitual; las notas pasan al inicio al filtrar por vendedor.
   const columnasVerdes = estado.metadataProyectos.columnas
-    .filter(c => c.verde)
+    .filter(c => c.verde || c.key === 'estatus')
     .map(c => c.key);
+  if (!columnasVerdes.includes('estatus')) columnasVerdes.push('estatus');
 
   // Headers
   const COL_ID = '__identificador';
   const COL_REVENUE = '__revenue_periodo';
-  const columnasResumen = new Set([COL_ID, 'estado', 'nombre_del_proyecto', 'pm_lider', 'valor_of', 'backlog_2026', COL_REVENUE]);
-  columnasVerdes.unshift(COL_ID);
+  const columnasResumen = new Set(['estatus', COL_ID, 'estado', 'nombre_del_proyecto', 'pm_lider', 'valor_of', 'backlog_2026', COL_REVENUE]);
+  if (vistaVendedor) {
+    columnasVerdes.splice(columnasVerdes.indexOf('estatus'), 1);
+    columnasVerdes.unshift('estatus', COL_ID);
+  } else columnasVerdes.unshift(COL_ID);
   columnasVerdes.push(COL_REVENUE);
   columnasVerdes.forEach((key) => {
     const col = estado.metadataProyectos.columnas.find(c => c.key === key)
-      || { label: key === COL_ID ? 'PA / PR' : `Revenue · ${periodoActual().etiqueta}` };
+      || { label: key === COL_ID ? 'PA / PR' : key === 'estatus' ? 'Estatus' : `Revenue · ${periodoActual().etiqueta}` };
     const th = document.createElement('th');
     const ord = estado.orden || {};
-    const etiqueta = ({ valor_of: 'Valor Booking', backlog_2026: 'Backlog', pm_lider: 'PM/Líder' })[key] || col.label;
+    const etiqueta = ({ estatus: 'Estatus', valor_of: 'Valor Booking', backlog_2026: 'Backlog', pm_lider: 'PM/Líder' })[key] || col.label;
     th.textContent = etiqueta + (ord.columna === key ? (ord.desc ? '  ↓' : '  ↑') : '');
     th.dataset.columna = key;
+    if (key === 'estatus') th.classList.add('columna-estatus');
     if (!columnasResumen.has(key)) th.classList.add('columna-secundaria');
     th.title = `Ordenar por ${col.label}`;
     if (ord.columna === key) th.classList.add('col-ordenada');
@@ -929,7 +975,32 @@ function renderizarTabla() {
       }
 
       // Formatos especiales
-      if (key === COL_ID) {
+      if (key === 'estatus') {
+        td.className = 'columna-estatus';
+        if (normalizarValor(valor) === null || String(valor).trim() === '') td.textContent = '—';
+        else if (vistaVendedor) {
+          const boton = document.createElement('button');
+          boton.type = 'button';
+          boton.className = 'estatus-lectura';
+          boton.setAttribute('aria-haspopup', 'dialog');
+          boton.setAttribute('aria-label', `Leer estatus completo de ${identificador(proyecto).valor}`);
+          const vistaPrevia = document.createElement('span');
+          vistaPrevia.className = 'estatus-vista-previa';
+          vistaPrevia.textContent = String(valor);
+          const indicacion = document.createElement('span');
+          indicacion.className = 'estatus-leer-mas';
+          indicacion.textContent = 'Leer completo';
+          boton.append(vistaPrevia, indicacion);
+          boton.addEventListener('click', e => {
+            e.stopPropagation();
+            abrirLecturaEstatus(proyecto);
+          });
+          td.appendChild(boton);
+        } else {
+          td.textContent = String(valor);
+          td.title = String(valor);
+        }
+      } else if (key === COL_ID) {
         const id = identificador(proyecto);
         td.textContent = id.valor;
         td.className = 'celda-id';
@@ -4921,7 +4992,7 @@ function irAProyectosDePM(pm) {
 // COLUMNAS REDIMENSIONABLES
 // ============================================================================
 
-// Storage: Map<tableKey + '|' + colIndex, width>
+// El listado usa el nombre de columna para conservar el ancho al cambiar el orden.
 const anchosColumnasGuardados = new Map();
 // Control de drag
 let dragInfo = null;
@@ -4937,6 +5008,15 @@ function obtenerTabllaKey(tabla) {
   return tabla.id || (tabla.className.split(' ')[0] || 'tabla-sin-id');
 }
 
+function claveAnchoColumna(tabla, th, indice) {
+  let columna = tabla.id === 'tabla-proyectos' && th.dataset.columna
+    ? `col:${th.dataset.columna}` : indice;
+  if (tabla.id === 'tabla-proyectos' && th.dataset.columna === 'estatus') {
+    columna += tabla.classList.contains('vista-vendedor') ? ':vendedor' : ':compacto';
+  }
+  return `${obtenerTabllaKey(tabla)}|${columna}`;
+}
+
 /**
  * Carga los anchos guardados de localStorage
  */
@@ -4948,6 +5028,30 @@ function cargarAnchosDeStorage() {
     for (const [k, v] of Object.entries(obj)) {
       anchosColumnasGuardados.set(k, v);
     }
+    // Migrar el orden anterior antes de insertar Estatus al inicio; su ancho parte del nuevo valor por defecto.
+    const anteriores = ['__identificador', ...estado.metadataProyectos.columnas.filter(c => c.verde).map(c => c.key), '__revenue_periodo'];
+    let migrado = false;
+    anteriores.forEach((campo, i) => {
+      const viejo = `tabla-proyectos|${i}`, nuevo = `tabla-proyectos|col:${campo}`;
+      const ancho = anchosColumnasGuardados.get(viejo);
+      if (anchosColumnasGuardados.has(viejo)) {
+        if (campo !== 'estatus' && Number.isFinite(ancho) && ancho > 0 && !anchosColumnasGuardados.has(nuevo)) {
+          anchosColumnasGuardados.set(nuevo, ancho);
+        }
+        anchosColumnasGuardados.delete(viejo);
+        migrado = true;
+      }
+    });
+    const estatusAnterior = 'tabla-proyectos|col:estatus';
+    const estatusVendedor = 'tabla-proyectos|col:estatus:vendedor';
+    if (anchosColumnasGuardados.has(estatusAnterior)) {
+      if (!anchosColumnasGuardados.has(estatusVendedor)) {
+        anchosColumnasGuardados.set(estatusVendedor, anchosColumnasGuardados.get(estatusAnterior));
+      }
+      anchosColumnasGuardados.delete(estatusAnterior);
+      migrado = true;
+    }
+    if (migrado) guardarAnchosEnStorage();
   } catch (e) {
     console.warn('Error cargando anchosColumnas:', e);
   }
@@ -4970,7 +5074,6 @@ function guardarAnchosEnStorage() {
 function asegurarResizers(tabla) {
   if (!tabla || !tabla.tagName || tabla.tagName !== 'TABLE') return;
 
-  const tableKey = obtenerTabllaKey(tabla);
   const thead = tabla.querySelector('thead');
   if (!thead) return;
 
@@ -4991,7 +5094,7 @@ function asegurarResizers(tabla) {
   // Reaplica los anchos guardados
   const tBodyRows = tabla.querySelectorAll('tbody tr');
   lastHeaderRow.querySelectorAll('th').forEach((th, colIndex) => {
-    const key = `${tableKey}|${colIndex}`;
+    const key = claveAnchoColumna(tabla, th, colIndex);
     const savedWidth = anchosColumnasGuardados.get(key);
     if (savedWidth) {
       th.style.width = savedWidth + 'px';
@@ -5040,7 +5143,7 @@ document.addEventListener('pointerdown', (e) => {
 
   dragInfo = {
     tabla,
-    tableKey: obtenerTabllaKey(tabla),
+    claveAncho: claveAnchoColumna(tabla, th, colIndex),
     colIndex,
     startX,
     startWidth,
@@ -5084,7 +5187,7 @@ document.addEventListener('pointerdown', (e) => {
     if (!dragInfo) return;
 
     const finalWidth = Math.max(60, dragInfo.startWidth + (e.clientX - dragInfo.startX));
-    const key = `${dragInfo.tableKey}|${dragInfo.colIndex}`;
+    const key = dragInfo.claveAncho;
     anchosColumnasGuardados.set(key, finalWidth);
     guardarAnchosEnStorage();
 
@@ -5130,8 +5233,7 @@ document.addEventListener('dblclick', (e) => {
   }
   if (colIndex === -1) return;
 
-  const tableKey = obtenerTabllaKey(tabla);
-  const key = `${tableKey}|${colIndex}`;
+  const key = claveAnchoColumna(tabla, th, colIndex);
 
   // Quitar estilos inline
   th.style.width = '';
