@@ -1,6 +1,7 @@
-# El Dockerfile de infra/api se construye con el contexto en la raiz del repo.
+# El Dockerfile se construye con el contexto en la raiz del repo.
 # Enviar solo sus fuentes y assets; .gitignore no protege el contexto de build.
 **
+!Dockerfile
 !index.html
 !app.js
 !styles.css
@@ -8,7 +9,6 @@
 !vendor/**
 !infra/
 !infra/api/
-!infra/api/Dockerfile
 !infra/api/package.json
 !infra/api/package-lock.json
 !infra/api/src/

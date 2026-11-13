@@ -14,7 +14,7 @@ historico, credenciales, control de acceso y n8n con su almacenamiento.
 El contexto de build debe ser la **raiz del repo**:
 
 ```bash
-podman build -f infra/api/Dockerfile -t localhost/cloud-forecast:preview .
+podman build -f Dockerfile -t localhost/cloud-forecast:preview .
 podman run --rm -p 127.0.0.1:3000:3000 \
   -e FORECAST_DEMO=true -e APP_BASE_PATH=/cloud-forecast \
   localhost/cloud-forecast:preview
@@ -47,7 +47,7 @@ cambios locales deben publicarse en esa rama antes de iniciar el despliegue.
 | Repository URL | `https://github.com/joguzman-redhat/PR-PSA-forecast-dashboard.git` |
 | Context Directory | `/` |
 | Git Branch | La rama remota que contiene estos cambios |
-| Dockerfile name | `infra/api/Dockerfile` |
+| Dockerfile name | `Dockerfile` |
 | Application Name | `cloud-forecast` (confirmar que este disponible) |
 | Environment | `dev`, sujeto al acceso asignado a la propiedad |
 | Path | `/cloud-forecast` |

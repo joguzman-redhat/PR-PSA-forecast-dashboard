@@ -27,7 +27,7 @@ services:
   api:
     build:
       context: ..
-      dockerfile: infra/api/Dockerfile
+      dockerfile: Dockerfile
     image: localhost/forecast-api:latest
     container_name: forecast-api
     environment:

@@ -114,7 +114,7 @@ cd infra && podman-compose down
 | `infra/docker-compose.yml` | 🆕 Crear | 3 servicios: postgres, api, n8n |
 | `infra/init.sql` | 🆕 Crear | Schema, views, permisos |
 | `infra/api/package.json` | 🆕 Crear | Dependencias Node.js |
-| `infra/api/Dockerfile` | 🆕 Crear | Build image para API |
+| `Dockerfile` | Existente en la raíz | Build image para API y dashboard |
 | `infra/api/index.js` | 🆕 Crear | API REST (Express) |
 | `infra/api/db.js` | 🆕 Crear | Pool PostgreSQL |
 | `infra/api/routes/*.js` | 🆕 Crear | 3 endpoints |

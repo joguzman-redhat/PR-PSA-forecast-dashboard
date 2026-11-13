@@ -2,7 +2,7 @@ FROM docker.io/library/node:22-alpine
 
 WORKDIR /app
 
-# Build context es el root del repo (no infra/api/): asi la imagen puede
+# Build context es el root del repo: asi la imagen puede
 # empaquetar tambien el dashboard estatico, que OpenShift no puede montar en
 # tiempo de ejecucion como hace el bind-mount de Podman Compose.
 COPY infra/api/package*.json ./

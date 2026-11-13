@@ -122,8 +122,8 @@ pantalla en blanco, revisa `oc logs deployment/forecast-api -n forecast-app`.
   reventar una base ya cargada en cada sync de Argo CD. Si hace falta
   reaplicarlo: `oc delete job forecast-postgres-init-schema -n forecast-app`
   y Argo CD lo vuelve a crear en el próximo sync.
-- **`infra/api/Dockerfile` cambió de contexto** (de `infra/api/` al root del
-  repo) para poder empaquetar el dashboard estático dentro de la imagen —
+- **`Dockerfile` vive en la raiz y usa ese contexto** (antes `infra/api/`)
+  para poder empaquetar el dashboard estático dentro de la imagen —
   OpenShift no soporta el bind-mount que usaba Podman Compose para montar
   `index.html`/`app.js`/etc. en caliente. Efecto secundario: en Podman local,
   un cambio a esos archivos ya **no se refleja al instante** — hay que
