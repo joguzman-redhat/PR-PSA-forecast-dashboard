@@ -15,7 +15,7 @@ function money(n){const sign=n<0?'-':'';n=Math.abs(n);return sign+'$'+(n>=1e6?(n
 (async()=>{
 const ui=context.ui;check('load',true,await ui.cargarDatos());
 const months=data.meta.periodos;const backlog=new Map(data.backlog.map(r=>[r.clave_timeline,r]));
-// Exhaustive ranges per project: 300 ranges x 343 projects x commit/upside.
+// Exhaustive ranges per project: all contiguous calendar ranges, commit and upside.
 for(let start=0;start<months.length;start++)for(let end=start;end<months.length;end++){
  ui.estado.periodo='rango';ui.estado.rangoTimeline={desde:months[start],hasta:months[end]};
  for(const p of data.proyectos){const b=backlog.get(p.clave_timeline);for(const [suffix,fn] of [['fijo',ui.revenuePeriodo],['upside',ui.upsidePeriodo]]){
@@ -23,12 +23,24 @@ for(let start=0;start<months.length;start++)for(let end=start;end<months.length;
    check(p.clave_timeline+' '+months[start]+'..'+months[end]+' '+suffix,expected,fn(p));
  }}
 }
-ui.estado.periodo='todos';const visible=data.proyectos.filter(p=>!['Completed','Canceled'].includes(p.estado));
-const sum=f=>visible.reduce((s,p)=>s+(backlog.get(p.clave_timeline)[f]||0),0);
+function elegibles(desde,hasta) {
+ return data.proyectos.filter(p=>{
+  if(['Completed','Canceled'].includes(p.estado))return false;
+  const parts=typeof p.fecha_fin==='string'?p.fecha_fin.match(/^(\d{2})\/(\d{2})\/(\d{4})$/):null;
+  const fin=parts?parts[3]+'-'+parts[1]:null;
+  const b=backlog.get(p.clave_timeline);
+  const inicio=months.find(m=>typeof b[m+'_fijo']==='number'&&b[m+'_fijo']!==0);
+  return (!inicio||inicio<=hasta)&&(!fin||fin>=desde);
+ });
+}
+ui.estado.periodo='todos';const visible=elegibles(months[0],months.at(-1));
+const sumRows=(rows,f)=>rows.reduce((s,p)=>s+(backlog.get(p.clave_timeline)[f]||0),0);
+const sum=f=>sumRows(visible,f);
 for(const p of data.proyectos){const b=backlog.get(p.clave_timeline);check('booking '+p.clave_timeline,b.valor_of,ui.valorBooking(p));check('backlog '+p.clave_timeline,b.backlog,ui.backlogHoy(p));check('accrued '+p.clave_timeline,b.acumulado_a_fecha,ui.acumuladoHoy(p));}
 for(const [name,start,end] of [['pantalla',0,23],['rango',9,23],['fy27',12,23]]){
- const d=dom[name];check(name+' count',String(visible.length),d['kpi-total-proyectos']);check(name+' booking',money(sum('valor_of')),d['kpi-valor-of-total']);check(name+' backlog',money(sum('backlog')),d['kpi-backlog-2026']);check(name+' accrued',money(sum('acumulado_a_fecha')),d['kpi-acumulado-hoy']);check(name+' execution',(100*sum('acumulado_a_fecha')/sum('valor_of')).toFixed(1)+'%',d['kpi-pct-ejecucion']);
- const expected=months.slice(start,end+1).reduce((s,m)=>s+sum(m+'_fijo'),0);check(name+' revenue',money(expected),d['kpi-revenue-periodo']);
+ const selected=elegibles(months[start],months[end]);const sumPage=f=>sumRows(selected,f);
+ const d=dom[name];check(name+' count',String(selected.length),d['kpi-total-proyectos']);check(name+' booking',money(sumPage('valor_of')),d['kpi-valor-of-total']);check(name+' backlog',money(sumPage('backlog')),d['kpi-backlog-2026']);check(name+' accrued',money(sumPage('acumulado_a_fecha')),d['kpi-acumulado-hoy']);check(name+' execution',(100*sumPage('acumulado_a_fecha')/sumPage('valor_of')).toFixed(1)+'%',d['kpi-pct-ejecucion']);
+ const expected=months.slice(start,end+1).reduce((s,m)=>s+sumPage(m+'_fijo'),0);check(name+' revenue',money(expected),d['kpi-revenue-periodo']);
 }
 const ps=new Map();for(const p of visible){const pm=p.pm_lider||'(sin dato)';if(!ps.has(pm))ps.set(pm,[]);ps.get(pm).push(p);}
 for(const pm of ui.calcularPMs()){

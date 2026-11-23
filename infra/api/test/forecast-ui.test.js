@@ -6,7 +6,7 @@ const path = require('node:path');
 const code = fs.readFileSync(path.resolve(__dirname,'../../../app.js'),'utf8');
 function pagina(search='') {
   const clases=new Set();const controles=new Map();
-  for(const id of ['forecast-desde','forecast-hasta','forecast-estado'])controles.set(id,{
+  for(const id of ['forecast-desde','forecast-hasta','forecast-estado','forecast-unidad'])controles.set(id,{
     value:'',textContent:'',disabled:false,opciones:[],handlers:{},
     replaceChildren(...items){this.opciones=items;},appendChild(item){this.opciones.push(item);},
     addEventListener(tipo,handler){this.handlers[tipo]=handler;},setCustomValidity(msg){this.validationMessage=msg;},reportValidity(){},
@@ -17,7 +17,7 @@ function pagina(search='') {
     Option:function(text,value){this.text=text;this.value=String(value);},
     location:{search,href:'http://localhost:3000/'+search,assign(url){this.destino=url;}},
   });
-  vm.runInContext(code+'\nglobalThis.ui={estado,cargarDatos,configurarSelectorForecast,mesesEjecutadosForecast,serieBacklogRevenuePorMes,acumuladoAnterior,configurarCalendarioTimeline,periodoActual,revenuePeriodo,upsidePeriodo,valorBooking,claveProyecto,compararMeses,coberturaCalendario};',context);
+  vm.runInContext(code+'\nglobalThis.ui={estado,cargarDatos,configurarSelectorForecast,mesesEjecutadosForecast,serieBacklogRevenuePorMes,acumuladoAnterior,configurarCalendarioTimeline,periodoActual,revenuePeriodo,upsidePeriodo,valorBooking,claveProyecto,compararMeses,coberturaCalendario,vidaProyecto,pasaPeriodoProyecto,mesesTimelineProyecto,valorDimension,etiquetaDimension,calcularPMs};',context);
   return {context,ui:context.ui,controles,clases};
 }
 test('el corte mensual distingue años pasados, actuales y futuros en hora Colombia',()=>{
@@ -50,7 +50,7 @@ test('carga atomica del timeline sin selector de año ni fuente',async()=>{
   const {ui,context,controles}=pagina();const consultas=[];
   context.fetch=async url=>{consultas.push(url);return {ok:true,json:async()=>datosTimeline()};};
   assert.equal(await ui.cargarDatos(),true);assert.equal(consultas.length,1);assert.match(consultas[0],/api\/timeline/);
-  ui.configurarSelectorForecast();assert.equal(controles.get('forecast-desde').opciones.length,32);
+  ui.configurarSelectorForecast();assert.equal(controles.get('forecast-desde').opciones.length,24);
   assert.equal(ui.valorBooking(ui.estado.proyectos[0]),1000);
   assert.equal(ui.claveProyecto(ui.estado.proyectos[0]),'PA:123');
 });
@@ -59,24 +59,31 @@ test('Desde y Hasta aceptan trimestres completos, meses y rangos entre años',as
   context.fetch=async()=>({ok:true,json:async()=>datosTimeline()});
   context.history={replaceState(_state,_title,url){context.location.href=String(url);}};
   context.document.querySelectorAll=()=>[];
-  vm.runInContext('actualizarUI=()=>{};renderizarTrazabilidad=()=>{};renderizarPMs=()=>{};',context);
+  vm.runInContext('aplicarFiltros=()=>{};actualizarUI=()=>{};renderizarTrazabilidad=()=>{};renderizarPMs=()=>{};',context);
   await ui.cargarDatos();ui.configurarSelectorForecast();
   const desde=controles.get('forecast-desde'),hasta=controles.get('forecast-hasta');
   assert.ok(desde.opciones.some(o=>o.value==='2026-10'));
+  const unidad=controles.get('forecast-unidad');
+  unidad.value='trimestres';unidad.handlers.change();
+  assert.equal(desde.opciones.length,8);
   assert.ok(desde.opciones.some(o=>o.value==='2026-q4'&&o.text.includes('oct–dic')));
   desde.value='2026-q4';hasta.value='2027-q1';desde.handlers.change();
   assert.equal(ui.periodoActual().meses.length,6);
   assert.equal(ui.revenuePeriodo(ui.estado.proyectos[0]),210);
-  assert.equal(new URL(context.location.href).search,'?desde=2026-10&hasta=2027-03');
+  assert.equal(new URL(context.location.href).search,'?desde=2026-10&hasta=2027-03&unidad=trimestres');
   hasta.value='2026-q4';hasta.handlers.change();
   assert.equal(ui.periodoActual().meses.length,3);
   assert.equal(ui.revenuePeriodo(ui.estado.proyectos[0]),10);
+  unidad.value='meses';unidad.handlers.change();
+  assert.equal(desde.opciones.length,24);
   desde.value='2026-11';desde.handlers.change();
   assert.equal(ui.periodoActual().meses.length,2);
   assert.equal(ui.revenuePeriodo(ui.estado.proyectos[0]),null);
+  unidad.value='trimestres';unidad.handlers.change();
+  const anterior=ui.estado.rangoTimeline.desde;
   desde.value='2027-q2';desde.handlers.change();
   assert.match(hasta.validationMessage,/posterior/);
-  assert.equal(ui.estado.rangoTimeline.desde,'2026-11');
+  assert.equal(ui.estado.rangoTimeline.desde,anterior);
 });
 test('rango Q4 2026 a Q4 2027 selecciona 15 meses y suma cada enero por separado',async()=>{
   const {ui,context}=pagina('?desde=2026-10&hasta=2027-12');
@@ -113,4 +120,43 @@ test('capturas sin FY27 no dibujan cero para los meses FY27',()=>{
   assert.equal(ui.coberturaCalendario({anios_disponibles:[2026]},[0,12]),false);
   assert.equal(ui.coberturaCalendario({anios_disponibles:[2026]},[0,1]),true);
   assert.equal(ui.coberturaCalendario({anios_disponibles:[2026,2027]},[0,12]),true);
+});
+
+
+test('fin se filtra por mes y año desde la fecha real, incluidos ISO y serial Excel',()=>{
+  const {ui}=pagina();
+  for(const fecha of ['12/31/2027','2027-12-31',46752]) {
+    // Excel serial 46752 is 2027-12-31.
+    assert.equal(ui.valorDimension({fecha_fin:fecha},'periodo_fin'),'2027-12');
+  }
+  assert.equal(ui.etiquetaDimension('periodo_fin','2027-12'),'dic 2027');
+  assert.equal(ui.valorDimension({fecha_fin:'02/30/2027'},'periodo_fin'),'(sin dato)');
+  assert.equal(ui.valorDimension({},'periodo_fin'),'(sin dato)');
+});
+test('el rango filtra desde el primer commit hasta el mes fin sin inventar fechas',async()=>{
+  const {ui,context}=pagina();context.fetch=async()=>({ok:true,json:async()=>datosTimeline()});await ui.cargarDatos();
+  const p=ui.estado.proyectos[0];p.fecha_fin='12/31/2026';
+  ui.estado.rangoTimeline={desde:'2027-01',hasta:'2027-12'};ui.estado.periodo='rango';
+  assert.equal(ui.pasaPeriodoProyecto(p),false); // Even with future commit in the source.
+  assert.equal(ui.vidaProyecto(p).fueraDeVigencia,true);
+  ui.estado.rangoTimeline={desde:'2026-12',hasta:'2026-12'};
+  assert.equal(ui.pasaPeriodoProyecto(p),true);
+  ui.estado.periodo='todos';assert.equal(ui.mesesTimelineProyecto(p).length,12);
+  ui.estado.backlog[0]['2026-01_fijo']=0;ui.estado.backlog[0]['2026-10_fijo']=0;
+  p.fecha_fin='12/31/2027';ui.estado.rangoTimeline={desde:'2026-01',hasta:'2026-12'};ui.estado.periodo='rango';
+  assert.equal(ui.pasaPeriodoProyecto(p),false); // First recorded commit is January 2027.
+  delete p.fecha_fin;ui.estado.rangoTimeline={desde:'2027-01',hasta:'2027-12'};
+  assert.equal(ui.pasaPeriodoProyecto(p),true);
+  assert.equal(ui.valorDimension(p,'periodo_fin'),'(sin dato)');
+});
+test('los proyectos sin commit se filtran por su fin conocido y los PMs respetan la vigencia',async()=>{
+  const {ui,context}=pagina();const datos=datosTimeline();
+  datos.proyectos[0].pm_lider='PM prueba';datos.proyectos[0].estado='In Progress';datos.proyectos[0].fecha_fin='12/31/2026';
+  datos.proyectos.push({...datos.proyectos[0],num_pa:'456',clave_timeline:'PA:456',fecha_fin:'12/31/2027'});
+  datos.backlog.push({_tipo_fila:'proyecto',num_pa:'456',clave_timeline:'PA:456',valor_of:400,backlog:300,'2027-01_fijo':0});
+  context.fetch=async()=>({ok:true,json:async()=>datos});await ui.cargarDatos();
+  ui.estado.periodo='rango';ui.estado.rangoTimeline={desde:'2027-01',hasta:'2027-12'};
+  const filas=ui.calcularPMs();assert.equal(filas.length,1);assert.equal(filas[0].nProyectos,1);
+  assert.equal(filas[0].proyectos[0].num_pa,'456');assert.equal(ui.vidaProyecto(datos.proyectos[1]).inicio,null);
+  datos.proyectos[1].fecha_fin='12/31/2026';assert.equal(ui.pasaPeriodoProyecto(datos.proyectos[1]),false);
 });

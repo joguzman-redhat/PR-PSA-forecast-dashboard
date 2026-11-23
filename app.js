@@ -23,7 +23,7 @@ const estado = {
     tsm: [],
     estado_contrato: [],
     tipo_de_ejecucion: [],
-    ano_de_finalizacion: [],
+    periodo_fin: [],
     cliente: [],
     riesgo: [],
     executive_watchlist: [],
@@ -167,6 +167,7 @@ function configurarCalendarioTimeline(meta) {
   estado.rangoTimeline={desde:meta.desde,hasta:meta.hasta};
   const url=new URLSearchParams(location.search);
   estado.periodo=url.has('desde')||url.has('hasta')?'rango':'todos';
+  estado.unidadTimeline=url.get('unidad')==='trimestres'?'trimestres':'meses';
 }
 function etiquetaPeriodoCalendario(p) {
   if(!/^\d{4}-\d{2}$/.test(p||''))return p;
@@ -179,39 +180,51 @@ function limitePeriodoForecast(valor, extremo) {
   return `${trimestre[1]}-${String(mes).padStart(2, '0')}`;
 }
 function configurarSelectorForecast() {
-  if(!estado.forecast.timeline)return;
-  const desde=document.getElementById('forecast-desde'),hasta=document.getElementById('forecast-hasta');
-  const periodos=estado.forecast.periodos;
-  const trimestres=[...new Set(periodos.map(p=>`${p.slice(0,4)}-q${Math.ceil(Number(p.slice(5))/3)}`))];
-  for(const control of [desde,hasta]) {
-    control.replaceChildren(
-      ...periodos.map(p=>new Option(etiquetaPeriodoCalendario(p),p)),
-      ...trimestres.map(p=>{
-        const q=Number(p.at(-1));
-        const meses=NOMBRES_MESES.slice((q-1)*3,q*3);
-        return new Option(`Q${q} ${p.slice(0,4)} · ${meses[0].slice(0,3)}–${meses[2].slice(0,3)}`,p);
-      }),
-    );
-    control.disabled=!periodos.length;
-  }
-  desde.value=estado.rangoTimeline.desde;hasta.value=estado.rangoTimeline.hasta;
-  const cambiar=()=>{
-    const inicio=limitePeriodoForecast(desde.value,'desde'),fin=limitePeriodoForecast(hasta.value,'hasta');
-    if(inicio>fin){hasta.setCustomValidity('El final debe ser igual o posterior al inicio');hasta.reportValidity();return;}
-    hasta.setCustomValidity('');
-    estado.rangoTimeline={desde:inicio,hasta:fin};estado.periodo='rango';
-    const u=new URL(location.href);u.search='';u.searchParams.set('desde',inicio);u.searchParams.set('hasta',fin);
-    history.replaceState(null,'',u);
-    document.querySelectorAll('.select-periodo').forEach(control=>{
-      const opt=[...control.options].find(o=>o.value==='rango');if(opt)opt.textContent=periodoActual().etiqueta;
-      control.value='rango';
-    });
-    actualizarUI();
-    if(estado.proyectoSeleccionado)renderizarDetalle();
-    if(estado.historia)renderizarTrazabilidad();
-    if(typeof renderizarPMs==='function')renderizarPMs();
+  if (!estado.forecast.timeline) return;
+  const unidad = document.getElementById('forecast-unidad');
+  const desde = document.getElementById('forecast-desde');
+  const hasta = document.getElementById('forecast-hasta');
+  const periodos = estado.forecast.periodos;
+  const trimestres = [...new Set(periodos.map(p => `${p.slice(0,4)}-q${Math.ceil(Number(p.slice(5))/3)}`))];
+  unidad.value = estado.unidadTimeline;
+  const poblar = () => {
+    const porQ = unidad.value === 'trimestres';
+    const opciones = porQ ? trimestres : periodos;
+    for (const control of [desde, hasta]) {
+      control.replaceChildren(...opciones.map(p => new Option(porQ
+        ? `Q${p.at(-1)} ${p.slice(0,4)} · ${NOMBRES_MESES[(Number(p.at(-1))-1)*3].slice(0,3)}–${NOMBRES_MESES[Number(p.at(-1))*3-1].slice(0,3)}`
+        : etiquetaPeriodoCalendario(p), p)));
+      control.disabled = !opciones.length;
+      control.setCustomValidity('');
+    }
+    const convertir = p => porQ && p ? `${p.slice(0,4)}-q${Math.ceil(Number(p.slice(5))/3)}` : p;
+    desde.value = convertir(estado.rangoTimeline.desde);
+    hasta.value = convertir(estado.rangoTimeline.hasta);
   };
-  desde.addEventListener('change',cambiar);hasta.addEventListener('change',cambiar);
+  const cambiar = () => {
+    const inicio = limitePeriodoForecast(desde.value, 'desde');
+    const fin = limitePeriodoForecast(hasta.value, 'hasta');
+    if (!inicio || !fin || inicio > fin) {
+      hasta.setCustomValidity('El final debe ser igual o posterior al inicio');
+      hasta.reportValidity(); return;
+    }
+    hasta.setCustomValidity('');
+    estado.unidadTimeline = unidad.value;
+    estado.rangoTimeline = {desde: inicio, hasta: fin}; estado.periodo = 'rango';
+    const u = new URL(location.href); u.search = '';
+    u.searchParams.set('desde', inicio); u.searchParams.set('hasta', fin);
+    if (unidad.value === 'trimestres') u.searchParams.set('unidad', 'trimestres');
+    history.replaceState(null, '', u);
+    aplicarFiltros();
+    if (estado.proyectoSeleccionado) renderizarDetalle();
+    if (estado.historia) renderizarTrazabilidad();
+    renderizarPMs();
+  };
+  poblar();
+  unidad.disabled = !periodos.length;
+  unidad.addEventListener('change', () => { poblar(); if (periodos.length) cambiar(); });
+  desde.addEventListener('change', cambiar);
+  hasta.addEventListener('change', cambiar);
 }
 
 // ============================================================================
@@ -372,6 +385,45 @@ function mesFinalizacion(proyecto) {
   return anio * 12 + mes - 1;
 }
 
+/** Months are compared as YYYY-MM; unknown limits stay unknown. */
+function periodoFinProyecto(proyecto) {
+  const mes = mesFinalizacion(proyecto);
+  return mes === null ? null : `${Math.floor(mes / 12)}-${String(mes % 12 + 1).padStart(2, '0')}`;
+}
+function vidaProyecto(proyecto) {
+  const fila = backlogDe(proyecto);
+  const periodos = estado.forecast.periodos || [];
+  const inicio = periodos.find(p => Number.isFinite(fila?.[p+'_fijo']) && fila[p+'_fijo'] !== 0) || null;
+  const fin = periodoFinProyecto(proyecto);
+  const fueraDeVigencia = !!fin && periodos.some(p => p > fin &&
+    ((Number.isFinite(fila?.[p+'_fijo']) && fila[p+'_fijo'] !== 0) ||
+     (Number.isFinite(fila?.[p+'_upside']) && fila[p+'_upside'] !== 0)));
+  return {inicio, fin, fueraDeVigencia};
+}
+function pasaPeriodoProyecto(proyecto) {
+  if (!estado.forecast.timeline) return true;
+  const indices = mesesActivos();
+  if (!indices.length) return false;
+  const desde = MESES_ES[indices[0]], hasta = MESES_ES[indices.at(-1)];
+  const {inicio, fin} = vidaProyecto(proyecto);
+  return (!fin || fin >= desde) && (!inicio || inicio <= hasta);
+}
+function mesesTimelineProyecto(proyecto) {
+  if (!estado.forecast.timeline) return mesesActivos();
+  const {inicio, fin} = vidaProyecto(proyecto);
+  return mesesActivos().filter(i => (!inicio || MESES_ES[i] >= inicio) && (!fin || MESES_ES[i] <= fin));
+}
+function actualizarResumenRango() {
+  if (!estado.forecast.timeline) return;
+  const visibles = estado.proyectos.filter(pasaVisibilidadProyecto);
+  const sinInicio = visibles.filter(p => !vidaProyecto(p).inicio).length;
+  const sinFin = visibles.filter(p => !vidaProyecto(p).fin).length;
+  const aviso = document.getElementById('forecast-estado');
+  if (aviso && estado.proyectos.length) aviso.textContent =
+    `${visibles.length} proyectos en el rango · ${estado.proyectos.length} cargados` +
+    (sinInicio ? ` · ${sinInicio} sin primer commit` : '') + (sinFin ? ` · ${sinFin} sin fecha fin` : '');
+}
+
 function etiquetaMesRevenue(indice) {
   const mes = NOMBRES_MESES[indice % 12];
   return `${mes.charAt(0).toUpperCase() + mes.slice(1, 3)} ${Math.floor(indice / 12)}`;
@@ -501,7 +553,7 @@ const DIMENSIONES = [
   { campo: 'tsm', etiqueta: 'TSM' },
   { campo: 'estado_contrato', etiqueta: 'Estado contrato' },
   { campo: 'tipo_de_ejecucion', etiqueta: 'Tipo de ejecución' },
-  { campo: 'ano_de_finalizacion', etiqueta: 'Año fin' },
+  { campo: 'periodo_fin', etiqueta: 'Mes y año fin' },
   { campo: 'riesgo', etiqueta: 'Riesgo' },
   { campo: 'executive_watchlist', etiqueta: 'Handover' },
   { campo: 'project_status', etiqueta: 'Project Status' },
@@ -660,6 +712,7 @@ function claseVencimiento(dias) {
 // esos proyectos, se agrupan bajo una opción propia: "no sabemos" también
 // es una respuesta que el negocio necesita poder filtrar.
 function valorDimension(proyecto, campo) {
+  if (campo === 'periodo_fin') return periodoFinProyecto(proyecto) || SIN_DATO;
   if (campo === 'riesgo') {
     return proyecto.start_at_risk ? 'Start at risk' : 'Sin marca de riesgo';
   }
@@ -679,6 +732,10 @@ function valorDimension(proyecto, campo) {
   return (v === null || v === undefined || v === '') ? SIN_DATO : String(v);
 }
 
+function etiquetaDimension(campo, valor) {
+  return campo === 'periodo_fin' && valor !== SIN_DATO ? etiquetaPeriodoCalendario(valor) : valor;
+}
+
 function pasaDimension(proyecto, campo) {
   const marcados = estado.filtros[campo];
   if (!marcados || marcados.length === 0) return true;
@@ -694,13 +751,15 @@ function pasaTexto(proyecto) {
   ].map(v => String(v ?? '')).join(' ').toLowerCase().includes(texto);
 }
 
-function pasaFiltroCompletados(proyecto) {
-  return estado.incluirCompletados || proyecto?.estado !== 'Completed';
+function pasaVisibilidadProyecto(proyecto) {
+  return (estado.incluirCompletados || proyecto?.estado !== 'Completed')
+    && (estado.incluirCancelados || proyecto?.estado !== 'Canceled')
+    && pasaPeriodoProyecto(proyecto);
 }
 
-function clavesCompletadosOcultos() {
-  return new Set(estado.incluirCompletados ? [] : estado.proyectos
-    .filter(p => !pasaFiltroCompletados(p)).map(claveProyecto));
+function clavesProyectosOcultos() {
+  return new Set(estado.proyectos
+    .filter(p => !pasaVisibilidadProyecto(p)).map(claveProyecto));
 }
 
 function sincronizarMostrarCompletados() {
@@ -721,13 +780,14 @@ function cambiarMostrarCompletados(incluir) {
 
 function aplicarFiltros() {
   estado.proyectosFiltrados = estado.proyectos.filter(p => {
-    if (!pasaFiltroCompletados(p)) return false;
+    if (!pasaVisibilidadProyecto(p)) return false;
     if (!estado.incluirCancelados && p.estado === 'Canceled') return false;
     return DIMENSIONES.every(d => pasaDimension(p, d.campo)) && pasaTexto(p);
   });
   DIMENSIONES.forEach(d => refrescarConteos(d.campo));
   renderizarChips();
   actualizarUI();
+  actualizarResumenRango();
 }
 
 /**
@@ -739,7 +799,7 @@ function aplicarFiltros() {
 function conteosDe(campo) {
   const conteos = new Map();
   estado.proyectos.forEach(p => {
-    if (!pasaFiltroCompletados(p)) return;
+    if (!pasaVisibilidadProyecto(p)) return;
     if (!estado.incluirCancelados && p.estado === 'Canceled' && campo !== 'estado') return;
     const pasa = DIMENSIONES.every(d => d.campo === campo || pasaDimension(p, d.campo));
     if (!pasa || !pasaTexto(p)) return;
@@ -801,7 +861,7 @@ function inicializarFiltros() {
   }
 
   const anfitrion = document.getElementById('periodo-listado');
-  if (anfitrion && !anfitrion.children.length) {
+  if (!estado.forecast.timeline && anfitrion && !anfitrion.children.length) {
     anfitrion.appendChild(construirSelectorPeriodo(actualizarUI));
   }
 
@@ -861,7 +921,7 @@ function construirDropdown(dim) {
     buscador.addEventListener('input', () => {
       const q = buscador.value.toLowerCase();
       panel.querySelectorAll('.dropdown-opcion').forEach(fila => {
-        fila.style.display = fila.dataset.valor.toLowerCase().includes(q) ? '' : 'none';
+        fila.style.display = (fila.dataset.valor+' '+etiquetaDimension(dim.campo,fila.dataset.valor)).toLowerCase().includes(q) ? '' : 'none';
       });
     });
     panel.appendChild(buscador);
@@ -874,7 +934,7 @@ function construirDropdown(dim) {
     fila.className = 'dropdown-opcion';
     fila.dataset.valor = valor;
     fila.innerHTML = `<input type="checkbox" value="${valor.replace(/"/g, '&quot;')}">
-                      <span class="opcion-texto">${valor}</span>
+                      <span class="opcion-texto">${etiquetaDimension(dim.campo,valor)}</span>
                       <span class="opcion-conteo" data-conteo-de="${valor.replace(/"/g, '&quot;')}"></span>`;
     fila.querySelector('input').addEventListener('change', ev => {
       const marcados = estado.filtros[dim.campo];
@@ -941,7 +1001,7 @@ function renderizarChips() {
     chip.type = 'button';
     chip.className = 'chip';
     chip.innerHTML = `<span class="chip-dim">${c.etiqueta}</span>
-                      <span class="chip-valor">${c.valor}</span>
+                      <span class="chip-valor">${etiquetaDimension(c.campo,c.valor)}</span>
                       <span class="chip-x" aria-hidden="true">×</span>`;
     chip.title = `Quitar filtro ${c.etiqueta}: ${c.valor}`;
     chip.addEventListener('click', () => {
@@ -1184,7 +1244,7 @@ function renderizarTabla() {
 
   // Actualizar indicador
   document.getElementById('indicador-proyectos').textContent =
-    `${estado.proyectosFiltrados.length} de ${estado.proyectos.filter(pasaFiltroCompletados).length} proyectos`;
+    `${estado.proyectosFiltrados.length} de ${estado.proyectos.filter(pasaVisibilidadProyecto).length} proyectos`;
 }
 
 function ordenarTabla(columna) {
@@ -2626,6 +2686,11 @@ function renderizarDetalle() {
 
   contenedor.innerHTML = '';
   renderizarEncabezadoProyecto(contenedor, proyecto);
+  if (!pasaPeriodoProyecto(proyecto)) {
+    const aviso = document.createElement('p'); aviso.className = 'nota-periodo';
+    aviso.textContent = 'Este proyecto no coincide con el rango global seleccionado.';
+    contenedor.appendChild(aviso); return;
+  }
 
   // Buscar datos de backlog asociados
   const datosBacklog = backlogDe(proyecto);
@@ -2756,10 +2821,17 @@ function renderizarDetalle() {
     const h4 = document.createElement('h4');
     h4.textContent = `Revenue detallado · ${periodoActual().etiqueta}`;
     divRevenue.appendChild(h4);
-    divRevenue.appendChild(construirSelectorPeriodo(renderizarDetalle));
+    if (estado.forecast.timeline) {
+      const vida = vidaProyecto(proyecto);
+      const nota = document.createElement('p'); nota.className = 'nota-periodo';
+      nota.textContent = `Primer commit registrado: ${vida.inicio ? etiquetaPeriodoCalendario(vida.inicio) : 'sin commit registrado'}. Fecha fin: ${vida.fin ? etiquetaPeriodoCalendario(vida.fin) : 'sin fecha fin'}.`;
+      if (vida.fueraDeVigencia) nota.textContent += ' La fuente contiene importes fuera de estas fechas; se conservan en los totales del periodo y requieren revisión.';
+      divRevenue.appendChild(nota);
+    }
+    if (!estado.forecast.timeline) divRevenue.appendChild(construirSelectorPeriodo(renderizarDetalle));
 
     // Gráfica de barras apiladas (fijo vs upside), solo los meses del periodo
-    const meses = mesesActivos().map(i => MESES_ES[i]);
+    const meses = mesesTimelineProyecto(proyecto).map(i => MESES_ES[i]);
 
     const datosGrafica = {};
     meses.forEach(mes => {
@@ -3430,7 +3502,7 @@ function renderizarHermanosDeCliente(contenedor, proyecto) {
     p => p.cliente === proyecto.cliente && p !== proyecto);
   // Mantener el bloque si todos los hermanos están ocultos para poder mostrarlos.
   if (!todosHermanos.length) return;
-  const hermanos = todosHermanos.filter(pasaFiltroCompletados);
+  const hermanos = todosHermanos.filter(pasaVisibilidadProyecto);
 
   const div = document.createElement('div');
   div.className = 'detalle-trazabilidad otros-proyectos-cliente';
@@ -3448,7 +3520,7 @@ function renderizarHermanosDeCliente(contenedor, proyecto) {
   control.append(chk, document.createTextNode('Mostrar completados'));
   div.appendChild(control);
 
-  const totalCliente = [proyecto, ...todosHermanos].filter(pasaFiltroCompletados)
+  const totalCliente = [proyecto, ...todosHermanos].filter(pasaVisibilidadProyecto)
     .reduce((a, p) => a + (valorBooking(p) || 0), 0);
   const nota = document.createElement('p');
   nota.className = 'nota-tabla';
@@ -3753,7 +3825,7 @@ function mesesVisiblesPorSnapshot() {
   const hist = estado.historia;
   const porSnapshot = new Map(hist.snapshots.map(s => [s.id,
     Object.fromEntries(Object.entries(s.por_mes).map(([mes, valores]) => [mes, { ...valores }]))]));
-  clavesCompletadosOcultos().forEach(clave => {
+  clavesProyectosOcultos().forEach(clave => {
     (hist.series_por_proyecto[clave] || []).forEach(entrada => {
       const meses = porSnapshot.get(entrada.snapshot_id);
       if (!meses) return;
@@ -3797,7 +3869,7 @@ function renderizarTrazabilidad() {
 
   // El selector de periodo se monta una sola vez, arriba de las gráficas.
   const anfitrion = document.getElementById('periodo-trazabilidad');
-  if (anfitrion && !anfitrion.children.length) {
+  if (!estado.forecast.timeline && anfitrion && !anfitrion.children.length) {
     anfitrion.appendChild(construirSelectorPeriodo(renderizarTrazabilidad));
   }
 
@@ -3862,7 +3934,7 @@ function renderizarTrazabilidad() {
     selectorBVR.append(lbl, sel);
   }
   actualizarOpcionesFiltro(document.getElementById('select-pm-backlog-revenue'),
-    estado.proyectos.filter(pasaFiltroCompletados).map(p => p.pm_lider).filter(Boolean));
+    estado.proyectos.filter(pasaVisibilidadProyecto).map(p => p.pm_lider).filter(Boolean));
   renderizarGraficaBacklogVsRevenue();
 
   const tituloDesglose = document.getElementById('titulo-desglose');
@@ -3947,7 +4019,7 @@ function renderizarGraficaBacklogVsRevenue() {
   const sel = document.getElementById('select-pm-backlog-revenue');
   const pmElegido = sel ? sel.value : '';
 
-  const proyectos = estado.proyectos.filter(p => pasaFiltroCompletados(p) && (!pmElegido || p.pm_lider === pmElegido));
+  const proyectos = estado.proyectos.filter(p => pasaVisibilidadProyecto(p) && (!pmElegido || p.pm_lider === pmElegido));
   pintarProyeccionBacklogRevenue(svg, proyectos, document.getElementById('nota-backlog-vs-revenue'));
 
   const titulo = document.getElementById('titulo-backlog-vs-revenue');
@@ -3991,7 +4063,7 @@ function rangoPredefinido(clave, snaps) {
     return [Math.max(0, desde - 1), ultimo];
   }
   // 'ultimo': el par de snapshots más reciente en el que de verdad pasó algo.
-  const ocultos = clavesCompletadosOcultos();
+  const ocultos = clavesProyectosOcultos();
   const conEventos = new Set(estado.historia.eventos.filter(e => !ocultos.has(String(e.num_pa))).map(e => e.snapshot_id));
   for (let i = ultimo; i > 0; i--) {
     if (conEventos.has(snaps[i].id)) return [i - 1, i];
@@ -4024,7 +4096,7 @@ function calcularCambios() {
   const idA = snaps[iA].id, idB = snaps[iB].id;
 
   const porProyecto = new Map(estado.proyectos.map(p => [claveProyecto(p), p]));
-  const ocultos = clavesCompletadosOcultos();
+  const ocultos = clavesProyectosOcultos();
   const mesesOk = new Set(mesesActivos().map(i => MESES_ES[i]));
 
   // Eventos del rango, agrupados por proyecto. Commit y Upside se tratan
@@ -4533,7 +4605,7 @@ function actualizarTablaEventos() {
   const busca = (document.getElementById('buscar-evento-proyecto').value || '')
     .trim().toLowerCase();
   const limitar = document.getElementById('limitar-por-proyecto').checked;
-  const ocultos = clavesCompletadosOcultos();
+  const ocultos = clavesProyectosOcultos();
 
   // Initialize PM filter
   const filtroPMEvento = document.getElementById('filtro-eventos-pm');
@@ -4694,7 +4766,7 @@ const CLAVE_ESTADO_PM = { 'In Progress': 'inProgreso', 'On Hold': 'onHold', 'Pla
 function calcularPMs() {
   const porPM = new Map();
   estado.proyectos.forEach(p => {
-    if (!pasaFiltroCompletados(p)) return;
+    if (!pasaVisibilidadProyecto(p)) return;
     if (!estado.incluirCancelados && p.estado === 'Canceled') return;
     const pm = p.pm_lider || SIN_DATO;
     if (!porPM.has(pm)) {
@@ -4787,7 +4859,7 @@ function renderizarGraficasPMs(filas) {
 
 function renderizarPMs() {
   const anfitrion = document.getElementById('periodo-pms');
-  if (anfitrion && !anfitrion.children.length) {
+  if (!estado.forecast.timeline && anfitrion && !anfitrion.children.length) {
     anfitrion.appendChild(construirSelectorPeriodo(renderizarPMs));
   }
 
@@ -5494,7 +5566,7 @@ function construirResumenReporte(contenido, vista, nombreVista, partes) {
   const proyectos = vista.id === 'pestana-listado' ? estado.proyectosFiltrados
     : vista.id === 'pestana-detalle' ? [estado.proyectoSeleccionado].filter(Boolean)
     : vista.id === 'pestana-pms' ? calcularPMs().flatMap(f => f.proyectos)
-    : estado.proyectos.filter(pasaFiltroCompletados);
+    : estado.proyectos.filter(pasaVisibilidadProyecto);
   const sumar = fn => {
     const valores = proyectos.map(fn).filter(Number.isFinite);
     return valores.length || !proyectos.length ? valores.reduce((s, v) => s + v, 0) : null;
@@ -5827,7 +5899,7 @@ function actualizarUI() {
   renderizarTabla();
   actualizarGraficas();
   document.getElementById('indicador-proyectos').textContent =
-    `${estado.proyectosFiltrados.length} de ${estado.proyectos.filter(pasaFiltroCompletados).length} proyectos`;
+    `${estado.proyectosFiltrados.length} de ${estado.proyectos.filter(pasaVisibilidadProyecto).length} proyectos`;
 }
 
 // ============================================================================

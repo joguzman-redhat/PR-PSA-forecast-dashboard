@@ -103,15 +103,29 @@ anual: los acumulados de FY26 y FY27 NO se suman entre si.
 - La clave multianual es PA. Sin PA, se utiliza Project ID/PR; sin ambos, la
   identidad se aisla por año y proyecto existente y exige conciliacion manual.
   No se unen proyectos desconocidos solo por tener nombres parecidos.
-- Los filtros Desde/Hasta afectan el revenue del calendario, no duplican ni
-  suman Booking. Cambiar de periodo no debe cambiar el proyecto de referencia.
+- Desde/Hasta es el único rango global para listado, PMs, detalle y trazabilidad.
+  Se eligen meses o trimestres visibles en el control «Ver por»; Q1 es enero-marzo,
+  Q2 abril-junio, Q3 julio-septiembre y Q4 octubre-diciembre, como en los Excel.
+  El rango limita tanto el revenue como los proyectos cuya vigencia se solapa
+  con él, desde el primer mes con commit distinto de cero registrado hasta el
+  mes de Fecha fin, inclusive. Incluye créditos negativos como actividad registrada.
+  No se toma la fecha de captura como fecha de inicio ni se inventa una fecha
+  de inicio anterior al calendario cargado. Sin primer commit o sin fecha fin,
+  solo se aplica el extremo conocido y se informa el dato faltante.
+  Booking y backlog se toman una vez por cada proyecto visible; cambiar de
+  periodo no cambia el año de referencia ni suma los importes de varios años.
+  Por eso esos totales sí pueden variar cuando el rango excluye proyectos.
+- «Mes y año fin» se deriva de Fecha fin, no de una columna de año ausente.
+  Solo fechas ausentes o inválidas se agrupan como «sin dato».
 - La grafica combinada muestra Commit/Upside fuente por mes y año, sin estimar
   importes para meses fuera de cobertura. Un mes no disponible es null, distinto
   de un cero cargado. Las reglas anteriores de proyeccion estimada se conservan
   solo para consumidores anuales anteriores, no se aplican sobre el timeline.
 - Una fecha de inicio real no se inventa: el calendario disponible comienza
   con las fuentes cargadas. Fecha fin se conserva como atributo; no se borran
-  montos de Excel por estar fuera de esa fecha.
+  montos de Excel por estar fuera de esa fecha. El detalle limita su gráfica
+  mensual a la vigencia conocida y al rango global; si hay importes fuera de
+  fecha fin, lo advierte sin borrar ni recortar el dinero fuente almacenado.
 
 Los snapshots originales conservan el historial de cambios; la tabla
 `forecast_revenue_mensual` es su consolidacion de lectura, mantenida en la
