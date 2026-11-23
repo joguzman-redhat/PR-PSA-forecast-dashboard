@@ -1,6 +1,6 @@
 {
   "id": "nola-etl-y-agente",
-  "name": "NOLA - ETL + Agente (Vertex AI)",
+  "name": "NOLA · Forecast & IA",
   "nodes": [
     {
       "id": "trigger1",
@@ -9,7 +9,7 @@
       "typeVersion": 1,
       "position": [
         0,
-        200
+        600
       ],
       "parameters": {}
     },
@@ -19,14 +19,14 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        220,
-        300
+        900,
+        100
       ],
       "parameters": {
         "operation": "download",
         "fileId": {
           "__rl": true,
-          "value": "1oXfRnj6tEi2fZrDfjpXitFGWTwG4cxaj",
+          "value": "={{ $json._fuente.archivo_id }}",
           "mode": "id"
         },
         "options": {
@@ -39,7 +39,7 @@
       },
       "credentials": {
         "googleDriveOAuth2Api": {
-          "id": "PENDIENTE",
+          "id": "mgX5qSv5MZaSZ3Jn",
           "name": "Google Drive account"
         }
       }
@@ -50,8 +50,8 @@
       "type": "n8n-nodes-base.spreadsheetFile",
       "typeVersion": 2,
       "position": [
-        440,
-        200
+        1120,
+        0
       ],
       "parameters": {
         "fileFormat": "xlsx",
@@ -66,8 +66,8 @@
       "type": "n8n-nodes-base.spreadsheetFile",
       "typeVersion": 2,
       "position": [
-        440,
-        420
+        1120,
+        220
       ],
       "parameters": {
         "fileFormat": "xlsx",
@@ -82,8 +82,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        660,
-        200
+        1340,
+        0
       ],
       "parameters": {
         "assignments": {
@@ -106,8 +106,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        660,
-        420
+        1340,
+        220
       ],
       "parameters": {
         "assignments": {
@@ -130,8 +130,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        880,
-        300
+        1560,
+        100
       ],
       "parameters": {
         "mode": "append"
@@ -143,12 +143,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1080,
-        300
+        1780,
+        100
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const items = $input.all();\nconst infoProyectos = items.filter(i => i.json._sheet === 'InfoProyectos').map(i => { const { _sheet, ...rest } = i.json; return rest; });\nconst backlog = items.filter(i => i.json._sheet === 'Backlog').map(i => { const { _sheet, ...rest } = i.json; return rest; });\nreturn [{ json: { InfoProyectos: infoProyectos, Backlog: backlog } }];"
+        "jsCode": "const items = $input.all();\nconst infoProyectos = items.filter(i => i.json._sheet === 'InfoProyectos').map(i => { const { _sheet, ...rest } = i.json; return rest; });\nconst backlog = items.filter(i => i.json._sheet === 'Backlog').map(i => { const { _sheet, ...rest } = i.json; return rest; });\nconst fuente = $('Fuente Actual Forecast').first(0, $runIndex).json._fuente;\nreturn [{ json: { _fuente: fuente, InfoProyectos: infoProyectos, Backlog: backlog }, pairedItem: { item: 0 } }];"
       }
     },
     {
@@ -158,7 +158,7 @@
       "typeVersion": 1.3,
       "position": [
         0,
-        300
+        1400
       ],
       "parameters": {
         "public": false
@@ -171,13 +171,13 @@
       "typeVersion": 2.1,
       "position": [
         320,
-        300
+        1400
       ],
       "parameters": {
         "promptType": "auto",
         "hasOutputParser": false,
         "options": {
-          "systemMessage": "Eres un asistente de datos para el equipo de Servicios de Red Hat en NOLA. Tienes acceso a herramientas que consultan datos reales y actualizados del portafolio de proyectos (hoja Info Proyectos) y del backlog de ingresos (hoja BackLog NOLA), incluyendo su historial de cambios y metricas ya calculadas. Responde siempre en espanol, de forma clara y con numeros concretos, citando la fuente (ej. 'segun Info Proyectos...'). Si no tienes suficiente informacion en las herramientas para responder con certeza, dilo explicitamente en vez de inventar datos. IMPORTANTE sobre herramientas: cuando necesites datos de una herramienta, EJECUTALA de verdad usando function calling - NUNCA escribas el nombre de la herramienta ni su sintaxis como texto plano en tu respuesta (ej. nunca escribas algo como 'Invocando la herramienta: Tool_X(...)'). Si una pregunta requiere datos, tu ÚNICA salida debe ser la llamada real a la función; espera el resultado y luego responde con los datos reales obtenidos, nunca con una simulación. IMPORTANTE sobre repetir herramientas: nunca llames la misma herramienta dos veces seguidas con argumentos iguales o muy similares. Si ya recibiste datos de una herramienta, USA esos datos para responder de inmediato, no la vuelvas a consultar 'para confirmar'. Si necesitas datos de un proyecto especifico, siempre pasa el parametro 'pa' para traer solo ese proyecto en vez de la tabla completa. Para preguntas de CONTEO o distribucion por categoria (cuantos proyectos en tal estado, zona, pais, etc.), usa SIEMPRE Tool_Metricas_Dashboard primero (ya trae distribucion_zona_json y distribucion_estado_json precalculados) en vez de Tool_Info_Proyectos o Tool_Backlog_Actual. Solo usa Tool_Info_Proyectos o Tool_Backlog_Actual con el parametro 'pa' cuando la pregunta sea sobre UN proyecto especifico identificado por su numero de PA. Ahora tambien tienes 3 herramientas que consultan PostgreSQL directamente (Tool_Postgres_Proyectos, Tool_Postgres_Movimientos, Tool_Postgres_Metricas) con los mismos datos pero desde la base de datos relacional en vez de las Data tables. Usa las herramientas de Postgres cuando el usuario pida explicitamente datos 'de Postgres', 'de la base de datos', o quiera comparar contra las otras herramientas. Para preguntas normales, sigue usando las herramientas de Data table como hasta ahora.",
+          "systemMessage": "Eres un asistente de datos para el equipo de Servicios de Red Hat en NOLA. Tienes acceso a herramientas que consultan datos reales y actualizados del portafolio de proyectos (hoja Info Proyectos) y del backlog de ingresos (hoja BackLog NOLA), incluyendo su historial de cambios y metricas ya calculadas. Responde siempre en espanol, de forma clara y con numeros concretos, citando la fuente (ej. 'segun Info Proyectos...'). Si no tienes suficiente informacion en las herramientas para responder con certeza, dilo explicitamente en vez de inventar datos. IMPORTANTE sobre herramientas: cuando necesites datos de una herramienta, EJECUTALA de verdad usando function calling - NUNCA escribas el nombre de la herramienta ni su sintaxis como texto plano en tu respuesta (ej. nunca escribas algo como 'Invocando la herramienta: Tool_X(...)'). Si una pregunta requiere datos, tu ÚNICA salida debe ser la llamada real a la función; espera el resultado y luego responde con los datos reales obtenidos, nunca con una simulación. IMPORTANTE sobre repetir herramientas: nunca llames la misma herramienta dos veces seguidas con argumentos iguales o muy similares. Si ya recibiste datos de una herramienta, USA esos datos para responder de inmediato, no la vuelvas a consultar 'para confirmar'. Si necesitas datos de un proyecto especifico, siempre pasa el parametro 'pa' para traer solo ese proyecto en vez de la tabla completa. Para preguntas de CONTEO o distribucion por categoria (cuantos proyectos en tal estado, zona, pais, etc.), usa SIEMPRE Tool_Metricas_Dashboard primero (ya trae distribucion_zona_json y distribucion_estado_json precalculados) en vez de Tool_Info_Proyectos o Tool_Backlog_Actual. Solo usa Tool_Info_Proyectos o Tool_Backlog_Actual con el parametro 'pa' cuando la pregunta sea sobre UN proyecto especifico identificado por su numero de PA. Ahora tambien tienes 3 herramientas que consultan PostgreSQL directamente (Tool_Postgres_Proyectos, Tool_Postgres_Movimientos, Tool_Postgres_Metricas) con los mismos datos pero desde la base de datos relacional en vez de las Data tables. Usa las herramientas de Postgres cuando el usuario pida explicitamente datos 'de Postgres', 'de la base de datos', o quiera comparar contra las otras herramientas. Para preguntas normales, sigue usando las herramientas de Data table como hasta ahora.\nALCANCE TEMPORAL: Las herramientas actuales del agente solo estan habilitadas para FY26 (2026). Para FY27 o comparaciones multianuales indica que aun no estan soportadas en el chat y remite al selector de año del dashboard. No uses Data tables como sustituto FY27 ni interpretes una muestra limitada como un conteo total.",
           "maxIterations": 4
         }
       }
@@ -189,7 +189,7 @@
       "typeVersion": 1.3,
       "position": [
         160,
-        700
+        1800
       ],
       "parameters": {
         "model": {
@@ -205,8 +205,8 @@
       },
       "credentials": {
         "openAiApi": {
-          "id": "PENDIENTE",
-          "name": "MaaS Red Hat account"
+          "id": "K0JHpYU7ZsMDc7pW",
+          "name": "OpenAI account"
         }
       }
     },
@@ -216,12 +216,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1280,
-        900
+        2220,
+        100
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "function normalizarNombre(nombre) {\n  return String(nombre || '')\n    .normalize('NFD').replace(/\\p{Diacritic}/gu, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]/g, '');\n}\n\nfunction calcularClave(row) {\n  const pa = row['# PA'];\n  if (pa !== null && pa !== undefined && String(pa).trim() !== '' && String(pa) !== '#N/A') {\n    return 'pa:' + String(pa).trim();\n  }\n  return 'nombre:' + normalizarNombre(row['Nombre del Proyecto']);\n}\n\nfunction excelSerialToDate(serial) {\n  return new Date(Date.UTC(1899, 11, 30) + serial * 86400000);\n}\n\nfunction parseFechaFin(v) {\n  if (v instanceof Date) return v;\n  if (typeof v === 'number') return excelSerialToDate(v);\n  if (typeof v === 'string') {\n    // 'Fecha fin' viene en formato MM/DD/YYYY (americano), confirmado con datos reales\n    // (ej. '12/14/2026' solo es valido como mes/dia, nunca dia/mes).\n    const m = v.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n    if (m) {\n      const mes = +m[1], dia = +m[2], anio = +m[3];\n      if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;\n      const fecha = new Date(Date.UTC(anio, mes - 1, dia));\n      if (fecha.getUTCMonth() !== mes - 1 || fecha.getUTCDate() !== dia) return null;\n      return fecha;\n    }\n  }\n  return null;\n}\n\nfunction calcularEstadoYDias(fechaFinRaw, hoyStr) {\n  const fechaFin = parseFechaFin(fechaFinRaw);\n  if (!fechaFin) return { dias: null, estado: null };\n  const hoy = new Date(hoyStr + 'T00:00:00Z');\n  const dias = Math.round((fechaFin - hoy) / 86400000);\n  let estado;\n  if (dias <= 0) estado = 'Contrato vencido';\n  else if (dias <= 30) estado = 'Contrato vence en menos de 30dias';\n  else if (dias < 60) estado = 'Contrato finaliza en menos de 60dias';\n  else estado = 'Contrato vigente';\n  return { dias, estado };\n}\n\n\n// Sin la columna del Excel no hay cómo saber los meses transcurridos: hace\n// falta la fecha de inicio, que no viene. Mejor vacío que un número inventado.\nfunction calcularMesesTranscurridos() {\n  return null;\n}\n\nfunction esVacia(row) {\n  const pa = row['# PA'];\n  const nombre = row['Nombre del Proyecto'];\n  const paVacio = pa === null || pa === undefined || String(pa).trim() === '' || String(pa) === '#N/A';\n  const nombreTexto = nombre === null || nombre === undefined ? '' : String(nombre).trim().toLowerCase();\n  const nombreVacio = nombreTexto === '' || nombreTexto === 'n/a' || nombreTexto === '#n/a' || nombreTexto === 'na';\n  return paVacio && nombreVacio;\n}\n\nconst data = $json;\nconst infoSinVacias = (data.InfoProyectos || []).filter(row => !esVacia(row));\nconst backlogSinVacias = (data.Backlog || []).filter(row => !esVacia(row));\nconst filasVaciasDescartadas = (data.InfoProyectos || []).length - infoSinVacias.length\n  + (data.Backlog || []).length - backlogSinVacias.length;\nconst fechaReferencia = new Date().toISOString().slice(0, 10);\n\nfunction formatearFechaISO(fecha) {\n  if (!fecha) return null;\n  return fecha.toISOString().slice(0, 10);\n}\n\nconst infoEnriquecido = infoSinVacias.map(row => {\n  const { dias, estado } = calcularEstadoYDias(row['Fecha fin'], fechaReferencia);\n  const fechaFinParsed = parseFechaFin(row['Fecha fin']);\n  return {\n    ...row,\n    _clave: calcularClave(row),\n    _dias_para_vencimiento: dias,\n    _estado_contrato: estado,\n    _fecha_fin_iso: formatearFechaISO(fechaFinParsed),\n    _meses_transcurridos: row['Meses transcurridos'] !== null && row['Meses transcurridos'] !== undefined && String(row['Meses transcurridos']).trim() !== '' ? row['Meses transcurridos'] : calcularMesesTranscurridos(row['Fecha fin'], fechaReferencia),\n    _executive_watchlist: row['Executive Watchlist'],\n    _project_status: row['Project Status'],\n  };\n});\n\nconst backlogEnriquecido = backlogSinVacias.map(row => ({ ...row, _clave: calcularClave(row) }));\n\nreturn [{ json: { InfoProyectos: infoEnriquecido, Backlog: backlogEnriquecido, fechaReferencia, filasVaciasDescartadas } }];"
+        "jsCode": "function normalizarNombre(nombre) {\n  return String(nombre || '')\n    .normalize('NFD').replace(/\\p{Diacritic}/gu, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]/g, '');\n}\n\nfunction calcularClave(row) {\n  const pa = row['# PA'];\n  if (pa !== null && pa !== undefined && String(pa).trim() !== '' && String(pa) !== '#N/A') {\n    return 'pa:' + String(pa).trim();\n  }\n  return 'nombre:' + normalizarNombre(row['Nombre del Proyecto']);\n}\n\nfunction excelSerialToDate(serial) {\n  return new Date(Date.UTC(1899, 11, 30) + serial * 86400000);\n}\n\nfunction parseFechaFin(v) {\n  if (v instanceof Date) return v;\n  if (typeof v === 'number') return excelSerialToDate(v);\n  if (typeof v === 'string') {\n    // 'Fecha fin' viene en formato MM/DD/YYYY (americano), confirmado con datos reales\n    // (ej. '12/14/2026' solo es valido como mes/dia, nunca dia/mes).\n    const m = v.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);\n    if (m) {\n      const mes = +m[1], dia = +m[2], anio = +m[3];\n      if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;\n      const fecha = new Date(Date.UTC(anio, mes - 1, dia));\n      if (fecha.getUTCMonth() !== mes - 1 || fecha.getUTCDate() !== dia) return null;\n      return fecha;\n    }\n  }\n  return null;\n}\n\nfunction calcularEstadoYDias(fechaFinRaw, hoyStr) {\n  const fechaFin = parseFechaFin(fechaFinRaw);\n  if (!fechaFin) return { dias: null, estado: null };\n  const hoy = new Date(hoyStr + 'T00:00:00Z');\n  const dias = Math.round((fechaFin - hoy) / 86400000);\n  let estado;\n  if (dias <= 0) estado = 'Contrato vencido';\n  else if (dias <= 30) estado = 'Contrato vence en menos de 30dias';\n  else if (dias < 60) estado = 'Contrato finaliza en menos de 60dias';\n  else estado = 'Contrato vigente';\n  return { dias, estado };\n}\n\n\n// Sin la columna del Excel no hay cómo saber los meses transcurridos: hace\n// falta la fecha de inicio, que no viene. Mejor vacío que un número inventado.\nfunction calcularMesesTranscurridos() {\n  return null;\n}\n\nfunction esVacia(row) {\n  const pa = row['# PA'];\n  const nombre = row['Nombre del Proyecto'];\n  const paVacio = pa === null || pa === undefined || String(pa).trim() === '' || String(pa) === '#N/A';\n  const nombreTexto = nombre === null || nombre === undefined ? '' : String(nombre).trim().toLowerCase();\n  const nombreVacio = nombreTexto === '' || nombreTexto === 'n/a' || nombreTexto === '#n/a' || nombreTexto === 'na';\n  return paVacio && nombreVacio;\n}\n\nconst data = $json;\nconst infoSinVacias = (data.InfoProyectos || []).filter(row => !esVacia(row));\nconst backlogSinVacias = (data.Backlog || []).filter(row => !esVacia(row));\nconst filasVaciasDescartadas = (data.InfoProyectos || []).length - infoSinVacias.length\n  + (data.Backlog || []).length - backlogSinVacias.length;\nconst fechaReferencia = new Date().toISOString().slice(0, 10);\n\nfunction formatearFechaISO(fecha) {\n  if (!fecha) return null;\n  return fecha.toISOString().slice(0, 10);\n}\n\nconst infoEnriquecido = infoSinVacias.map(row => {\n  const { dias, estado } = calcularEstadoYDias(row['Fecha fin'], fechaReferencia);\n  const fechaFinParsed = parseFechaFin(row['Fecha fin']);\n  return {\n    ...row,\n    _clave: calcularClave(row),\n    _dias_para_vencimiento: dias,\n    _estado_contrato: estado,\n    _fecha_fin_iso: formatearFechaISO(fechaFinParsed),\n    _meses_transcurridos: row['Meses transcurridos'] !== null && row['Meses transcurridos'] !== undefined && String(row['Meses transcurridos']).trim() !== '' ? row['Meses transcurridos'] : calcularMesesTranscurridos(row['Fecha fin'], fechaReferencia),\n    _executive_watchlist: row['Executive Watchlist'],\n    _project_status: row['Project Status'],\n  };\n});\n\nconst backlogEnriquecido = backlogSinVacias.map(row => ({ ...row, _clave: calcularClave(row) }));\n\nreturn [{ json: { ...data, InfoProyectos: infoEnriquecido, Backlog: backlogEnriquecido, fechaReferencia, filasVaciasDescartadas } }];"
       }
     },
     {
@@ -230,12 +230,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1480,
-        900
+        2440,
+        100
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "function esNumero(v) {\n  if (v === null || v === undefined || v === '' || v === '#N/A') return false;\n  return !isNaN(Number(v));\n}\n\nconst data = $json;\nconst info = data.InfoProyectos || [];\nconst backlog = data.Backlog || [];\nconst errores = [];\n\nif (info.length < 10) errores.push(`Muy pocos proyectos en Info Proyectos: ${info.length}`);\nif (backlog.length < 10) errores.push(`Muy pocos proyectos en Backlog: ${backlog.length}`);\n\nconst clavesInfo = new Set(info.map(r => r._clave));\nconst sinCruce = backlog.filter(r => !clavesInfo.has(r._clave));\nconst cruzan = backlog.length - sinCruce.length;\nconst pctCruce = backlog.length ? cruzan / backlog.length : 0;\nif (pctCruce < 0.95) {\n  const ejemplos = sinCruce.slice(0, 15).map(r => `${r._clave} (${r['Nombre del Proyecto'] || 'sin nombre'})`).join('; ');\n  errores.push(`Cruce entre hojas muy bajo: ${(pctCruce * 100).toFixed(1)}% (minimo 95%). Sin cruce (${sinCruce.length} de ${backlog.length}): ${ejemplos}`);\n}\n\nconst conValorOf = info.filter(r => esNumero(r['Valor OF'])).length;\nconst pctValorOf = info.length ? conValorOf / info.length : 0;\nif (pctValorOf < 0.5) errores.push(`Muy pocos Valor OF numericos: ${(pctValorOf * 100).toFixed(1)}% (minimo 50%)`);\n\nreturn [{ json: { ...data, _validacion: { valido: errores.length === 0, errores } } }];"
+        "jsCode": "function esNumero(v) {\n  if (v === null || v === undefined || v === '' || v === '#N/A') return false;\n  return !isNaN(Number(v));\n}\n\nconst data = $json;\nconst info = data.InfoProyectos || [];\nconst backlog = data.Backlog || [];\nconst errores = [];\nif (!data._esquema_forecast) errores.push('Falta normalizar el forecast antes de validar.');\nif (data._esquema_forecast?.faltantes.length) {\n  errores.push('Columnas requeridas ausentes para FY' + data._fuente.anio_forecast + ': ' + data._esquema_forecast.faltantes.join(', '));\n}\nif (data._esquema_forecast?.cabeceraOtroAnio) errores.push('El archivo contiene la cabecera de backlog de otro año. Revisa la fuente configurada.');\nfor (const campo of ['valor_of','acumulado_anterior','backlog','total_ejecutado']) {\n  if (!backlog.some(r => typeof r._forecast?.[campo] === 'number' && Number.isFinite(r._forecast[campo]))) {\n    errores.push('Sin valores numericos para ' + campo + '. No se permite una carga financiera completamente vacia.');\n  }\n}\nfor (const [hoja, filas] of [['Info Proyectos', info], ['BackLog NOLA', backlog]]) {\n  if (new Set(filas.map(r => r._clave)).size !== filas.length) errores.push('Llaves duplicadas en ' + hoja + '.');\n}\n\nif (info.length < 10) errores.push(`Muy pocos proyectos en Info Proyectos: ${info.length}`);\nif (backlog.length < 10) errores.push(`Muy pocos proyectos en Backlog: ${backlog.length}`);\n\nconst clavesInfo = new Set(info.map(r => r._clave));\nconst sinCruce = backlog.filter(r => !clavesInfo.has(r._clave));\nconst cruzan = backlog.length - sinCruce.length;\nconst pctCruce = backlog.length ? cruzan / backlog.length : 0;\nif (pctCruce < 0.95) {\n  const ejemplos = sinCruce.slice(0, 15).map(r => `${r._clave} (${r['Nombre del Proyecto'] || 'sin nombre'})`).join('; ');\n  errores.push(`Cruce entre hojas muy bajo: ${(pctCruce * 100).toFixed(1)}% (minimo 95%). Sin cruce (${sinCruce.length} de ${backlog.length}): ${ejemplos}`);\n}\n\nconst conValorOf = info.filter(r => esNumero(r['Valor OF'])).length;\nconst pctValorOf = info.length ? conValorOf / info.length : 0;\nif (pctValorOf < 0.5) errores.push(`Muy pocos Valor OF numericos: ${(pctValorOf * 100).toFixed(1)}% (minimo 50%)`);\n\nreturn [{ json: { ...data, _validacion: { valido: errores.length === 0, errores } } }];"
       }
     },
     {
@@ -244,8 +244,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1680,
-        900
+        2660,
+        100
       ],
       "parameters": {
         "conditions": {
@@ -274,8 +274,8 @@
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        1880,
-        1020
+        2880,
+        400
       ],
       "parameters": {
         "errorType": "errorMessage",
@@ -288,12 +288,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1680,
-        780
+        3100,
+        100
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "function cyrb53(str, seed = 0) {\n  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;\n  for (let i = 0, ch; i < str.length; i++) {\n    ch = str.charCodeAt(i);\n    h1 = Math.imul(h1 ^ ch, 2654435761);\n    h2 = Math.imul(h2 ^ ch, 1597334677);\n  }\n  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);\n  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);\n  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);\n  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);\n  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);\n}\n\nfunction ordenarClaves(obj) {\n  if (Array.isArray(obj)) return obj.map(ordenarClaves);\n  if (obj && typeof obj === 'object') {\n    return Object.keys(obj).sort().reduce((acc, k) => {\n      acc[k] = ordenarClaves(obj[k]);\n      return acc;\n    }, {});\n  }\n  return obj;\n}\n\nconst data = $json;\n// Subir VERSION_ETL cada vez que cambie qué se extrae o cómo se calcula: así\n// la misma planilla genera una carga nueva en vez de deduplicarse contra una\n// carga hecha con la lógica anterior.\nconst VERSION_ETL = 3;\nconst payload = { version: VERSION_ETL, InfoProyectos: data.InfoProyectos, Backlog: data.Backlog };\nconst canonical = JSON.stringify(ordenarClaves(payload));\nconst hash = cyrb53(canonical);\n\nreturn [{ json: { ...data, _hash: hash } }];"
+        "jsCode": "function cyrb53(str, seed = 0) {\n  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;\n  for (let i = 0, ch; i < str.length; i++) {\n    ch = str.charCodeAt(i);\n    h1 = Math.imul(h1 ^ ch, 2654435761);\n    h2 = Math.imul(h2 ^ ch, 1597334677);\n  }\n  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);\n  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);\n  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);\n  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);\n  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);\n}\n\nfunction ordenarClaves(obj) {\n  if (Array.isArray(obj)) return obj.map(ordenarClaves);\n  if (obj && typeof obj === 'object') {\n    return Object.keys(obj).sort().reduce((acc, k) => {\n      acc[k] = ordenarClaves(obj[k]);\n      return acc;\n    }, {});\n  }\n  return obj;\n}\n\nconst data = $json;\nif ((!Number.isInteger(data._fuente?.anio_forecast) || data._fuente.anio_forecast < 2000 || data._fuente.anio_forecast > 2100) || data._fuente?.modo !== 'cargar'\n    || typeof data._fuente?.archivo_id !== 'string' || !data._fuente.archivo_id.trim()) {\n  throw new Error('Escritura bloqueada: requiere año valido, modo cargar y archivo_id.');\n}\n// Subir VERSION_ETL cada vez que cambie qué se extrae o cómo se calcula: así\n// la misma planilla genera una carga nueva en vez de deduplicarse contra una\n// carga hecha con la lógica anterior.\nconst VERSION_ETL = 5;\nconst payload = { version: VERSION_ETL, anio_forecast: data._fuente.anio_forecast,\n  archivo_id: data._fuente.archivo_id, InfoProyectos: data.InfoProyectos, Backlog: data.Backlog };\nconst canonical = JSON.stringify(ordenarClaves(payload));\nconst hash = cyrb53(canonical);\n\nreturn [{ json: { ...data, _hash: hash } }];"
       }
     },
     {
@@ -302,13 +302,15 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1880,
-        780
+        3320,
+        100
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT (SELECT datos_hash FROM carga ORDER BY id DESC LIMIT 1) AS datos_hash;",
-        "options": {}
+        "query": "SELECT (SELECT datos_hash FROM carga WHERE anio_forecast = $1 AND archivo_id = $2 ORDER BY id DESC LIMIT 1) AS datos_hash;",
+        "options": {
+          "queryReplacement": "={{ [ $('Calcular Hash').item.json._fuente.anio_forecast, $('Calcular Hash').item.json._fuente.archivo_id ] }}"
+        }
       },
       "credentials": {
         "postgres": {
@@ -323,8 +325,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        2080,
-        780
+        3540,
+        100
       ],
       "parameters": {
         "conditions": {
@@ -349,14 +351,17 @@
     },
     {
       "id": "pgnode5b",
-      "name": "Sin Cambios (fin)",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
+      "name": "Sin Cambios (siguiente fuente)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        2280,
-        900
+        4200,
+        340
       ],
-      "parameters": {}
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const fuente = $('Calcular Hash').item.json._fuente;\nreturn [{ json: { anio_forecast: fuente.anio_forecast, archivo_id: fuente.archivo_id, archivo_nombre: fuente.archivo_nombre, estado: 'sin_cambios', escritura_postgres: false } }];"
+      }
     },
     {
       "id": "pgnode6",
@@ -364,12 +369,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2280,
-        700
+        3760,
+        100
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "\nfunction sqlBool(v) {\n  return v === true ? 'TRUE' : v === false ? 'FALSE' : 'NULL::boolean';\n}\n\nfunction parsearBooleano(v) {\n  if (v === null || v === undefined || v === '') return null;\n  const s = String(v).toLowerCase().trim();\n  if (s === 'true' || s === '1' || s === 'sí' || s === 'si') return true;\n  if (s === 'false' || s === '0' || s === 'no') return false;\n  return null;\n}\n\n\nfunction parsearProjectStatus(v) {\n  if (v === null || v === undefined) return null;\n  const s = String(v).trim().toLowerCase();\n  if (s === 'red' || s === 'rojo') return 'Red';\n  if (s === 'yellow' || s === 'amarillo') return 'Yellow';\n  if (s === 'green' || s === 'verde') return 'Green';\n  return null;\n}\n\nfunction sqlStr(v) {\n  if (v === null || v === undefined || v === '' || v === '#N/A') return 'NULL';\n  return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";\n}\n// En un VALUES sin montos, NULL sin tipo se infiere como text.\nfunction sqlNum(v, ausente = 'NULL::numeric') {\n  if (v === null || v === undefined || v === '' || v === '#N/A') return ausente;\n  const n = Number(v);\n  const LIMITE_MONTO = 100000000;\n  if (!Number.isFinite(n) || Math.abs(n) > LIMITE_MONTO) return ausente;\n  return String(n);\n}\nfunction sqlInt(v) {\n  if (v === null || v === undefined) return 'NULL::integer';\n  return String(Math.round(v));\n}\nfunction sqlDate(v) {\n  if (v === null || v === undefined || v === '') return 'NULL::date';\n  return \"'\" + v + \"'::date\";\n}\n\n// Drive puede entregar encabezados con espacios o saltos de linea.\nfunction columnaBacklog(row, ...nombres) {\n  const normalizar = nombre => nombre.replace(/\\s+/g, ' ').trim().toUpperCase();\n  const columnas = Object.keys(row);\n  for (const nombre of nombres) {\n    const clave = columnas.find(k => normalizar(k) === normalizar(nombre));\n    if (clave !== undefined) return row[clave];\n  }\n  return null;\n}\n\nconst data = $('Calcular Hash').item.json;\nconst info = data.InfoProyectos || [];\nconst backlog = data.Backlog || [];\nconst hash = data._hash;\nconst fechaReferencia = data.fechaReferencia;\n\nconst proyectosPorClave = new Map();\nfor (const row of info) proyectosPorClave.set(row._clave, row);\nfor (const row of backlog) if (!proyectosPorClave.has(row._clave)) proyectosPorClave.set(row._clave, row);\n\nconst backlogPorClave = new Map();\nfor (const row of backlog) if (!backlogPorClave.has(row._clave)) backlogPorClave.set(row._clave, row);\nconst backlogSinDuplicados = Array.from(backlogPorClave.values());\n\nconst proyectoValues = [];\nfor (const [clave, row] of proyectosPorClave) {\n  proyectoValues.push(`(${sqlStr(clave)}, ${sqlStr(row['# PA'])}, ${sqlStr(row['Project ID'])}, ${sqlStr(row['# Opp.'])}, `\n    + `${sqlStr(row['Nombre del Proyecto'])}, ${sqlStr(row['Cliente'])}, ${sqlStr(row['PM/Líder'])}, ${sqlStr(row['PM/Líder PSA'])}, `\n    + `${sqlStr(row['Zona'])}, ${sqlStr(row['Pais'])}, ${sqlStr(row['Vendedor'])}, ${sqlStr(row['TSM'])}, `\n    + `${sqlStr(row['Billing Type'])}, ${sqlStr(row['Billing Arrengement'])}, ${sqlStr(row['Estado'])}, `\n    + `${sqlNum(row['Valor OF'])}, ${sqlNum(row['Valor OF Anterior'])}, ${sqlNum(row['ACUMULADO A HOY'])}, `\n    + `${sqlNum(row['Consumido 2025'])}, ${sqlNum(row['Backlog 2026'])}, ${sqlDate(row._fecha_fin_iso)}, `\n    + `${sqlInt(row._dias_para_vencimiento)}, ${sqlNum(row._meses_transcurridos)}, ${sqlStr(row._estado_contrato)}, ${sqlStr(row['ESTATUS'])}, `\n    + `${sqlBool(parsearBooleano(row._executive_watchlist))}, ${sqlStr(parsearProjectStatus(row._project_status))})`);\n}\n\nconst sqlProyectosUpsert = `proyectos_upsert AS (\n  INSERT INTO proyecto (\n    clave, num_pa, project_id, num_opp, nombre, cliente, pm_lider, pm_lider_psa,\n    zona, pais, vendedor, tsm, billing_type, billing_arrangement, estado,\n    valor_of, valor_of_anterior, acumulado_a_hoy, consumido_2025, backlog_2026, fecha_fin,\n    dias_para_vencimiento, meses_transcurridos, estado_contrato, estatus,\n    executive_watchlist, project_status, primera_carga_id, ultima_carga_id\n  )\n  SELECT v.*, (SELECT id FROM nueva_carga), (SELECT id FROM nueva_carga)\n  FROM (VALUES\n${proyectoValues.join(',\\n')}\n  ) AS v(\n    clave, num_pa, project_id, num_opp, nombre, cliente, pm_lider, pm_lider_psa,\n    zona, pais, vendedor, tsm, billing_type, billing_arrangement, estado,\n    valor_of, valor_of_anterior, acumulado_a_hoy, consumido_2025, backlog_2026, fecha_fin,\n    dias_para_vencimiento, meses_transcurridos, estado_contrato, estatus,\n    executive_watchlist, project_status\n  )\n  ON CONFLICT (clave) DO UPDATE SET\n    num_pa = EXCLUDED.num_pa, project_id = EXCLUDED.project_id, num_opp = EXCLUDED.num_opp,\n    nombre = EXCLUDED.nombre, cliente = EXCLUDED.cliente, pm_lider = EXCLUDED.pm_lider, pm_lider_psa = EXCLUDED.pm_lider_psa,\n    zona = EXCLUDED.zona, pais = EXCLUDED.pais, vendedor = EXCLUDED.vendedor, tsm = EXCLUDED.tsm,\n    billing_type = EXCLUDED.billing_type, billing_arrangement = EXCLUDED.billing_arrangement, estado = EXCLUDED.estado,\n    valor_of = EXCLUDED.valor_of, valor_of_anterior = EXCLUDED.valor_of_anterior, acumulado_a_hoy = EXCLUDED.acumulado_a_hoy,\n    consumido_2025 = EXCLUDED.consumido_2025, backlog_2026 = EXCLUDED.backlog_2026, fecha_fin = EXCLUDED.fecha_fin,\n    dias_para_vencimiento = EXCLUDED.dias_para_vencimiento, meses_transcurridos = EXCLUDED.meses_transcurridos,\n    estado_contrato = EXCLUDED.estado_contrato, estatus = EXCLUDED.estatus,\n    executive_watchlist = EXCLUDED.executive_watchlist, project_status = EXCLUDED.project_status,\n    ultima_carga_id = (SELECT id FROM nueva_carga), actualizado_en = now()\n  RETURNING id, clave\n)`;\n\nconst MESES = [\n  ['Enero', 1, 'Upside'], ['Febrero', 2, 'Upside_1'], ['Marzo', 3, 'Upside_2'],\n  ['Abril', 4, 'Upside_3'], ['Mayo', 5, 'Upside_4'], ['Junio', 6, 'Upside_5'],\n  ['Julio', 7, 'Upside_6'], ['Agosto', 8, 'Upside_7'], ['Septiembre', 9, 'Upside_8'],\n  ['Octubre', 10, 'Upside_9'], ['Noviembre', 11, 'Upside_10'], ['Diciembre', 12, 'Upside_11'],\n];\n\nconst revenueMesValues = [];\nfor (const row of backlogSinDuplicados) {\n  for (const [mesNombre, mesNum, upsideCol] of MESES) {\n    const commit = sqlNum(row[mesNombre], '0');\n    const upside = sqlNum(row[upsideCol], '0');\n    revenueMesValues.push(`(${sqlStr(row._clave)}, ${mesNum}, ${commit}, ${upside})`);\n  }\n}\n\nconst sqlRevenueMes = `revenue_mes_insert AS (\n  INSERT INTO revenue_mes (carga_id, proyecto_id, mes, commit_usd, upside_usd)\n  SELECT (SELECT id FROM nueva_carga), pu.id, v.mes, v.commit_usd, v.upside_usd\n  FROM (VALUES\n${revenueMesValues.join(',\\n')}\n  ) AS v(clave, mes, commit_usd, upside_usd)\n  JOIN proyectos_upsert pu ON pu.clave = v.clave\n  RETURNING proyecto_id, mes, commit_usd, upside_usd\n)`;\n\nconst revenueAnualValues = backlogSinDuplicados.map(row => {\n  // FIX: valor_of debe venir de BackLog NOLA (row['Valor OF']), NO de Info Proyectos\n  const valorOf = sqlNum(row['Valor OF']);\n  return `(${sqlStr(row._clave)}, ${valorOf}, ${sqlNum(row['Acum 2025'])}, ${sqlNum(columnaBacklog(row, 'Backlog 2026', 'Backlog'))}, ${sqlNum(columnaBacklog(row, 'TOTAL EJECUTADO ACUMULADO 2025-2026 (COPIAR)', 'TOTAL EJECUTADO ACUMULADO'))})`;\n});\n\nconst sqlRevenueAnual = `revenue_anual_insert AS (\n  INSERT INTO revenue_anual (carga_id, proyecto_id, valor_of, acum_2025, backlog, total_ejecutado_acumulado)\n  SELECT (SELECT id FROM nueva_carga), pu.id, v.valor_of, v.acum_2025, v.backlog, v.total_ejecutado\n  FROM (VALUES\n${revenueAnualValues.join(',\\n')}\n  ) AS v(clave, valor_of, acum_2025, backlog, total_ejecutado)\n  JOIN proyectos_upsert pu ON pu.clave = v.clave\n  RETURNING 1\n)`;\n\nconst sqlMovimiento = `movimiento_insert AS (\n  INSERT INTO movimiento (carga_id, carga_previa_id, proyecto_id, mes, tipo, monto, commit_anterior, commit_nuevo, upside_anterior, upside_nuevo)\n  SELECT\n    (SELECT id FROM nueva_carga), (SELECT id FROM carga_previa),\n    n.proyecto_id, n.mes,\n    CASE WHEN n.commit_usd > COALESCE(a.commit_usd, 0) THEN 'upside_a_commit' ELSE 'commit_a_upside' END,\n    abs(n.commit_usd - COALESCE(a.commit_usd, 0)),\n    a.commit_usd, n.commit_usd, a.upside_usd, n.upside_usd\n  FROM revenue_mes_insert n\n  LEFT JOIN revenue_mes a\n    ON a.carga_id = (SELECT id FROM carga_previa) AND a.proyecto_id = n.proyecto_id AND a.mes = n.mes\n  WHERE (SELECT id FROM carga_previa) IS NOT NULL\n    AND abs(n.commit_usd - COALESCE(a.commit_usd, 0)) >= 1.0\n  RETURNING 1\n)`;\n\nconst sql = `BEGIN;\nWITH\nnueva_carga AS (\n  INSERT INTO carga (archivo_nombre, datos_hash, fecha_referencia, filas_info, filas_backlog)\n  VALUES ('CLOUD FORECAST GENERAL - NOLA FY26', ${sqlStr(hash)}, ${sqlStr(fechaReferencia)}, ${info.length}, ${backlog.length})\n  RETURNING id\n),\ncarga_previa AS (\n  SELECT id FROM carga WHERE id < (SELECT id FROM nueva_carga) ORDER BY id DESC LIMIT 1\n),\n${sqlProyectosUpsert},\n${sqlRevenueMes},\n${sqlRevenueAnual},\n${sqlMovimiento}\nSELECT\n  (SELECT id FROM nueva_carga) AS carga_id,\n  (SELECT count(*) FROM proyectos_upsert) AS proyectos,\n  (SELECT count(*) FROM revenue_mes_insert) AS filas_revenue,\n  (SELECT count(*) FROM movimiento_insert) AS movimientos;\nCOMMIT;`;\n\nreturn [{ json: { sql } }];"
+        "jsCode": "\nfunction sqlBool(v) {\n  return v === true ? 'TRUE' : v === false ? 'FALSE' : 'NULL::boolean';\n}\n\nfunction parsearBooleano(v) {\n  if (v === null || v === undefined || v === '') return null;\n  const s = String(v).toLowerCase().trim();\n  if (s === 'true' || s === '1' || s === 'sí' || s === 'si') return true;\n  if (s === 'false' || s === '0' || s === 'no') return false;\n  return null;\n}\n\n\nfunction parsearProjectStatus(v) {\n  if (v === null || v === undefined) return null;\n  const s = String(v).trim().toLowerCase();\n  if (s === 'red' || s === 'rojo') return 'Red';\n  if (s === 'yellow' || s === 'amarillo') return 'Yellow';\n  if (s === 'green' || s === 'verde') return 'Green';\n  return null;\n}\n\nfunction sqlStr(v) {\n  if (v === null || v === undefined || v === '' || v === '#N/A') return 'NULL';\n  return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";\n}\n// En un VALUES sin montos, NULL sin tipo se infiere como text.\nfunction sqlNum(v, ausente = 'NULL::numeric') {\n  if (v === null || v === undefined || v === '' || v === '#N/A') return ausente;\n  const n = Number(v);\n  const LIMITE_MONTO = 100000000;\n  if (!Number.isFinite(n) || Math.abs(n) > LIMITE_MONTO) return ausente;\n  return String(n);\n}\nfunction sqlInt(v) {\n  if (v === null || v === undefined) return 'NULL::integer';\n  return String(Math.round(v));\n}\nfunction sqlDate(v) {\n  if (v === null || v === undefined || v === '') return 'NULL::date';\n  return \"'\" + v + \"'::date\";\n}\n\nconst data = $('Calcular Hash').item.json;\nif ((!Number.isInteger(data._fuente?.anio_forecast) || data._fuente.anio_forecast < 2000 || data._fuente.anio_forecast > 2100) || data._fuente?.modo !== 'cargar'\n    || typeof data._fuente?.archivo_id !== 'string' || !data._fuente.archivo_id.trim()) {\n  throw new Error('Escritura bloqueada: requiere año valido, modo cargar y archivo_id.');\n}\nconst info = data.InfoProyectos || [];\nconst backlog = data.Backlog || [];\nif (backlog.some(r => r._forecast?.anio_forecast !== data._fuente.anio_forecast)) {\n  throw new Error('Falta normalizar o hay filas de otro año. Ejecuta desde Manual Trigger.');\n}\nconst hash = data._hash;\nconst fechaReferencia = data.fechaReferencia;\n\nconst proyectosPorClave = new Map();\nfor (const row of info) proyectosPorClave.set(row._clave, row);\nfor (const row of backlog) if (!proyectosPorClave.has(row._clave)) proyectosPorClave.set(row._clave, row);\n\nconst backlogPorClave = new Map();\nfor (const row of backlog) if (!backlogPorClave.has(row._clave)) backlogPorClave.set(row._clave, row);\nconst backlogSinDuplicados = Array.from(backlogPorClave.values());\n\nconst proyectoValues = [];\nfor (const [clave, row] of proyectosPorClave) {\n  proyectoValues.push(`(${sqlStr(clave)}, ${sqlStr(row['# PA'])}, ${sqlStr(row['Project ID'])}, ${sqlStr(row['# Opp.'])}, `\n    + `${sqlStr(row['Nombre del Proyecto'])}, ${sqlStr(row['Cliente'])}, ${sqlStr(row['PM/Líder'])}, ${sqlStr(row['PM/Líder PSA'])}, `\n    + `${sqlStr(row['Zona'])}, ${sqlStr(row['Pais'])}, ${sqlStr(row['Vendedor'])}, ${sqlStr(row['TSM'])}, `\n    + `${sqlStr(row['Billing Type'])}, ${sqlStr(row['Billing Arrengement'])}, ${sqlStr(row['Estado'])}, `\n    + `${sqlNum(row['Valor OF'])}, ${sqlNum(row['Valor OF Anterior'])}, ${sqlNum(row['ACUMULADO A HOY'])}, `\n    + `${sqlNum(row['Consumido 2025'])}, ${sqlNum(row['Backlog 2026'])}, ${sqlDate(row._fecha_fin_iso)}, `\n    + `${sqlInt(row._dias_para_vencimiento)}, ${sqlNum(row._meses_transcurridos)}, ${sqlStr(row._estado_contrato)}, ${sqlStr(row['ESTATUS'])}, `\n    + `${sqlBool(parsearBooleano(row._executive_watchlist))}, ${sqlStr(parsearProjectStatus(row._project_status))})`);\n}\n\nconst sqlProyectosUpsert = `proyectos_upsert AS (\n  INSERT INTO proyecto (\n    clave, num_pa, project_id, num_opp, nombre, cliente, pm_lider, pm_lider_psa,\n    zona, pais, vendedor, tsm, billing_type, billing_arrangement, estado,\n    valor_of, valor_of_anterior, acumulado_a_hoy, consumido_2025, backlog_2026, fecha_fin,\n    dias_para_vencimiento, meses_transcurridos, estado_contrato, estatus,\n    executive_watchlist, project_status, primera_carga_id, ultima_carga_id\n  )\n  SELECT v.*, (SELECT id FROM nueva_carga), (SELECT id FROM nueva_carga)\n  FROM (VALUES\n${proyectoValues.join(',\\n')}\n  ) AS v(\n    clave, num_pa, project_id, num_opp, nombre, cliente, pm_lider, pm_lider_psa,\n    zona, pais, vendedor, tsm, billing_type, billing_arrangement, estado,\n    valor_of, valor_of_anterior, acumulado_a_hoy, consumido_2025, backlog_2026, fecha_fin,\n    dias_para_vencimiento, meses_transcurridos, estado_contrato, estatus,\n    executive_watchlist, project_status\n  )\n  ON CONFLICT (clave) DO UPDATE SET\n    num_pa = EXCLUDED.num_pa, project_id = EXCLUDED.project_id, num_opp = EXCLUDED.num_opp,\n    nombre = EXCLUDED.nombre, cliente = EXCLUDED.cliente, pm_lider = EXCLUDED.pm_lider, pm_lider_psa = EXCLUDED.pm_lider_psa,\n    zona = EXCLUDED.zona, pais = EXCLUDED.pais, vendedor = EXCLUDED.vendedor, tsm = EXCLUDED.tsm,\n    billing_type = EXCLUDED.billing_type, billing_arrangement = EXCLUDED.billing_arrangement, estado = EXCLUDED.estado,\n    valor_of = EXCLUDED.valor_of, valor_of_anterior = EXCLUDED.valor_of_anterior, acumulado_a_hoy = EXCLUDED.acumulado_a_hoy,\n    consumido_2025 = EXCLUDED.consumido_2025, backlog_2026 = EXCLUDED.backlog_2026, fecha_fin = EXCLUDED.fecha_fin,\n    dias_para_vencimiento = EXCLUDED.dias_para_vencimiento, meses_transcurridos = EXCLUDED.meses_transcurridos,\n    estado_contrato = EXCLUDED.estado_contrato, estatus = EXCLUDED.estatus,\n    executive_watchlist = EXCLUDED.executive_watchlist, project_status = EXCLUDED.project_status,\n    ultima_carga_id = (SELECT id FROM nueva_carga), actualizado_en = now()\n  RETURNING id, clave\n)`;\n\nconst MESES = [\n  ['Enero', 1, 'Upside'], ['Febrero', 2, 'Upside_1'], ['Marzo', 3, 'Upside_2'],\n  ['Abril', 4, 'Upside_3'], ['Mayo', 5, 'Upside_4'], ['Junio', 6, 'Upside_5'],\n  ['Julio', 7, 'Upside_6'], ['Agosto', 8, 'Upside_7'], ['Septiembre', 9, 'Upside_8'],\n  ['Octubre', 10, 'Upside_9'], ['Noviembre', 11, 'Upside_10'], ['Diciembre', 12, 'Upside_11'],\n];\n\nconst revenueMesValues = [];\nfor (const row of backlogSinDuplicados) {\n  for (const [mesNombre, mesNum, upsideCol] of MESES) {\n    const commit = sqlNum(row._forecast.meses[mesNum - 1].commit, '0');\n    const upside = sqlNum(row._forecast.meses[mesNum - 1].upside, '0');\n    revenueMesValues.push(`(${sqlStr(row._clave)}, ${mesNum}, ${commit}, ${upside})`);\n  }\n}\n\nconst sqlRevenueMes = `revenue_mes_insert AS (\n  INSERT INTO revenue_mes (carga_id, proyecto_id, mes, commit_usd, upside_usd)\n  SELECT (SELECT id FROM nueva_carga), pu.id, v.mes, v.commit_usd, v.upside_usd\n  FROM (VALUES\n${revenueMesValues.join(',\\n')}\n  ) AS v(clave, mes, commit_usd, upside_usd)\n  JOIN proyectos_upsert pu ON pu.clave = v.clave\n  RETURNING proyecto_id, mes, commit_usd, upside_usd\n)`;\n\nconst revenueAnualValues = backlogSinDuplicados.map(row => {\n  // FIX: valor_of debe venir de BackLog NOLA (row['Valor OF']), NO de Info Proyectos\n  const valorOf = sqlNum(row._forecast.valor_of);\n  return `(${sqlStr(row._clave)}, ${valorOf}, ${sqlNum(row._forecast.acumulado_anterior)}, ${sqlNum(row._forecast.backlog)}, ${sqlNum(row._forecast.total_ejecutado)})`;\n});\n\nconst sqlRevenueAnual = `revenue_anual_insert AS (\n  INSERT INTO revenue_anual (carga_id, proyecto_id, valor_of, acum_2025, backlog, total_ejecutado_acumulado)\n  SELECT (SELECT id FROM nueva_carga), pu.id, v.valor_of::numeric, v.acum_2025::numeric, v.backlog::numeric, v.total_ejecutado::numeric\n  FROM (VALUES\n${revenueAnualValues.join(',\\n')}\n  ) AS v(clave, valor_of, acum_2025, backlog, total_ejecutado)\n  JOIN proyectos_upsert pu ON pu.clave = v.clave\n  RETURNING 1\n)`;\n\nconst sqlMovimiento = `movimiento_insert AS (\n  INSERT INTO movimiento (carga_id, carga_previa_id, proyecto_id, mes, tipo, monto, commit_anterior, commit_nuevo, upside_anterior, upside_nuevo)\n  SELECT\n    (SELECT id FROM nueva_carga), (SELECT id FROM carga_previa),\n    n.proyecto_id, n.mes,\n    CASE WHEN n.commit_usd > COALESCE(a.commit_usd, 0) THEN 'upside_a_commit' ELSE 'commit_a_upside' END,\n    abs(n.commit_usd - COALESCE(a.commit_usd, 0)),\n    a.commit_usd, n.commit_usd, a.upside_usd, n.upside_usd\n  FROM revenue_mes_insert n\n  LEFT JOIN revenue_mes a\n    ON a.carga_id = (SELECT id FROM carga_previa) AND a.proyecto_id = n.proyecto_id AND a.mes = n.mes\n  WHERE (SELECT id FROM carga_previa) IS NOT NULL\n    AND abs(n.commit_usd - COALESCE(a.commit_usd, 0)) >= 1.0\n  RETURNING 1\n)`;\n\nconst sql = `BEGIN;\nWITH\nnueva_carga AS (\n  INSERT INTO carga (archivo_nombre, datos_hash, fecha_referencia, filas_info, filas_backlog, anio_forecast, archivo_id)\n  VALUES (${sqlStr(data._fuente.archivo_nombre)}, ${sqlStr(hash)}, ${sqlStr(fechaReferencia)}, ${info.length}, ${backlog.length}, ${sqlInt(data._fuente.anio_forecast)}, ${sqlStr(data._fuente.archivo_id)})\n  RETURNING id, anio_forecast, archivo_id, archivo_nombre\n),\ncarga_previa AS (\n  SELECT id FROM carga WHERE id < (SELECT id FROM nueva_carga)\n    AND anio_forecast = ${sqlInt(data._fuente.anio_forecast)}\n    AND archivo_id = ${sqlStr(data._fuente.archivo_id)}\n  ORDER BY id DESC LIMIT 1\n),\n${sqlProyectosUpsert},\n${sqlRevenueMes},\n${sqlRevenueAnual},\n${sqlMovimiento}\nSELECT\n  (SELECT id FROM nueva_carga) AS carga_id,\n  (SELECT anio_forecast FROM nueva_carga) AS anio_forecast,\n  (SELECT archivo_id FROM nueva_carga) AS archivo_id,\n  (SELECT archivo_nombre FROM nueva_carga) AS archivo_nombre,\n  (SELECT count(*) FROM proyectos_upsert) AS proyectos,\n  (SELECT count(*) FROM revenue_mes_insert) AS filas_revenue,\n  (SELECT count(*) FROM movimiento_insert) AS movimientos;\nCOMMIT;`;\n\nreturn [{ json: { sql } }];"
       }
     },
     {
@@ -378,8 +383,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        2480,
-        700
+        3980,
+        100
       ],
       "parameters": {
         "operation": "executeQuery",
@@ -400,13 +405,13 @@
       "typeVersion": 1.1,
       "position": [
         1420,
-        520
+        1620
       ],
       "parameters": {
         "name": "Tool_Postgres_Proyectos",
-        "description": "Consulta la tabla de proyectos directo en PostgreSQL (fuente: tabla carga/proyecto, la misma que usa el pipeline de snapshots). Devuelve clave, num_pa, nombre, cliente, pm_lider, zona, pais, estado, valor_of, fecha_fin, dias_para_vencimiento, estado_contrato, acum_2025, backlog, total_ejecutado_acumulado. Parametro opcional 'pa': numero de PA exacto para traer solo ese proyecto; vacio ('') para traer todos (maximo 500).",
+        "description": "SOLO FY26 (2026). Consulta la ultima captura FY26 y sus atributos historicos en PostgreSQL. Incluye anio_forecast, carga_id y archivo_id. PA opcional exacto: maximo 10 resultados; sin filtro devuelve una muestra de hasta 20 proyectos. La muestra NO es un conteo total. Para totales usar Tool_Postgres_Metricas. No responde FY27 ni comparaciones entre años.",
         "source": "parameter",
-        "workflowJson": "{\"nodes\": [{\"id\": \"trig\",\"name\": \"Execute Workflow Trigger\",\"type\": \"n8n-nodes-base.executeWorkflowTrigger\",\"typeVersion\": 1.1,\"position\": [0,0],\"parameters\": {\"inputSource\": \"passthrough\"}},{\"id\": \"ifnode\",\"name\": \"Hay filtro?\",\"type\": \"n8n-nodes-base.if\",\"typeVersion\": 2,\"position\": [220,0],\"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true,\"leftValue\": \"\",\"typeValidation\": \"strict\"},\"conditions\": [{\"leftValue\": \"={{ String($json.query.pa ?? '') }}\",\"rightValue\": \"\",\"operator\": {\"type\": \"string\",\"operation\": \"notEquals\"}}],\"combinator\": \"and\"}}},{\"id\": \"qfiltrada\",\"name\": \"Query (filtrada)\",\"type\": \"n8n-nodes-base.postgres\",\"typeVersion\": 2.6,\"position\": [440,-100],\"parameters\": {\"operation\": \"executeQuery\",\"query\": \"SELECT p.clave, p.num_pa, p.nombre, p.cliente, p.pm_lider, p.zona, p.pais, p.estado, p.fecha_fin, p.dias_para_vencimiento, p.estado_contrato, ra.valor_of, ra.acum_2025, ra.backlog, ra.total_ejecutado_acumulado FROM proyecto p LEFT JOIN revenue_anual ra ON ra.proyecto_id = p.id AND ra.carga_id = (SELECT id FROM v_carga_actual) WHERE (p.num_pa = $1 OR p.clave = $1) AND p.ultima_carga_id = (SELECT id FROM v_carga_actual) LIMIT 10;\",\"options\": {\"queryReplacement\": \"={{ $json.query.pa }}\"}},\"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\",\"name\": \"Postgres account\"}}},{\"id\": \"qtodas\",\"name\": \"Query (todas)\",\"type\": \"n8n-nodes-base.postgres\",\"typeVersion\": 2.6,\"position\": [440,100],\"parameters\": {\"operation\": \"executeQuery\",\"query\": \"SELECT p.clave, p.num_pa, p.nombre, p.cliente, p.pm_lider, p.zona, p.pais, p.estado, p.fecha_fin, p.dias_para_vencimiento, p.estado_contrato, ra.valor_of, ra.acum_2025, ra.backlog, ra.total_ejecutado_acumulado FROM proyecto p LEFT JOIN revenue_anual ra ON ra.proyecto_id = p.id AND ra.carga_id = (SELECT id FROM v_carga_actual) WHERE p.ultima_carga_id = (SELECT id FROM v_carga_actual) LIMIT 20;\",\"options\": {}},\"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\",\"name\": \"Postgres account\"}}},{\"id\": \"agg\",\"name\": \"Aggregate\",\"type\": \"n8n-nodes-base.code\",\"typeVersion\": 2,\"position\": [660,0],\"parameters\": {\"mode\": \"runOnceForAllItems\",\"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}],\"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Hay filtro?\",\"type\": \"main\",\"index\": 0}]]},\"Hay filtro?\": {\"main\": [[{\"node\": \"Query (filtrada)\",\"type\": \"main\",\"index\": 0}],[{\"node\": \"Query (todas)\",\"type\": \"main\",\"index\": 0}]]},\"Query (filtrada)\": {\"main\": [[{\"node\": \"Aggregate\",\"type\": \"main\",\"index\": 0}]]},\"Query (todas)\": {\"main\": [[{\"node\": \"Aggregate\",\"type\": \"main\",\"index\": 0}]]}}}",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"ifnode\", \"name\": \"Hay filtro?\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2, \"position\": [220, 0], \"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"strict\"}, \"conditions\": [{\"leftValue\": \"={{ String($json.query.pa ?? '') }}\", \"rightValue\": \"\", \"operator\": {\"type\": \"string\", \"operation\": \"notEquals\"}}], \"combinator\": \"and\"}}}, {\"id\": \"qfiltrada\", \"name\": \"Query (filtrada)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, -100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"WITH actual AS (SELECT id FROM v_carga_actual_por_forecast WHERE anio_forecast=2026 ORDER BY id DESC LIMIT 1) SELECT 2026 AS anio_forecast, s.carga_id, c.archivo_id, s.atributos->>'clave' AS clave, s.atributos->>'num_pa' AS num_pa, s.atributos->>'nombre' AS nombre, s.atributos->>'cliente' AS cliente, s.atributos->>'pm_lider' AS pm_lider, s.atributos->>'zona' AS zona, s.atributos->>'pais' AS pais, s.atributos->>'estado' AS estado, s.atributos->>'fecha_fin' AS fecha_fin, s.atributos->>'dias_para_vencimiento' AS dias_para_vencimiento, s.atributos->>'estado_contrato' AS estado_contrato, ra.valor_of, ra.acum_2025, ra.backlog, ra.total_ejecutado_acumulado FROM proyecto_snapshot s JOIN carga c ON c.id=s.carga_id LEFT JOIN revenue_anual ra ON ra.carga_id=s.carga_id AND ra.proyecto_id=s.proyecto_id WHERE s.carga_id=(SELECT id FROM actual) AND (s.atributos->>'num_pa'=$1 OR s.atributos->>'clave'=$1) ORDER BY s.proyecto_id LIMIT 10;\", \"options\": {\"queryReplacement\": \"={{ $json.query.pa }}\"}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"qtodas\", \"name\": \"Query (todas)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, 100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"WITH actual AS (SELECT id FROM v_carga_actual_por_forecast WHERE anio_forecast=2026 ORDER BY id DESC LIMIT 1) SELECT 2026 AS anio_forecast, s.carga_id, c.archivo_id, s.atributos->>'clave' AS clave, s.atributos->>'num_pa' AS num_pa, s.atributos->>'nombre' AS nombre, s.atributos->>'cliente' AS cliente, s.atributos->>'pm_lider' AS pm_lider, s.atributos->>'zona' AS zona, s.atributos->>'pais' AS pais, s.atributos->>'estado' AS estado, s.atributos->>'fecha_fin' AS fecha_fin, s.atributos->>'dias_para_vencimiento' AS dias_para_vencimiento, s.atributos->>'estado_contrato' AS estado_contrato, ra.valor_of, ra.acum_2025, ra.backlog, ra.total_ejecutado_acumulado FROM proyecto_snapshot s JOIN carga c ON c.id=s.carga_id LEFT JOIN revenue_anual ra ON ra.carga_id=s.carga_id AND ra.proyecto_id=s.proyecto_id WHERE s.carga_id=(SELECT id FROM actual) ORDER BY s.proyecto_id LIMIT 20;\", \"options\": {}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [660, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Hay filtro?\", \"type\": \"main\", \"index\": 0}]]}, \"Hay filtro?\": {\"main\": [[{\"node\": \"Query (filtrada)\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Query (todas)\", \"type\": \"main\", \"index\": 0}]]}, \"Query (filtrada)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}, \"Query (todas)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
         "specifyInputSchema": true,
         "schemaType": "manual",
         "inputSchema": "{\"type\": \"object\", \"properties\": {\"pa\": {\"type\": [\"string\", \"number\"], \"description\": \"Numero de PA a buscar. Dejar vacio para traer todos.\"}}}"
@@ -419,13 +424,13 @@
       "typeVersion": 1.1,
       "position": [
         1620,
-        520
+        1620
       ],
       "parameters": {
         "name": "Tool_Postgres_Movimientos",
-        "description": "Consulta el historial de cambios REAL calculado en PostgreSQL (tabla movimiento), comparando cada carga contra la anterior con umbral de $1. Devuelve num_pa, nombre, mes, tipo (upside_a_commit/commit_a_upside/alta_proyecto), monto, valores antes/despues, y fecha de la carga. Parametro opcional 'pa': numero de PA exacto para filtrar un proyecto; vacio ('') para traer los ultimos 100 movimientos de todos los proyectos.",
+        "description": "SOLO FY26 (2026). Consulta hasta 10 movimientos recientes de la fuente FY26 activa, con PA opcional exacto, fecha, monto y valores antes/despues. La lista es una muestra, no el total del historial. Incluye anio_forecast y archivo_id. No responde FY27 ni comparaciones entre años.",
         "source": "parameter",
-        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"ifnode\", \"name\": \"Hay filtro?\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2, \"position\": [220, 0], \"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"strict\"}, \"conditions\": [{\"leftValue\": \"={{ String($json.query.pa ?? '') }}\", \"rightValue\": \"\", \"operator\": {\"type\": \"string\", \"operation\": \"notEquals\"}}], \"combinator\": \"and\"}}}, {\"id\": \"qfiltrada\", \"name\": \"Query (filtrada)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, -100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"SELECT p.num_pa, p.nombre, m.mes, m.tipo, m.monto, m.commit_anterior, m.commit_nuevo, m.upside_anterior, m.upside_nuevo, c.ejecutada_en FROM movimiento m JOIN proyecto p ON p.id = m.proyecto_id JOIN carga c ON c.id = m.carga_id WHERE p.num_pa = $1 OR p.clave = $1 ORDER BY m.id DESC LIMIT 10;\", \"options\": {\"queryReplacement\": \"={{ $json.query.pa }}\"}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"qtodas\", \"name\": \"Query (todas)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, 100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"SELECT p.num_pa, p.nombre, m.mes, m.tipo, m.monto, m.commit_anterior, m.commit_nuevo, m.upside_anterior, m.upside_nuevo, c.ejecutada_en FROM movimiento m JOIN proyecto p ON p.id = m.proyecto_id JOIN carga c ON c.id = m.carga_id ORDER BY m.id DESC LIMIT 10;\", \"options\": {}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [660, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Hay filtro?\", \"type\": \"main\", \"index\": 0}]]}, \"Hay filtro?\": {\"main\": [[{\"node\": \"Query (filtrada)\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Query (todas)\", \"type\": \"main\", \"index\": 0}]]}, \"Query (filtrada)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}, \"Query (todas)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"ifnode\", \"name\": \"Hay filtro?\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2, \"position\": [220, 0], \"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"strict\"}, \"conditions\": [{\"leftValue\": \"={{ String($json.query.pa ?? '') }}\", \"rightValue\": \"\", \"operator\": {\"type\": \"string\", \"operation\": \"notEquals\"}}], \"combinator\": \"and\"}}}, {\"id\": \"qfiltrada\", \"name\": \"Query (filtrada)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, -100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"WITH actual AS (SELECT id FROM v_carga_actual_por_forecast WHERE anio_forecast=2026 ORDER BY id DESC LIMIT 1) SELECT 2026 AS anio_forecast, c.archivo_id, COALESCE(s.atributos->>'num_pa',p.num_pa) AS num_pa, COALESCE(s.atributos->>'nombre','(sin nombre historico)') AS nombre, m.mes, m.tipo, m.monto, m.commit_anterior, m.commit_nuevo, m.upside_anterior, m.upside_nuevo, c.ejecutada_en FROM movimiento m JOIN proyecto p ON p.id=m.proyecto_id JOIN carga c ON c.id=m.carga_id JOIN carga a ON a.id=(SELECT id FROM actual) LEFT JOIN proyecto_snapshot s ON s.carga_id=c.id AND s.proyecto_id=m.proyecto_id WHERE c.anio_forecast=2026 AND c.archivo_id IS NOT DISTINCT FROM a.archivo_id AND (p.num_pa=$1 OR p.clave=$1) ORDER BY m.id DESC LIMIT 10;\", \"options\": {\"queryReplacement\": \"={{ $json.query.pa }}\"}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"qtodas\", \"name\": \"Query (todas)\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [440, 100], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"WITH actual AS (SELECT id FROM v_carga_actual_por_forecast WHERE anio_forecast=2026 ORDER BY id DESC LIMIT 1) SELECT 2026 AS anio_forecast, c.archivo_id, COALESCE(s.atributos->>'num_pa',p.num_pa) AS num_pa, COALESCE(s.atributos->>'nombre','(sin nombre historico)') AS nombre, m.mes, m.tipo, m.monto, m.commit_anterior, m.commit_nuevo, m.upside_anterior, m.upside_nuevo, c.ejecutada_en FROM movimiento m JOIN proyecto p ON p.id=m.proyecto_id JOIN carga c ON c.id=m.carga_id JOIN carga a ON a.id=(SELECT id FROM actual) LEFT JOIN proyecto_snapshot s ON s.carga_id=c.id AND s.proyecto_id=m.proyecto_id WHERE c.anio_forecast=2026 AND c.archivo_id IS NOT DISTINCT FROM a.archivo_id ORDER BY m.id DESC LIMIT 10;\", \"options\": {}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [660, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Hay filtro?\", \"type\": \"main\", \"index\": 0}]]}, \"Hay filtro?\": {\"main\": [[{\"node\": \"Query (filtrada)\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Query (todas)\", \"type\": \"main\", \"index\": 0}]]}, \"Query (filtrada)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}, \"Query (todas)\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
         "specifyInputSchema": true,
         "schemaType": "manual",
         "inputSchema": "{\"type\": \"object\", \"properties\": {\"pa\": {\"type\": [\"string\", \"number\"], \"description\": \"Numero de PA a buscar. Dejar vacio para traer todos.\"}}}"
@@ -438,15 +443,156 @@
       "typeVersion": 1.1,
       "position": [
         1820,
-        520
+        1620
       ],
       "parameters": {
         "name": "Tool_Postgres_Metricas",
-        "description": "Devuelve metricas agregadas del portafolio calculadas EN VIVO desde PostgreSQL (no desde Data tables): total de proyectos, valor OF total, backlog total, acum_2025 total, conteo de contratos vencidos/vigentes, y fecha de la ultima carga. Usa esta herramienta para preguntas de totales/conteos cuando se pida explicitamente el dato 'de Postgres' o 'de la base de datos'.",
+        "description": "SOLO FY26 (2026). No responde FY27 ni comparaciones entre años. Devuelve metricas agregadas del portafolio calculadas EN VIVO desde PostgreSQL (no desde Data tables): total de proyectos, valor OF total, backlog total, acum_2025 total, conteo de contratos vencidos/vigentes, y fecha de la ultima carga. Usa esta herramienta para preguntas de totales/conteos cuando se pida explicitamente el dato 'de Postgres' o 'de la base de datos'.",
         "source": "parameter",
-        "workflowJson": "{\"nodes\": [{\"id\": \"trig\",\"name\": \"Execute Workflow Trigger\",\"type\": \"n8n-nodes-base.executeWorkflowTrigger\",\"typeVersion\": 1.1,\"position\": [0,0],\"parameters\": {\"inputSource\": \"passthrough\"}},{\"id\": \"q\",\"name\": \"Query\",\"type\": \"n8n-nodes-base.postgres\",\"typeVersion\": 2.6,\"position\": [220,0],\"parameters\": {\"operation\": \"executeQuery\",\"query\": \"WITH carga_actual AS (SELECT id FROM v_carga_actual)\\nSELECT\\n  (SELECT COUNT(*) FROM proyecto WHERE ultima_carga_id = (SELECT id FROM carga_actual)) AS total_proyectos,\\n  (SELECT SUM(ra.valor_of) FROM revenue_anual ra WHERE ra.carga_id = (SELECT id FROM carga_actual)) AS valor_of_total,\\n  (SELECT SUM(ra.backlog) FROM revenue_anual ra WHERE ra.carga_id = (SELECT id FROM carga_actual)) AS backlog_total,\\n  (SELECT SUM(ra.acum_2025) FROM revenue_anual ra WHERE ra.carga_id = (SELECT id FROM carga_actual)) AS acum_2025_total,\\n  (SELECT COUNT(*) FROM proyecto WHERE ultima_carga_id = (SELECT id FROM carga_actual) AND estado_contrato = 'Contrato vencido') AS contratos_vencidos,\\n  (SELECT COUNT(*) FROM proyecto WHERE ultima_carga_id = (SELECT id FROM carga_actual) AND estado_contrato = 'Contrato vigente') AS contratos_vigentes,\\n  (SELECT ejecutada_en FROM carga WHERE id = (SELECT id FROM carga_actual)) AS ultima_carga_en;\",\"options\": {}},\"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\",\"name\": \"Postgres account\"}}},{\"id\": \"agg\",\"name\": \"Aggregate\",\"type\": \"n8n-nodes-base.code\",\"typeVersion\": 2,\"position\": [440,0],\"parameters\": {\"mode\": \"runOnceForAllItems\",\"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}],\"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Query\",\"type\": \"main\",\"index\": 0}]]},\"Query\": {\"main\": [[{\"node\": \"Aggregate\",\"type\": \"main\",\"index\": 0}]]}}}",
+        "workflowJson": "{\"nodes\": [{\"id\": \"trig\", \"name\": \"Execute Workflow Trigger\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0], \"parameters\": {\"inputSource\": \"passthrough\"}}, {\"id\": \"q\", \"name\": \"Query\", \"type\": \"n8n-nodes-base.postgres\", \"typeVersion\": 2.6, \"position\": [220, 0], \"parameters\": {\"operation\": \"executeQuery\", \"query\": \"WITH actual AS (SELECT id FROM v_carga_actual_por_forecast WHERE anio_forecast=2026 ORDER BY id DESC LIMIT 1) SELECT 2026 AS anio_forecast, (SELECT id FROM actual) AS carga_id, (SELECT archivo_id FROM carga WHERE id=(SELECT id FROM actual)) AS archivo_id, COUNT(*) AS total_proyectos, SUM(ra.valor_of) AS valor_of_total, SUM(ra.backlog) AS backlog_total, SUM(ra.acum_2025) AS acum_2025_total, COUNT(*) FILTER (WHERE s.atributos->>'estado_contrato'='Contrato vencido') AS contratos_vencidos, COUNT(*) FILTER (WHERE s.atributos->>'estado_contrato'='Contrato vigente') AS contratos_vigentes, (SELECT ejecutada_en FROM carga WHERE id=(SELECT id FROM actual)) AS ultima_carga_en FROM proyecto_snapshot s LEFT JOIN revenue_anual ra ON ra.carga_id=s.carga_id AND ra.proyecto_id=s.proyecto_id WHERE s.carga_id=(SELECT id FROM actual);\", \"options\": {}}, \"credentials\": {\"postgres\": {\"id\": \"cSsw67wkMHZDJ5FB\", \"name\": \"Postgres account\"}}}, {\"id\": \"agg\", \"name\": \"Aggregate\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [440, 0], \"parameters\": {\"mode\": \"runOnceForAllItems\", \"jsCode\": \"return [{ json: { rows: $input.all().map(i => i.json) } }];\"}}], \"connections\": {\"Execute Workflow Trigger\": {\"main\": [[{\"node\": \"Query\", \"type\": \"main\", \"index\": 0}]]}, \"Query\": {\"main\": [[{\"node\": \"Aggregate\", \"type\": \"main\", \"index\": 0}]]}}}",
         "specifyInputSchema": false
       }
+    },
+    {
+      "id": "forecast-config",
+      "name": "Configurar Fuente Forecast",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        600
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Registrar aqui cada Excel nuevo. Los años anteriores se mantienen en la base.\nconst MODO = 'cargar'; // 'validar' revisa todas las fuentes sin escribir PostgreSQL.\nconst archivos = {\n  2026: { archivo_id: '1_NNst0wIKXAlCa7fu8RRiBFAahcXzvuGEEt5IAhm-co', archivo_nombre: 'CLOUD FORECAST GENERAL - NOLA FY26' },\n  2027: { archivo_id: '13ULKx3-9MmFrU6suvm8jSgIwIKsBh44wLH7i_l10tSE', archivo_nombre: '27-CLOUD FORECAST GENERAL - NOLA FY27' },\n};\nconst fuentes = Object.fromEntries(Object.entries(archivos).map(([key, archivo]) => {\n  const anio = Number(key);\n  const anteriores = Array.from({length:Math.max(0,anio-2025)},(_,i)=>2025+i).join('-');\n  const completo = anteriores + '-' + anio;\n  return [anio, { ...archivo, campos: archivo.campos || {\n    valor_of: ['Valor OF'],\n    acumulado_anterior: anio === 2026 ? ['Acum 2025'] : ['Total Ejecutado Acumulado ' + anteriores, 'Total Ejecutado Acumulado 2025-' + (anio - 1), 'Acumulado anterior'],\n    backlog: ['Backlog ' + anio, ...(anio === 2026 ? ['Backlog'] : [])],\n    total_ejecutado: ['TOTAL EJECUTADO ACUMULADO ' + completo, 'TOTAL EJECUTADO ACUMULADO ' + completo + ' (COPIAR)', 'TOTAL EJECUTADO ACUMULADO 2025-' + anio, 'TOTAL EJECUTADO ACUMULADO 2025-' + anio + ' (COPIAR)', ...(anio === 2026 ? ['TOTAL EJECUTADO ACUMULADO'] : [])],\n  } }];\n}));\nconst ANIOS_FORECAST = Object.keys(fuentes).map(Number).sort((a,b) => a-b);\nif (!['cargar', 'validar'].includes(MODO)) throw new Error('Modo de forecast no valido.');\nif (!ANIOS_FORECAST.length || new Set(ANIOS_FORECAST).size !== ANIOS_FORECAST.length\n    || ANIOS_FORECAST.some(anio => !fuentes[anio])) {\n  throw new Error('Seleccion de años de forecast no valida o duplicada.');\n}\nreturn ANIOS_FORECAST.map(anio => ({ json: {\n  _fuente: { anio_forecast: anio, modo: MODO, ...fuentes[anio] },\n} }));"
+      }
+    },
+    {
+      "id": "forecast-normalize",
+      "name": "Normalizar Forecast por Anio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const data = $json;\nconst fuente = data._fuente;\nif ((!Number.isInteger(fuente?.anio_forecast) || fuente.anio_forecast < 2000 || fuente.anio_forecast > 2100) || !fuente.campos) {\n  throw new Error('Falta configurar la fuente. Ejecuta desde Manual Trigger.');\n}\nconst normalizar = valor => String(valor).replace(/\\s+/g, ' ').trim().toUpperCase();\nconst numero = valor => {\n  if (valor === null || valor === undefined || typeof valor === 'boolean' || String(valor).trim() === '') return null;\n  const n = Number(valor);\n  return Number.isFinite(n) && Math.abs(n) <= 100000000 ? n : null;\n};\nfunction leer(fila, nombres) {\n  for (const nombre of nombres) {\n    const clave = Object.keys(fila).find(k => normalizar(k) === normalizar(nombre));\n    if (clave !== undefined) return fila[clave];\n  }\n  return null;\n}\nconst meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];\nconst cabeceras = new Set((data.Backlog || []).flatMap(r => Object.keys(r).map(normalizar)));\nconst requeridas = {\n  ...fuente.campos,\n  ...Object.fromEntries(meses.map(m => [m, [m]])),\n  ...Object.fromEntries(meses.map((m, i) => [m + '_upside', [i ? 'Upside_' + i : 'Upside']])),\n};\nconst faltantes = Object.entries(requeridas).filter(([, nombres]) => !nombres.some(n => cabeceras.has(normalizar(n)))).map(([campo]) => campo);\n// No permitir que un archivo FY27 se procese por error como FY26 o viceversa.\nconst cabeceraOtroAnio = [...cabeceras].some(c => /^BACKLOG 20\\d{2}$/.test(c) && c !== 'BACKLOG ' + fuente.anio_forecast);\nconst backlog = (data.Backlog || []).map(row => ({\n  ...row,\n  _forecast: {\n    anio_forecast: fuente.anio_forecast,\n    ...Object.fromEntries(Object.entries(fuente.campos).map(([campo, nombres]) => [campo, numero(leer(row, nombres))])),\n    meses: meses.map((m, i) => ({\n      mes: i + 1,\n      commit: numero(leer(row, [m])),\n      upside: numero(leer(row, [i ? 'Upside_' + i : 'Upside'])),\n    })),\n  },\n}));\nreturn [{ json: {\n  ...data,\n  Backlog: backlog,\n  _esquema_forecast: { anio_forecast: fuente.anio_forecast, faltantes, cabeceraOtroAnio },\n} }];\n"
+      }
+    },
+    {
+      "id": "forecast-mode",
+      "name": "Solo Validar Forecast?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json._fuente.modo }}",
+              "rightValue": "validar",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "forecast-preview",
+      "name": "Resumen Validacion Forecast (sin escritura)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4200,
+        -180
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const data = $json;\nconst campos = ['valor_of','acumulado_anterior','backlog','total_ejecutado'];\nreturn [{ json: {\n  modo: 'validar',\n  anio_forecast: data._fuente.anio_forecast,\n  archivo_id: data._fuente.archivo_id,\n  archivo_nombre: data._fuente.archivo_nombre,\n  valido: data._validacion.valido,\n  filas_info: data.InfoProyectos.length,\n  filas_backlog: data.Backlog.length,\n  cobertura_financiera: Object.fromEntries(campos.map(c => [c, {\n    con_dato: data.Backlog.filter(r => r._forecast[c] !== null).length,\n    sin_dato: data.Backlog.filter(r => r._forecast[c] === null).length,\n  }])),\n  muestras: data.Backlog.slice(0, 3).map(r => ({ pa: r['# PA'] ?? null, ...r._forecast })),\n  escritura_postgres: false,\n  aviso: 'Validacion terminada. No se consultaron ni modificaron cargas, proyectos o movimientos de PostgreSQL. El dashboard y el agente mantienen FY26.',\n} }];\n"
+      }
+    },
+    {
+      "id": "1abfde20-0682-4808-ae3e-e9509694b139",
+      "name": "Procesar Fuentes Forecast",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        460,
+        600
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "reset": false
+        }
+      }
+    },
+    {
+      "id": "ddf7d3e0-e787-4d16-8139-1ed8693a72e6",
+      "name": "Fuente Actual Forecast",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nif (items.length !== 1 || (!Number.isInteger(items[0]?.json._fuente?.anio_forecast) || items[0].json._fuente.anio_forecast < 2000 || items[0].json._fuente.anio_forecast > 2100)) throw new Error('Se requiere una sola fuente por iteracion. Ejecuta desde Manual Trigger.');\nreturn items;"
+      }
+    },
+    {
+      "id": "e509078c-7da1-464d-bcc7-e883c985d6ed",
+      "name": "Carga Completada (siguiente fuente)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4200,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// PostgreSQL devuelve la identidad de la captura; no dependemos de pairedItem.\nconst cargas = $input.all().map(i => i.json).filter(r => r.carga_id != null);\nif (cargas.length !== 1) throw new Error('PostgreSQL debe devolver exactamente una carga_id.');\nconst carga = cargas[0];\nconst anio = Number(carga.anio_forecast);\nif ((!Number.isInteger(anio) || anio < 2000 || anio > 2100) || typeof carga.archivo_id !== 'string' || !carga.archivo_id) {\n  throw new Error('La respuesta SQL no identifica año/fuente. Actualiza tambien Construir SQL de Carga.');\n}\nreturn [{ json: { anio_forecast: anio, archivo_id: carga.archivo_id, archivo_nombre: carga.archivo_nombre,\n  estado: 'cargado', escritura_postgres: true, carga_id: carga.carga_id,\n  proyectos: carga.proyectos, filas_revenue: carga.filas_revenue, movimientos: carga.movimientos } }];"
+      }
+    },
+    {
+      "id": "703c5db5-4e11-4b6a-a7d0-cac1dd86de96",
+      "name": "Resumen Actualizacion Forecast",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        820
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const fuentes = $input.all().map(i => i.json);\nconst esperadas = $('Configurar Fuente Forecast').all().map(i => i.json._fuente.anio_forecast);\nif (fuentes.length !== esperadas.length || esperadas.some(anio => fuentes.filter(f => f.anio_forecast === anio).length !== 1)) throw new Error('Resumen incompleto o fuentes duplicadas. Revisa la ejecucion.');\nreturn [{ json: { total_fuentes: fuentes.length, cargas_nuevas: fuentes.filter(f => f.estado === 'cargado').length, sin_cambios: fuentes.filter(f => f.estado === 'sin_cambios').length, solo_validadas: fuentes.filter(f => f.modo === 'validar').length, fuentes } }];"
+      }
+    },
+    {
+      "id": "741f864d-508b-4a7f-8b5a-f40e73938415",
+      "name": "Siguiente Excel",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4440,
+        600
+      ],
+      "parameters": {}
     }
   ],
   "connections": {
@@ -525,7 +671,7 @@
       "main": [
         [
           {
-            "node": "Recalcular Columnas Rotas",
+            "node": "Normalizar Forecast por Anio",
             "type": "main",
             "index": 0
           }
@@ -536,7 +682,7 @@
       "main": [
         [
           {
-            "node": "Descargar data.xlsx de Drive",
+            "node": "Configurar Fuente Forecast",
             "type": "main",
             "index": 0
           }
@@ -591,7 +737,7 @@
       "main": [
         [
           {
-            "node": "Calcular Hash",
+            "node": "Solo Validar Forecast?",
             "type": "main",
             "index": 0
           }
@@ -638,7 +784,7 @@
         ],
         [
           {
-            "node": "Sin Cambios (fin)",
+            "node": "Sin Cambios (siguiente fuente)",
             "type": "main",
             "index": 0
           }
@@ -688,7 +834,132 @@
           }
         ]
       ]
+    },
+    "Configurar Fuente Forecast": {
+      "main": [
+        [
+          {
+            "node": "Procesar Fuentes Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Forecast por Anio": {
+      "main": [
+        [
+          {
+            "node": "Recalcular Columnas Rotas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solo Validar Forecast?": {
+      "main": [
+        [
+          {
+            "node": "Resumen Validacion Forecast (sin escritura)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Calcular Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Fuentes Forecast": {
+      "main": [
+        [
+          {
+            "node": "Resumen Actualizacion Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fuente Actual Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fuente Actual Forecast": {
+      "main": [
+        [
+          {
+            "node": "Descargar data.xlsx de Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sin Cambios (siguiente fuente)": {
+      "main": [
+        [
+          {
+            "node": "Siguiente Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumen Validacion Forecast (sin escritura)": {
+      "main": [
+        [
+          {
+            "node": "Siguiente Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carga Completada (siguiente fuente)": {
+      "main": [
+        [
+          {
+            "node": "Siguiente Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutar Carga en Postgres": {
+      "main": [
+        [
+          {
+            "node": "Carga Completada (siguiente fuente)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siguiente Excel": {
+      "main": [
+        [
+          {
+            "node": "Procesar Fuentes Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": {}
+  "settings": {},
+  "pinData": {}
 }

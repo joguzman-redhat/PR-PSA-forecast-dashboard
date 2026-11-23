@@ -81,3 +81,38 @@ esquema va **en los dos lugares**:
 
 El workflow de n8n vive en `n8n/n8n_nola_completo.json`. Se edita ese archivo y
 se reimporta en n8n.
+
+
+## Timeline multianual (requerimiento del 22 nov 2026)
+
+La vista combinada sustituye la seleccion de archivo por un rango mensual.
+Cada periodo se identifica por año y mes (`2026-01`, `2027-01`); un quarter
+siempre incluye su año. Se conserva la semantica de cada columna financiera
+anual: los acumulados de FY26 y FY27 NO se suman entre si.
+
+- Todo dinero sigue procediendo de BackLog NOLA. Commit/Upside se concatenan
+  por periodo. Booking, backlog fuente y acumulado anterior se seleccionan
+  una sola vez por proyecto, sin sumarlos por año.
+- Para esos atributos, prioridad por proyecto: año actual en America/Bogota;
+  si falta, anterior mas cercano; si solo existe en el futuro, futuro mas cercano.
+  La carga mas reciente resuelve empates en la misma fuente/año. No se rellena
+  un importe ausente con el de Info Proyectos ni con cero.
+- El acumulado a hoy parte del acumulado anterior de la fuente de referencia
+  y suma los meses de ESA fuente hasta hoy. No vuelve a sumar los años que
+  ya estan incluidos en su saldo anterior.
+- La clave multianual es PA. Sin PA, se utiliza Project ID/PR; sin ambos, la
+  identidad se aisla por año y proyecto existente y exige conciliacion manual.
+  No se unen proyectos desconocidos solo por tener nombres parecidos.
+- Los filtros Desde/Hasta afectan el revenue del calendario, no duplican ni
+  suman Booking. Cambiar de periodo no debe cambiar el proyecto de referencia.
+- La grafica combinada muestra Commit/Upside fuente por mes y año, sin estimar
+  importes para meses fuera de cobertura. Un mes no disponible es null, distinto
+  de un cero cargado. Las reglas anteriores de proyeccion estimada se conservan
+  solo para consumidores anuales anteriores, no se aplican sobre el timeline.
+- Una fecha de inicio real no se inventa: el calendario disponible comienza
+  con las fuentes cargadas. Fecha fin se conserva como atributo; no se borran
+  montos de Excel por estar fuera de esa fecha.
+
+Los snapshots originales conservan el historial de cambios; la tabla
+`forecast_revenue_mensual` es su consolidacion de lectura, mantenida en la
+misma transaccion por trigger. No sustituye ni elimina la evidencia original.

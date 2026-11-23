@@ -92,7 +92,7 @@ case "${1:-up}" in
     for sql in db/migraciones/*.sql; do
       [ -f "$sql" ] || continue
       echo "Aplicando $(basename "$sql")..."
-      podman exec -i forecast-postgres psql -U "${POSTGRES_USER:-forecast}" -d "${POSTGRES_DB:-forecast}" < "$sql"
+      podman exec -i forecast-postgres psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-forecast}" -d "${POSTGRES_DB:-forecast}" < "$sql"
     done
     echo "✓ Migraciones aplicadas"
     ;;

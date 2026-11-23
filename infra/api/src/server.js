@@ -80,13 +80,48 @@ function crearApp({
       res.set('Cache-Control', 'no-store');
       next();
     });
+    rutas.get('/api/timeline', (_req,res) => {
+      const nombres=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      const periodos=nombres.map((_,i)=>'2026-'+String(i+1).padStart(2,'0'));
+      const backlog=datosDemo.backlog.backlog.map(b=>{
+        const row={...b,clave_timeline:String(b.num_pa),acumulado_anterior:b.acumulado_anterior??b.acum_2025,acumulado_a_fecha:null};
+        nombres.forEach((m,i)=>{row[periodos[i]+'_fijo']=b[m+'_fijo'];row[periodos[i]+'_upside']=b[m+'_upside'];});return row;
+      });
+      const historia=structuredClone(datosDemo.historia);
+      for(const snap of historia.snapshots||[])if(snap.por_mes)snap.por_mes=Object.fromEntries(nombres.map((m,i)=>[periodos[i],snap.por_mes[m]]));
+      res.json({meta:{...datosDemo.proyectos.meta,timeline:true,origen:'demo',anio_actual:2026,estado:'disponible',periodos,
+        desde:periodos[0],hasta:periodos.at(-1)},proyectos:datosDemo.proyectos.proyectos.map(p=>({...p,clave_timeline:String(p.num_pa)})),backlog,historia});
+    });
+    rutas.get('/api/forecasts', (_req, res) => res.json({
+      anios: [2026, 2027], fuentes: [{ anio_forecast: 2026, archivo_id: 'demo',
+        archivo_nombre: 'Datos ficticios', carga_id: null, snapshots: datosDemo.historia.snapshots.length }],
+    }));
     for (const nombre of ['proyectos', 'backlog', 'historia']) {
-      rutas.get(`/api/${nombre}`, (_req, res) => res.json(datosDemo[nombre]));
+      rutas.get(`/api/${nombre}`, (req, res, next) => {
+        try {
+          // Se valida sin cargar el modulo que crea el pool de PostgreSQL.
+          const anio = req.query.anio ?? '2026';
+          if (typeof anio !== 'string' || !/^\d{4}$/.test(anio) || +anio < 2000 || +anio > 2100) {
+            return res.status(400).json({ error: 'anio no valido' });
+          }
+          const disponible = anio === '2026' && (!Object.hasOwn(req.query, 'archivo_id') || req.query.archivo_id === 'demo');
+          const datos = disponible ? datosDemo[nombre] : nombre === 'historia'
+            ? { snapshots: [], series_por_proyecto: {}, eventos: [] } : { [nombre]: [] };
+          res.json({ ...datos, meta: { ...(datos.meta || {}), anio_forecast: +anio, archivo_id: 'demo', origen: 'demo',
+            estado: disponible ? 'disponible' : 'sin_datos', ...(nombre === 'proyectos' && !disponible ? { columnas: [] } : {}) } });
+        } catch (err) { next(err); }
+      });
     }
     rutas.post('/api/reload', (_req, res) => res.status(409).json({
       error: 'El modo demo utiliza datos ficticios y no admite cargas de datos.',
     }));
   } else {
+    rutas.get('/api/timeline', async (req,res,next) => {
+      try { res.set('Cache-Control','no-store');res.json(await require('./timeline').obtenerTimeline(req.query)); } catch(e){next(e);}
+    });
+    rutas.get('/api/forecasts', async (_req, res, next) => {
+      try { res.json(await require('./forecast').catalogoForecasts()); } catch (err) { next(err); }
+    });
     rutas.use('/api/proyectos', require('./routes/proyectos'));
     rutas.use('/api/backlog', require('./routes/backlog'));
     const { router: historia, invalidarCache } = require('./routes/historia');
@@ -134,7 +169,7 @@ function crearApp({
 
   app.use((err, _req, res, _next) => {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   });
   return app;
 }

@@ -13,7 +13,7 @@ const QUARTERS = { q1: [1, 2, 3], q2: [4, 5, 6], q3: [7, 8, 9], q4: [10, 11, 12]
 // Se excluyen del jsonb descriptivo para que no puedan divergir de las tablas
 // de hechos: la plata tiene un solo dueño.
 const CLAVES_DINERO_BACKLOG = new Set([
-  'valor_of', 'acum_2025', 'backlog', 'total_ejecutado_acumulado',
+  'valor_of', 'acum_2025', 'acumulado_anterior', 'backlog', 'total_ejecutado_acumulado',
   ...Object.keys(QUARTERS),
   ...MESES.flatMap((m) => [`${m}_fijo`, `${m}_upside`]),
 ]);

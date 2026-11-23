@@ -7,7 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23EE0000' d='M341.52 285.56c33.65 0 82.34-6.94 82.34-47 .22-6.74.86-1.82-20.88-96.24-4.62-19.15-8.68-27.84-42.31-44.65-26.09-13.34-82.92-35.37-99.73-35.37-15.66 0-20.2 20.17-38.87 20.17-18 0-31.31-15.06-48.12-15.06-16.14 0-26.66 11-34.78 33.62-27.5 77.55-26.28 74.27-26.12 78.27 0 24.8 97.64 106.11 228.47 106.11M429 254.84c4.65 22 4.65 24.35 4.65 27.25 0 37.66-42.33 58.56-98 58.56-125.74.08-235.91-73.65-235.91-122.33a49.55 49.55 0 0 1 4.06-19.72C58.56 200.86 0 208.93 0 260.63c0 84.67 200.63 189 359.49 189 121.79 0 152.51-55.08 152.51-98.58 0-34.21-29.59-73.05-82.93-96.24'/%3E%3C/svg%3E">
   <!-- CSS real y compilado de PatternFly v6 (vendorizado en vendor/, sin CDN) -->
   <link rel="stylesheet" href="vendor/patternfly.css">
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=34">
 </head>
 <body>
   <!-- Masthead: estructura real de PatternFly (pf-v6-c-masthead) con la marca Red Hat -->
@@ -33,6 +33,12 @@
       <h1 class="pf-v6-c-title pf-m-2xl">Dashboard de Proyectos</h1>
       <p class="subtitulo">Red Hat LATAM - Visualización de Portfolio</p>
     </header>
+
+    <div class="forecast-toolbar" aria-label="Rango del calendario de revenue">
+      <label for="forecast-desde">Desde <select id="forecast-desde"></select></label>
+      <label for="forecast-hasta">Hasta <select id="forecast-hasta"></select></label>
+      <p id="forecast-estado" role="status" aria-live="polite">Cargando timeline…</p>
+    </div>
 
     <!-- Pestañas de navegación: estructura real de PatternFly (pf-v6-c-tabs) -->
     <div class="pf-v6-c-tabs">
@@ -108,8 +114,7 @@
       <div id="periodo-listado"></div>
       <p class="nota-periodo">
         El periodo aplica al revenue, que es lo único con desglose mensual.
-        Los demás indicadores y columnas son totales anuales de Info Proyectos,
-        que no tiene apertura por mes.
+        Booking y backlog se toman una sola vez por proyecto, con preferencia por el año actual.
       </p>
 
       <div class="layout-listado">
@@ -388,7 +393,7 @@
           <input type="checkbox" id="chk-completados-trazabilidad" data-mostrar-completados>
           Mostrar completados
         </label>
-        <p class="nota-grafica">El filtro usa el estado actual de cada proyecto y también se aplica a sus cifras históricas.</p>
+        <p class="nota-grafica">El filtro usa el estado actual de cada proyecto. Las variaciones comparan solo meses presentes en ambos cortes: incorporar otro año amplía la cobertura, no representa un movimiento.</p>
 
         <div class="grafica-contenedor ancho-completo pf-v6-c-card">
           <div class="pf-v6-c-card__body">
@@ -408,7 +413,7 @@
 
         <div class="grafica-contenedor ancho-completo pf-v6-c-card">
           <div class="pf-v6-c-card__body">
-          <h3 id="titulo-backlog-vs-revenue" class="pf-v6-c-title pf-m-md">Backlog vs. Revenue · todo el portafolio</h3>
+          <h3 id="titulo-backlog-vs-revenue" class="pf-v6-c-title pf-m-md">Commit y Upside mensual · todo el portafolio</h3>
           <div id="selector-backlog-vs-revenue"></div>
           <svg id="grafica-backlog-vs-revenue" class="grafica-svg"></svg>
           <p class="nota-grafica" id="nota-backlog-vs-revenue"></p>
@@ -628,6 +633,6 @@
     </section>
   </div>
 
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=38"></script>
 </body>
 </html>
