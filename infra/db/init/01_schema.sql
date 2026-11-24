@@ -25,7 +25,8 @@ CREATE TABLE carga (
   meta_proyectos   jsonb,                    -- bloque meta de Info Proyectos
   meta_backlog     jsonb,
   anio_forecast    smallint NOT NULL DEFAULT 2026 CONSTRAINT carga_anio_forecast_check CHECK (anio_forecast BETWEEN 2000 AND 2100),
-  archivo_id       text
+  archivo_id       text,
+  ejecucion_id     text                     -- corrida n8n compartida por todas las fuentes
 );
 CREATE INDEX idx_carga_ejecutada_en ON carga (ejecutada_en DESC);
 CREATE INDEX idx_carga_forecast_fuente ON carga (anio_forecast, archivo_id, id DESC);

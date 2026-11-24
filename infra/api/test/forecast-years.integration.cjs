@@ -23,6 +23,7 @@ before(async () => {
   ids.b = await cargar(2027,'source27','b','PM FY27 inicial',200,160);
   ids.c = await cargar(2026,'source26','c','PM FY26 actual',110,50);
   ids.d = await cargar(2027,'source27','d','PM FY27 actual',210,160);
+  await pool.query("UPDATE carga SET ejecucion_id=CASE WHEN id=ANY($1::bigint[]) THEN 'inicial' ELSE 'actualizacion' END WHERE archivo_id IS NOT NULL",[[ids.a,ids.b]]);
   server = crearApp().listen(0,'127.0.0.1'); await once(server,'listening');
   base = 'http://127.0.0.1:' + server.address().port;
 });
@@ -87,6 +88,10 @@ test('timeline combina 24 meses por PA sin duplicar Booking ni acumulados anuale
   const actual=d.meta.anio_actual;
   if(actual===2026){assert.equal(d.proyectos[0].pm_lider,'PM FY26 actual');assert.equal(b.acumulado_anterior,50);}
   assert.equal(d.historia.snapshots.at(-1).totales.fijo,320);
+  assert.equal(new Set(d.historia.snapshots.map(s=>s.etiqueta)).size,d.historia.snapshots.length);
+  assert.equal(d.historia.snapshots.length,2);
+  assert.ok(d.historia.snapshots.every(s=>!s.etiqueta.includes('FY')&&s.cargas_incluidas.length===2));
+  assert.deepEqual(d.historia.snapshots.at(-1).anios_actualizados,[2026,2027]);
   assert.deepEqual(d.historia.eventos.map(e=>[e.campo,e.tipo,e.delta]),[['2026-01','commit',10],['2027-01','commit',10]]);
 });
 test('rango entre años y quarters conserva fechas completas y valida los limites',async()=>{

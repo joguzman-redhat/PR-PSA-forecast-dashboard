@@ -49,12 +49,27 @@ function construirEstado(cargas,atributos,mensuales,periodos,actual,fecha) {
   }
   return {proyectos,backlog};
 }
+// Un corte aplica todas las fuentes de una corrida, incluso entre minutos.
+// Sin evidencia de la ejecución original se conserva una carga por corte:
+// no se fusionan corridas distintas solo por cercanía temporal.
+function agruparCortes(cargas) {
+  const grupos=[],porEjecucion=new Map();
+  for(const c of cargas){
+    let grupo=c.ejecucion_id && porEjecucion.get(c.ejecucion_id);
+    if(!grupo){
+      grupo={ejecucion_id:c.ejecucion_id||null,cargas:[]};grupos.push(grupo);
+      if(c.ejecucion_id)porEjecucion.set(c.ejecucion_id,grupo);
+    }
+    grupo.cargas.push(c);
+  }
+  return grupos.sort((a,b)=>a.cargas.at(-1).id-b.cargas.at(-1).id);
+}
 function construirHistoria(cargas,atributos,mensuales,periodos,actual,fecha) {
   // Vector de capturas disponible en cada fecha. Un año aun no cargado queda sin cobertura.
-  const years=[...new Set(cargas.map(c=>c.anio_forecast))];
   const latest=new Map(),snapshots=[],series={},eventos=[];let previous=null;
-  for(const c of cargas){
-    latest.set(c.anio_forecast,c);
+  for(const grupo of agruparCortes(cargas)){
+    for(const carga of grupo.cargas)if(!latest.has(carga.anio_forecast)||latest.get(carga.anio_forecast).id<carga.id)latest.set(carga.anio_forecast,carga);
+    const c=grupo.cargas.at(-1);
     const state=construirEstado([...latest.values()],atributos,mensuales,periodos,actual,fecha);
     const id='t'+c.id,por_mes=Object.fromEntries(periodos.map(p=>[p,{fijo:0,upside:0}]));
     let fijo=0,upside=0,backlog=0,total=0;
@@ -72,10 +87,15 @@ function construirHistoria(cargas,atributos,mensuales,periodos,actual,fecha) {
           num_pa:b.clave_timeline,nombre:b.nombre_del_proyecto,campo:periodos[i],tipo,valor_anterior:before,valor_nuevo:after,delta:after-before});
       }});
     }
-    snapshots.push({id,timestamp:c.ejecutada_en,etiqueta:c.etiqueta+' · '+id,tipo:c.tipo,anios_disponibles:[...latest.keys()].sort(),proyectos_activos:state.proyectos.length,
+    snapshots.push({id,timestamp:c.ejecutada_en,etiqueta:c.etiqueta+':'+String(new Date(c.ejecutada_en).getUTCSeconds()).padStart(2,'0'),
+      ejecucion_id:grupo.ejecucion_id,ejecucion_identificada:!!grupo.ejecucion_id,
+      cargas_incluidas:grupo.cargas.map(x=>x.id),anios_actualizados:grupo.cargas.map(x=>x.anio_forecast),
+      tipo:c.tipo,anios_disponibles:[...latest.keys()].sort(),proyectos_activos:state.proyectos.length,
       totales:{fijo,upside,backlog,total},por_mes});previous=now;
   }
-  return {meta:{total_snapshots:snapshots.length,total_proyectos:Object.keys(series).length,total_eventos:eventos.length,aviso:'Las capturas anteriores al alta de un año no incluyen su revenue; los meses sin cobertura no representan cero.'},snapshots,series_por_proyecto:series,eventos};
+  const etiquetas=new Map();for(const s of snapshots)etiquetas.set(s.etiqueta,(etiquetas.get(s.etiqueta)||0)+1);
+  for(const [i,s] of snapshots.entries())if(etiquetas.get(s.etiqueta)>1)s.etiqueta+=' · corte '+(i+1);
+  return {meta:{total_snapshots:snapshots.length,total_proyectos:Object.keys(series).length,total_eventos:eventos.length,aviso:'Cada corte consolida todos los años disponibles; conserva la última carga de los años sin cambios. Las cargas antiguas sin evidencia de ejecución se conservan como cortes independientes. Las capturas anteriores al alta de un año no incluyen su revenue; los meses sin cobertura no representan cero.'},snapshots,series_por_proyecto:series,eventos};
 }
 async function obtenerTimeline(query={}) {
   const rango=validarRango(query);
@@ -112,4 +132,4 @@ async function obtenerTimeline(query={}) {
       capturas:cargasActuales.map(c=>({anio:c.anio_forecast,carga_id:c.id})),total_proyectos:current.proyectos.length},...current,historia};
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
 }
-module.exports={obtenerTimeline,validarRango,calendario,construirEstado,preferir};
+module.exports={obtenerTimeline,validarRango,calendario,construirEstado,preferir,construirHistoria,agruparCortes};

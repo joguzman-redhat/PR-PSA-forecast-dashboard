@@ -134,3 +134,16 @@ test('carga FY27 con acumulado previo, preserva FY26 y compara movimientos dentr
     }
   }
 });
+
+test('las dos fuentes guardan el mismo ID de corrida sin mezclar sus importes',()=>{
+  sql('TRUNCATE movimiento, revenue_mes, revenue_anual, proyecto, carga RESTART IDENTITY CASCADE;');
+  const ejecutar=new Function('$','$execution','$workflow',code);
+  for(const anio of [2026,2027]){
+    const data={...normalizar([{_clave:'prueba', '# PA':'123', 'Nombre del Proyecto':'Demo', 'Valor OF':1000,Enero:anio===2026?100:200,Upside:0}],undefined,anio),_hash:randomUUID(),fechaReferencia:'2026-11-24'};
+    const [{json}]=ejecutar(()=>({item:{json:data}}),{id:'12345'},{id:'workflow-test'});
+    sql(json.sql);
+  }
+  const rows=JSON.parse(sql("SELECT json_agg(r ORDER BY anio_forecast) FROM (SELECT anio_forecast,ejecucion_id FROM carga) r"));
+  assert.deepEqual(rows,[{anio_forecast:2026,ejecucion_id:'workflow-test:12345'},{anio_forecast:2027,ejecucion_id:'workflow-test:12345'}]);
+  assert.equal(Number(sql('SELECT sum(commit_usd) FROM revenue_mes')),300);
+});

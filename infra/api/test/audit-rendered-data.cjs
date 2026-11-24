@@ -33,11 +33,15 @@ function elegibles(desde,hasta) {
   return (!inicio||inicio<=hasta)&&(!fin||fin>=desde);
  });
 }
-ui.estado.periodo='todos';const visible=elegibles(months[0],months.at(-1));
+const fecha=data.meta.fecha_referencia;const y=Number(fecha.slice(0,4)),m=Number(fecha.slice(5,7));
+const defaultDesde=`${y}-${String(Math.floor((m-1)/3)*3+1).padStart(2,'0')}`,defaultHasta=`${y+1}-12`;
+ui.estado.periodo='rango';ui.estado.rangoTimeline={desde:defaultDesde,hasta:defaultHasta};
+const selectedMonths=months.filter(m=>m>=defaultDesde&&m<=defaultHasta);
+const visible=elegibles(defaultDesde,defaultHasta);
 const sumRows=(rows,f)=>rows.reduce((s,p)=>s+(backlog.get(p.clave_timeline)[f]||0),0);
 const sum=f=>sumRows(visible,f);
 for(const p of data.proyectos){const b=backlog.get(p.clave_timeline);check('booking '+p.clave_timeline,b.valor_of,ui.valorBooking(p));check('backlog '+p.clave_timeline,b.backlog,ui.backlogHoy(p));check('accrued '+p.clave_timeline,b.acumulado_a_fecha,ui.acumuladoHoy(p));}
-for(const [name,start,end] of [['pantalla',0,23],['rango',9,23],['fy27',12,23]]){
+for(const [name,start,end] of [['pantalla',months.findIndex(m=>m>=defaultDesde),months.findLastIndex(m=>m<=defaultHasta)],['rango',9,23],['fy27',12,23]]){
  const selected=elegibles(months[start],months[end]);const sumPage=f=>sumRows(selected,f);
  const d=dom[name];check(name+' count',String(selected.length),d['kpi-total-proyectos']);check(name+' booking',money(sumPage('valor_of')),d['kpi-valor-of-total']);check(name+' backlog',money(sumPage('backlog')),d['kpi-backlog-2026']);check(name+' accrued',money(sumPage('acumulado_a_fecha')),d['kpi-acumulado-hoy']);check(name+' execution',(100*sumPage('acumulado_a_fecha')/sumPage('valor_of')).toFixed(1)+'%',d['kpi-pct-ejecucion']);
  const expected=months.slice(start,end+1).reduce((s,m)=>s+sumPage(m+'_fijo'),0);check(name+' revenue',money(expected),d['kpi-revenue-periodo']);
@@ -45,10 +49,10 @@ for(const [name,start,end] of [['pantalla',0,23],['rango',9,23],['fy27',12,23]])
 const ps=new Map();for(const p of visible){const pm=p.pm_lider||'(sin dato)';if(!ps.has(pm))ps.set(pm,[]);ps.get(pm).push(p);}
 for(const pm of ui.calcularPMs()){
  const group=ps.get(pm.pm)||[];check('pm count '+pm.pm,group.length,pm.proyectos.length);
- for(const [field,suffix] of [['commit','fijo'],['upside','upside']])check('pm '+field+' '+pm.pm,group.reduce((s,p)=>s+months.reduce((s,m)=>s+(backlog.get(p.clave_timeline)[m+'_'+suffix]||0),0),0),pm[field]);
+ for(const [field,suffix] of [['commit','fijo'],['upside','upside']])check('pm '+field+' '+pm.pm,group.reduce((s,p)=>s+selectedMonths.reduce((s,m)=>s+(backlog.get(p.clave_timeline)[m+'_'+suffix]||0),0),0),pm[field]);
 }
 check('rendered PM count',String(ps.size),dom.pms['kpi-pms-total']);
 for(const [status,id] of [['In Progress','in-progress'],['On Hold','on-hold'],['Planned','planned'],['Completed','completed']])check('rendered PM '+status,String(visible.filter(p=>p.estado===status).length),dom.pms['kpi-pms-'+id]);
-const graph=Object.values(ui.serieBacklogRevenuePorMes(visible));check('chart 24 months',24,graph.length);months.forEach((m,i)=>{check('chart commit '+m,sum(m+'_fijo'),graph[i].Commit);check('chart upside '+m,sum(m+'_upside'),graph[i].Upside);});
+const graph=Object.values(ui.serieBacklogRevenuePorMes(visible));check('chart selected months',selectedMonths.length,graph.length);selectedMonths.forEach((m,i)=>{check('chart commit '+m,sum(m+'_fijo'),graph[i].Commit);check('chart upside '+m,sum(m+'_upside'),graph[i].Upside);});
 const result={scope:'UI consistency with currently saved API data; NOT evidence of Excel freshness',checks:count,issues};fs.writeFileSync(path.join(out,'prueba-ui.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({checks:count,issues:issues.slice(0,4),failures:issues.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -103,7 +103,7 @@ anual: los acumulados de FY26 y FY27 NO se suman entre si.
 - La clave multianual es PA. Sin PA, se utiliza Project ID/PR; sin ambos, la
   identidad se aisla por año y proyecto existente y exige conciliacion manual.
   No se unen proyectos desconocidos solo por tener nombres parecidos.
-- Desde/Hasta es el único rango global para listado, PMs, detalle y trazabilidad.
+- Desde/Hasta es el único rango global para listado, PMs y trazabilidad global.
   Se eligen meses o trimestres visibles en el control «Ver por»; Q1 es enero-marzo,
   Q2 abril-junio, Q3 julio-septiembre y Q4 octubre-diciembre, como en los Excel.
   El rango limita tanto el revenue como los proyectos cuya vigencia se solapa
@@ -124,9 +124,63 @@ anual: los acumulados de FY26 y FY27 NO se suman entre si.
 - Una fecha de inicio real no se inventa: el calendario disponible comienza
   con las fuentes cargadas. Fecha fin se conserva como atributo; no se borran
   montos de Excel por estar fuera de esa fecha. El detalle limita su gráfica
-  mensual a la vigencia conocida y al rango global; si hay importes fuera de
+  mensual a toda la vigencia conocida, independientemente del rango global; si hay importes fuera de
   fecha fin, lo advierte sin borrar ni recortar el dinero fuente almacenado.
 
 Los snapshots originales conservan el historial de cambios; la tabla
 `forecast_revenue_mensual` es su consolidacion de lectura, mantenida en la
 misma transaccion por trigger. No sustituye ni elimina la evidencia original.
+
+
+## Ajustes de lectura del 24 nov 2026
+
+- Sin un rango explícito en la URL, se selecciona el trimestre actual en la fecha
+  de referencia de Colombia hasta Q4 del año siguiente. Un enlace con rango
+  explícito conserva su selección. Meses futuros sin fuente siguen sin dato.
+- El filtro rápido ofrece Todo NOLA, México y NSSA. México se identifica por
+  País; NSSA es el complemento dentro del portafolio NOLA, no una etiqueta de
+  Zona. Los proyectos sin país permanecen en el complemento y siguen marcados
+  sin dato. Cambiar este filtro limpia la selección de país para evitar conflictos.
+- La fila principal añade Upside del periodo, Commit pendiente del año de
+  referencia, Acumulado proyectado y Diferencia vs. Booking. Proyectado es
+  acumulado al corte más Commit de los meses posteriores del año de referencia.
+  Diferencia es Booking menos proyectado menos Backlog fuente: positivo indica
+  importe sin conciliar, negativo excedente, cero conciliación. No se modifica
+  ningún importe para forzar la igualdad; con cifras incompletas se muestra
+  ausencia de diferencia y se explica en la ayuda.
+- Los iconos de ayuda explican por separado el rango, los importes del periodo
+  y los importes del año financiero de referencia. No se mezclan ambas bases.
+- La barra de Planned/On Hold es ahora ejecución del contrato: acumulado al
+  corte / Booking del propio proyecto. No representa participación en el
+  backlog de los proyectos filtrados. El Backlog fuente se conserva como importe
+  separado. Para PA65723 es 81,1%, aunque solo quede ese proyecto visible.
+- On Hold tiene color naranja, separado del semáforo amarillo de Project Status.
+- El detalle muestra toda la vida disponible: primer Commit distinto de cero
+  hasta Fecha fin inclusive, sin recortarla por los quarters del listado. Sin
+  primer Commit no se inventa un inicio; sin Fecha fin se llega al último mes
+  con Commit registrado. Los meses sin cobertura conservan el hueco.
+- La curva del detalle se llama saldo contractual para distinguirla del Backlog
+  fuente. Comienza en un solo Booking, incorpora una sola vez el arrastre anterior
+  al calendario disponible y descuenta los Commit. El arrastre de un año posterior
+  se descuenta de los meses ya representados para evitar duplicarlos. Se muestran
+  saldo y revenue acumulado: no se fuerza el saldo a cero al finalizar ni se
+  redistribuyen importes sin Commit. Los créditos pueden aumentar el saldo y
+  una ejecución excedida puede volverlo negativo; ambos se muestran.
+- Las capturas crudas siguen separadas por fuente/año en PostgreSQL. La
+  comparación del dashboard usa cortes consolidados por ejecución n8n:
+  aplica todas las cargas de esa corrida y conserva la última conocida de cada
+  año sin cambios. Fecha/hora identifica el corte completo, no un Excel.
+  Eventos y diferencias se calculan entre esos estados completos; los meses
+  que aún no tenían cobertura no se consideran cero ni movimientos.
+- `carga.ejecucion_id` combina workflow e ID de ejecución de n8n y permite
+  unir fuentes aunque terminen en minutos distintos. Una corrida sin cambios
+  no crea un corte; si solo cambia un año, conserva los demás. Mientras una
+  corrida está en progreso su corte puede recibir la siguiente fuente; no es
+  una transacción atómica entre los dos archivos.
+- Las cargas anteriores solo se agrupan si hay evidencia del mismo ID de
+  corrida en el historial guardado de n8n. Localmente se recuperaron esos IDs
+  de los resultados de carga de ejecuciones exitosas. Sin evidencia se conserva
+  el corte independiente; no se fusionan cargas por cercanía temporal ni se
+  borran o reescriben sus importes. `ejecucion_identificada` informa la cobertura.
+- El rango de comparación evita elegir el mismo corte en ambos extremos si hay
+  varios; Último mes y Últimos 7 días usan la última fecha disponible.
