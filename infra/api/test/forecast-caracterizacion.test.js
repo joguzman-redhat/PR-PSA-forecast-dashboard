@@ -4,7 +4,7 @@
 // valores esperados son literales de ejemplos trabajados, no recalculos.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { pagina, datosTimeline } = require('./pagina-simulada');
+const { pagina, datosTimeline, simularElementos } = require('./pagina-simulada');
 
 // Carga el front con un timeline donde `mutar` ajusta proyectos y filas.
 async function cargar(mutar = () => {}) {
@@ -15,14 +15,14 @@ async function cargar(mutar = () => {}) {
   await p.ui.cargarDatos();
   return { ...p, d };
 }
-const fila = (pa, extra) => ({ _tipo_fila: 'proyecto', num_pa: pa, clave_timeline: 'PA:' + pa, ...extra });
-const proyecto = (pa, extra) => ({ _tipo_fila: 'proyecto', num_pa: pa, clave_timeline: 'PA:' + pa, ...extra });
+// Una fila del timeline: sirve igual para un proyecto de Info y para su fila de BackLog NOLA.
+const entidad = (pa, extra) => ({ _tipo_fila: 'proyecto', num_pa: pa, clave_timeline: 'PA:' + pa, ...extra });
 
 test('Booking sale de BackLog NOLA y nunca de Info Proyectos (PA 65006)', async () => {
   const { ui } = await cargar(d => {
     // Info Proyectos trae los montos sin factor de conversion; BackLog NOLA ya convertidos.
-    d.proyectos = [proyecto('65006', { valor_of: 974930, consumido_2025: 352766, backlog_2026: 622164 })];
-    d.backlog = [fila('65006', { valor_of: 920541, acumulado_anterior: 333086, backlog: 13547 })];
+    d.proyectos = [entidad('65006', { valor_of: 974930, consumido_2025: 352766, backlog_2026: 622164 })];
+    d.backlog = [entidad('65006', { valor_of: 920541, acumulado_anterior: 333086, backlog: 13547 })];
   });
   const p = ui.estado.proyectos[0];
   assert.equal(ui.valorBooking(p), 920541);
@@ -32,7 +32,7 @@ test('Booking sale de BackLog NOLA y nunca de Info Proyectos (PA 65006)', async 
 
 test('un proyecto sin fila en BackLog NOLA no tiene cifras y no cae a los valores de Info', async () => {
   const { ui } = await cargar(d => {
-    d.proyectos.push(proyecto('999', { valor_of: 500000, consumido_2025: 100000 }));
+    d.proyectos.push(entidad('999', { valor_of: 500000, consumido_2025: 100000 }));
   });
   const sinBacklog = ui.estado.proyectos.find(p => p.num_pa === '999');
   assert.equal(ui.valorBooking(sinBacklog), null);
@@ -46,8 +46,8 @@ test('un proyecto sin fila en BackLog NOLA no tiene cifras y no cae a los valore
 
 test('un importe que no es numero (N/A, texto) se trata como ausente, no como cero', async () => {
   const { ui } = await cargar(d => {
-    d.proyectos = [proyecto('1')];
-    d.backlog = [fila('1', { valor_of: 'N/A', backlog: '#N/A', acumulado_anterior: 'N/A' })];
+    d.proyectos = [entidad('1')];
+    d.backlog = [entidad('1', { valor_of: 'N/A', backlog: '#N/A', acumulado_anterior: 'N/A' })];
   });
   const p = ui.estado.proyectos[0];
   assert.equal(ui.valorBooking(p), null);
@@ -57,16 +57,16 @@ test('un importe que no es numero (N/A, texto) se trata como ausente, no como ce
 
 test('Backlog es la columna del Excel tal cual, no Booking menos acumulado', async () => {
   const { ui } = await cargar(d => {
-    d.backlog = [fila('123', { valor_of: 920541, acumulado_a_fecha: 333086, backlog: 13547 })];
+    d.backlog = [entidad('123', { valor_of: 920541, acumulado_a_fecha: 333086, backlog: 13547 })];
   });
   const p = ui.estado.proyectos[0];
   assert.equal(ui.backlogHoy(p), 13547); // 920541 - 333086 daria 587455
 });
 
-test('Ejecutado y la proyeccion de cierre se leen de la fila, sin completarlos desde Info', async () => {
+test('Ejecutado y el Proyectado de cierre se leen de la fila, sin completarlos desde Info', async () => {
   const { ui } = await cargar(d => {
-    d.proyectos = [proyecto('123', { consumido_2025: 1 })];
-    d.backlog = [fila('123', { valor_of: 920541, acumulado_a_fecha: 880000, total_ejecutado_acumulado: 906994, backlog: 13547 })];
+    d.proyectos = [entidad('123', { consumido_2025: 1 })];
+    d.backlog = [entidad('123', { valor_of: 920541, acumulado_a_fecha: 880000, total_ejecutado_acumulado: 906994, backlog: 13547 })];
   });
   const p = ui.estado.proyectos[0];
   assert.equal(ui.acumuladoHoy(p), 880000);
@@ -75,11 +75,11 @@ test('Ejecutado y la proyeccion de cierre se leen de la fila, sin completarlos d
 
 test('el porcentaje de ejecucion es Ejecutado sobre Booking y falta sin Booking positivo', async () => {
   const { ui } = await cargar(d => {
-    d.proyectos = [proyecto('1'), proyecto('2'), proyecto('3')];
+    d.proyectos = [entidad('1'), entidad('2'), entidad('3')];
     d.backlog = [
-      fila('1', { valor_of: 2000, acumulado_a_fecha: 500 }),
-      fila('2', { valor_of: 0, acumulado_a_fecha: 0 }),
-      fila('3', { valor_of: 1000 }),
+      entidad('1', { valor_of: 2000, acumulado_a_fecha: 500 }),
+      entidad('2', { valor_of: 0, acumulado_a_fecha: 0 }),
+      entidad('3', { valor_of: 1000 }),
     ];
   });
   const [a, b, c] = ui.estado.proyectos;
@@ -88,10 +88,10 @@ test('el porcentaje de ejecucion es Ejecutado sobre Booking y falta sin Booking 
   assert.equal(ui.porcentajeEjecucionProyecto(c), null); // sin Ejecutado
 });
 
-test('Commit pendiente son los meses posteriores al corte del año de la fuente', async () => {
-  // fecha_referencia 2026-11-24: el corte es noviembre, solo diciembre esta pendiente.
+test('Commit pendiente son los meses posteriores al mes actual del Año fuente', async () => {
+  // fecha_referencia 2026-11-24: el mes actual es noviembre, solo diciembre esta pendiente.
   const { ui } = await cargar(d => {
-    d.backlog = [fila('123', { anio_atributos: 2026, '2026-11_fijo': 700, '2026-12_fijo': 30 })];
+    d.backlog = [entidad('123', { anio_atributos: 2026, '2026-11_fijo': 700, '2026-12_fijo': 30 })];
   });
   assert.equal(ui.corteFinanciero(), '2026-11');
   assert.equal(ui.commitPendienteProyecto(ui.estado.proyectos[0]), 30);
@@ -101,23 +101,23 @@ test('con una fuente de 2027 todo ese año esta pendiente', async () => {
   const { ui } = await cargar(d => {
     const extra = { anio_atributos: 2027 };
     for (let m = 1; m <= 12; m++) extra['2027-' + String(m).padStart(2, '0') + '_fijo'] = 10;
-    d.backlog = [fila('123', extra)];
+    d.backlog = [entidad('123', extra)];
   });
   assert.equal(ui.commitPendienteProyecto(ui.estado.proyectos[0]), 120);
 });
 
 test('Commit pendiente queda sin dato si falta un mes pendiente, no se cuenta como cero', async () => {
   const { ui } = await cargar(d => {
-    d.backlog = [fila('123', { anio_atributos: 2026, '2026-11_fijo': 700 })]; // falta diciembre
+    d.backlog = [entidad('123', { anio_atributos: 2026, '2026-11_fijo': 700 })]; // falta diciembre
   });
   const p = ui.estado.proyectos[0];
   assert.equal(ui.commitPendienteProyecto(p), null);
   assert.equal(ui.proyeccionReferencia(p), null);
 });
 
-test('la proyeccion de referencia es Ejecutado mas Commit pendiente', async () => {
+test('el Proyectado de referencia es Ejecutado mas Commit pendiente', async () => {
   const { ui } = await cargar(d => {
-    d.backlog = [fila('123', { anio_atributos: 2026, acumulado_a_fecha: 880000, '2026-12_fijo': 27000 })];
+    d.backlog = [entidad('123', { anio_atributos: 2026, acumulado_a_fecha: 880000, '2026-12_fijo': 27000 })];
   });
   assert.equal(ui.proyeccionReferencia(ui.estado.proyectos[0]), 907000);
 });
@@ -125,7 +125,7 @@ test('la proyeccion de referencia es Ejecutado mas Commit pendiente', async () =
 test('Booking = Ejecutado + Commit pendiente + Backlog concilia a cero (cifras de PA 65006)', async () => {
   // 880.000 + 27.000 + 13.541 = 920.541
   const { ui } = await cargar(d => {
-    d.backlog = [fila('123', { anio_atributos: 2026, valor_of: 920541, acumulado_a_fecha: 880000, backlog: 13541, '2026-12_fijo': 27000 })];
+    d.backlog = [entidad('123', { anio_atributos: 2026, valor_of: 920541, acumulado_a_fecha: 880000, backlog: 13541, '2026-12_fijo': 27000 })];
   });
   const r = ui.resumenFinanciero(ui.estado.proyectos);
   assert.equal(r.booking, 920541);
@@ -136,7 +136,7 @@ test('Booking = Ejecutado + Commit pendiente + Backlog concilia a cero (cifras d
 
 test('Commit y Upside del periodo suman solo los meses del rango', async () => {
   const { ui } = await cargar(d => {
-    d.backlog = [fila('123', {
+    d.backlog = [entidad('123', {
       '2026-10_fijo': 1000, '2026-11_fijo': 100, '2026-12_fijo': 50, '2027-01_fijo': 25, '2027-02_fijo': 9999,
       '2026-11_upside': 7, '2026-12_upside': 3, '2027-01_upside': 1,
     })];
@@ -150,32 +150,26 @@ test('Commit y Upside del periodo suman solo los meses del rango', async () => {
 
 test('los KPIs ponderan por monto, ignoran proyectos sin cifras y no los cuentan como cero', async () => {
   const { ui, context } = await cargar(d => {
-    d.proyectos = [proyecto('A'), proyecto('B'), proyecto('C')];
+    d.proyectos = [entidad('A'), entidad('B'), entidad('C')];
     d.backlog = [
-      fila('A', { anio_atributos: 2026, valor_of: 2000000, acumulado_a_fecha: 1000000, backlog: 1000000,
+      entidad('A', { anio_atributos: 2026, valor_of: 2000000, acumulado_a_fecha: 1000000, backlog: 1000000,
         '2026-11_fijo': 5000, '2026-12_fijo': 500, '2026-11_upside': 1000 }),
-      fila('B', { anio_atributos: 2026, valor_of: 20000, acumulado_a_fecha: 20000, backlog: 0, '2026-12_fijo': 2500 }),
+      entidad('B', { anio_atributos: 2026, valor_of: 20000, acumulado_a_fecha: 20000, backlog: 0, '2026-12_fijo': 2500 }),
     ]; // C no tiene fila en BackLog NOLA
   });
-  const elementos = new Map();
-  context.document.getElementById = id => {
-    if (!elementos.has(id)) elementos.set(id, { textContent: '', title: '', closest() { return null; } });
-    return elementos.get(id);
-  };
-  context.document.querySelectorAll = () => [];
+  const textoDe = simularElementos(context);
   ui.calcularKPIs();
-  const kpi = id => elementos.get(id).textContent;
-  assert.equal(kpi('kpi-total-proyectos'), '3');
-  assert.equal(kpi('kpi-valor-of-total'), '$2.02M');
-  assert.equal(kpi('kpi-acumulado-hoy'), '$1.02M');
-  assert.equal(kpi('kpi-backlog-2026'), '$1.00M');
+  assert.equal(textoDe('kpi-total-proyectos'), '3');
+  assert.equal(textoDe('kpi-valor-of-total'), '$2.02M');
+  assert.equal(textoDe('kpi-acumulado-hoy'), '$1.02M');
+  assert.equal(textoDe('kpi-backlog-2026'), '$1.00M');
   // Ponderado: 1.020.000 / 2.020.000 = 50,5 %. El promedio de porcentajes daria 75,0 %.
-  assert.equal(kpi('kpi-pct-ejecucion'), '50.5%');
-  assert.equal(kpi('kpi-revenue-periodo'), '$8.0K');
-  assert.equal(kpi('kpi-upside-periodo'), '$1.0K');
-  assert.equal(kpi('kpi-commit-pendiente'), '$3.0K');
-  assert.equal(kpi('kpi-proyectado'), '$1.02M');
-  assert.equal(kpi('kpi-diferencia-booking'), '—'); // C tiene cifras incompletas
+  assert.equal(textoDe('kpi-pct-ejecucion'), '50.5%');
+  assert.equal(textoDe('kpi-revenue-periodo'), '$8.0K');
+  assert.equal(textoDe('kpi-upside-periodo'), '$1.0K');
+  assert.equal(textoDe('kpi-commit-pendiente'), '$3.0K');
+  assert.equal(textoDe('kpi-proyectado'), '$1.02M');
+  assert.equal(textoDe('kpi-diferencia-booking'), '—'); // C tiene cifras incompletas
 });
 
 test('el dinero se abrevia con signo aparte y el exacto no redondea mal las notas de credito', () => {
@@ -208,7 +202,7 @@ test('Fecha fin se lee de ISO, formato americano y serial de Excel, y una fecha 
 
 test('la vida empieza en el primer Commit distinto de cero, cuenta creditos y nunca inventa Fecha fin', async () => {
   const { ui } = await cargar(d => {
-    d.backlog = [fila('123', { '2026-01_fijo': 0, '2026-02_fijo': 0, '2026-03_fijo': 100 })];
+    d.backlog = [entidad('123', { '2026-01_fijo': 0, '2026-02_fijo': 0, '2026-03_fijo': 100 })];
   });
   const p = ui.estado.proyectos[0];
   let vida = ui.vidaProyecto(p);
@@ -219,10 +213,10 @@ test('la vida empieza en el primer Commit distinto de cero, cuenta creditos y nu
   assert.equal(ui.vidaProyecto(p).inicio, '2026-01');
 });
 
-test('un Commit o Upside posterior a la Fecha fin se marca fuera de vigencia sin tocar el importe', async () => {
+test('un Commit o Upside posterior a la Fecha fin se marca fuera de la Vida del proyecto sin tocar el importe', async () => {
   const { ui } = await cargar(d => {
-    d.proyectos = [proyecto('123', { fecha_fin: '12/31/2026' })];
-    d.backlog = [fila('123', { '2026-03_fijo': 100, '2027-02_upside': 50 })];
+    d.proyectos = [entidad('123', { fecha_fin: '12/31/2026' })];
+    d.backlog = [entidad('123', { '2026-03_fijo': 100, '2027-02_upside': 50 })];
   });
   const p = ui.estado.proyectos[0];
   assert.equal(ui.vidaProyecto(p).fueraDeVigencia, true);
@@ -234,16 +228,16 @@ test('un Commit o Upside posterior a la Fecha fin se marca fuera de vigencia sin
 
 test('el acumulado anterior acepta el nombre anterior acum_2025', async () => {
   const { ui } = await cargar(d => {
-    d.proyectos = [proyecto('1')];
-    d.backlog = [fila('1', { acum_2025: 333086 })];
+    d.proyectos = [entidad('1')];
+    d.backlog = [entidad('1', { acum_2025: 333086 })];
   });
   assert.equal(ui.acumuladoAnterior(ui.estado.proyectos[0]), 333086);
 });
 
 test('la fila de BackLog se une por clave, luego por PA y luego por nombre, nunca por posicion', async () => {
   const { ui } = await cargar(d => {
-    d.proyectos = [proyecto('555')];
-    d.backlog = [fila('555', { nombre_del_proyecto: 'Proyecto Ñandú', valor_of: 42 })];
+    d.proyectos = [entidad('555')];
+    d.backlog = [entidad('555', { nombre_del_proyecto: 'Proyecto Ñandú', valor_of: 42 })];
   });
   const esperada = ui.estado.backlog[0];
   assert.equal(ui.backlogDe({ clave_timeline: 'PA:555' }), esperada);
@@ -252,4 +246,34 @@ test('la fila de BackLog se une por clave, luego por PA y luego por nombre, nunc
   assert.equal(ui.backlogDe({ num_pa: 999, nombre_del_proyecto: 'otro proyecto' }), null);
   // Con una clave que no existe no se rescata por PA: evita mezclar proyectos distintos.
   assert.equal(ui.backlogDe({ clave_timeline: 'PA:000', num_pa: 555 }), null);
+});
+
+test('el periodo por trimestre, año, mes o todo el historico suma solo sus meses', async () => {
+  const { ui } = await cargar(d => {
+    d.backlog = [entidad('123', {
+      '2026-10_fijo': 10, '2026-11_fijo': 20, '2026-12_fijo': 30, '2027-01_fijo': 40, '2027-03_fijo': 5,
+    })];
+  });
+  const p = ui.estado.proyectos[0];
+  const suma = periodo => { ui.estado.periodo = periodo; return ui.revenuePeriodo(p); };
+  assert.equal(suma('2026-q4'), 60);
+  assert.equal(suma('2027-q1'), 45);
+  assert.equal(suma('y2027'), 45);
+  assert.equal(suma('2026-11'), 20);
+  assert.equal(suma('todos'), 105);
+  assert.equal(suma('periodo-inexistente'), 105); // un periodo desconocido cae a todo el historico
+  ui.estado.periodo = '2026-q4';
+  assert.equal(ui.periodoActual().meses.length, 3);
+});
+
+test('la Diferencia del KPI muestra el importe sin conciliar y cero cuando concilia', async () => {
+  const { ui, context } = await cargar(d => {
+    d.backlog = [entidad('123', { anio_atributos: 2026, valor_of: 1000, acumulado_a_fecha: 700, backlog: 270, '2026-12_fijo': 10 })];
+  });
+  const textoDe = simularElementos(context);
+  ui.calcularKPIs();
+  assert.equal(textoDe('kpi-diferencia-booking'), '$20'); // 1000 - 270 - 710: 20 sin conciliar
+  ui.estado.backlog[0]['2026-12_fijo'] = 30;
+  ui.calcularKPIs();
+  assert.equal(textoDe('kpi-diferencia-booking'), '$0'); // 1000 - 270 - 730
 });

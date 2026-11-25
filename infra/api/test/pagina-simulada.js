@@ -29,4 +29,15 @@ function datosTimeline() {
       '2026-01_fijo':100,'2027-01_fijo':200,'2026-10_fijo':10,'2027-12_fijo':20}],
     historia:{snapshots:[],eventos:[],series_por_proyecto:{}}};
 }
-module.exports = { pagina, datosTimeline };
+// Sustituye el DOM por elementos que se crean al pedirlos y devuelve una
+// funcion que lee el texto que el front escribio en cada uno.
+function simularElementos(context) {
+  const elementos = new Map();
+  context.document.getElementById = id => {
+    if (!elementos.has(id)) elementos.set(id, { textContent: '', title: '', closest() { return null; } });
+    return elementos.get(id);
+  };
+  context.document.querySelectorAll = () => [];
+  return id => elementos.get(id).textContent;
+}
+module.exports = { pagina, datosTimeline, simularElementos };
