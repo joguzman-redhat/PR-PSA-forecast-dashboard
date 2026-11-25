@@ -7,7 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23EE0000' d='M341.52 285.56c33.65 0 82.34-6.94 82.34-47 .22-6.74.86-1.82-20.88-96.24-4.62-19.15-8.68-27.84-42.31-44.65-26.09-13.34-82.92-35.37-99.73-35.37-15.66 0-20.2 20.17-38.87 20.17-18 0-31.31-15.06-48.12-15.06-16.14 0-26.66 11-34.78 33.62-27.5 77.55-26.28 74.27-26.12 78.27 0 24.8 97.64 106.11 228.47 106.11M429 254.84c4.65 22 4.65 24.35 4.65 27.25 0 37.66-42.33 58.56-98 58.56-125.74.08-235.91-73.65-235.91-122.33a49.55 49.55 0 0 1 4.06-19.72C58.56 200.86 0 208.93 0 260.63c0 84.67 200.63 189 359.49 189 121.79 0 152.51-55.08 152.51-98.58 0-34.21-29.59-73.05-82.93-96.24'/%3E%3C/svg%3E">
   <!-- CSS real y compilado de PatternFly v6 (vendorizado en vendor/, sin CDN) -->
   <link rel="stylesheet" href="vendor/patternfly.css">
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=37">
 </head>
 <body>
   <!-- Masthead: estructura real de PatternFly (pf-v6-c-masthead) con la marca Red Hat -->
@@ -33,6 +33,19 @@
       <h1 class="pf-v6-c-title pf-m-2xl">Dashboard de Proyectos</h1>
       <p class="subtitulo">Red Hat LATAM - Visualización de Portfolio</p>
     </header>
+
+    <div class="forecast-toolbar" aria-label="Rango de proyectos y revenue">
+      <fieldset class="territorio-rapido"><legend>Territorio</legend>
+        <label><input type="radio" name="forecast-territorio" value="todos" checked> Todo NOLA</label>
+        <label><input type="radio" name="forecast-territorio" value="mexico"> México</label>
+        <label><input type="radio" name="forecast-territorio" value="nssa"> NSSA</label>
+      </fieldset>
+      <label for="forecast-unidad">Ver por <select id="forecast-unidad"><option value="meses">Meses</option><option value="trimestres">Trimestres (Q)</option></select></label>
+      <label for="forecast-desde">Desde <select id="forecast-desde"></select></label>
+      <label for="forecast-hasta">Hasta <select id="forecast-hasta"></select></label>
+      <div class="ayuda-rango"><button type="button" class="ayuda-kpi" aria-label="Cómo funciona el rango y los indicadores" aria-describedby="ayuda-rango-texto">?</button><div id="ayuda-rango-texto" role="tooltip"></div></div>
+      <p id="forecast-estado" role="status" aria-live="polite">Cargando timeline…</p>
+    </div>
 
     <!-- Pestañas de navegación: estructura real de PatternFly (pf-v6-c-tabs) -->
     <div class="pf-v6-c-tabs">
@@ -67,7 +80,7 @@
     <!-- PESTAÑA 1: Listado de Proyectos -->
     <section class="pestana-contenido activa" id="pestana-listado">
       <!-- Fila de KPIs -->
-      <div class="fila-kpis">
+      <div class="fila-kpis fila-kpis-principal">
         <div class="kpi-tile pf-v6-c-card">
           <div class="pf-v6-c-card__body">
             <div class="kpi-valor" id="kpi-total-proyectos">—</div>
@@ -104,13 +117,12 @@
             <div class="kpi-etiqueta" id="kpi-revenue-periodo-etq">Revenue fijo</div>
           </div>
         </div>
+        <div class="kpi-tile pf-v6-c-card"><div class="pf-v6-c-card__body"><div class="kpi-valor" id="kpi-upside-periodo">—</div><div class="kpi-etiqueta">Upside del periodo</div></div></div>
+        <div class="kpi-tile pf-v6-c-card"><div class="pf-v6-c-card__body"><div class="kpi-valor" id="kpi-commit-pendiente">—</div><div class="kpi-etiqueta">Commit pendiente del año</div></div></div>
+        <div class="kpi-tile pf-v6-c-card"><div class="pf-v6-c-card__body"><div class="kpi-valor" id="kpi-proyectado">—</div><div class="kpi-etiqueta">Acumulado proyectado</div></div></div>
+        <div class="kpi-tile pf-v6-c-card"><div class="pf-v6-c-card__body"><div class="kpi-valor" id="kpi-diferencia-booking">—</div><div class="kpi-etiqueta">Diferencia vs. Booking</div></div></div>
       </div>
       <div id="periodo-listado"></div>
-      <p class="nota-periodo">
-        El periodo aplica al revenue, que es lo único con desglose mensual.
-        Los demás indicadores y columnas son totales anuales de Info Proyectos,
-        que no tiene apertura por mes.
-      </p>
 
       <div class="layout-listado">
       <!-- Filtros -->
@@ -297,7 +309,7 @@
                 <option value="On Hold">Solo On Hold</option>
               </select>
             </div>
-            <p class="nota-grafica">Las barras muestran la participación del proyecto en el backlog total visible de esta tabla.</p>
+            <p class="nota-grafica">Las barras muestran el porcentaje ejecutado del Booking de cada proyecto. El importe de Backlog fuente se muestra por separado.</p>
             <div class="contenedor-tabla-scroll tabla-no-iniciados-scroll">
               <table id="tabla-no-iniciados" class="tabla-proyectos tabla-no-iniciados pf-v6-c-table pf-m-compact">
                 <thead>
@@ -308,7 +320,7 @@
                     <th style="width: 15%;">Cliente</th>
                     <th style="width: 9%;" title="Días para vencimiento">Días</th>
                     <th style="width: 9%;">Meses</th>
-                    <th style="width: 18%;">Backlog</th>
+                    <th style="width: 18%;">Backlog / % ejecución</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -388,7 +400,7 @@
           <input type="checkbox" id="chk-completados-trazabilidad" data-mostrar-completados>
           Mostrar completados
         </label>
-        <p class="nota-grafica">El filtro usa el estado actual de cada proyecto y también se aplica a sus cifras históricas.</p>
+        <p class="nota-grafica">El filtro usa el estado actual de cada proyecto. Las variaciones comparan solo meses presentes en ambos cortes: incorporar otro año amplía la cobertura, no representa un movimiento.</p>
 
         <div class="grafica-contenedor ancho-completo pf-v6-c-card">
           <div class="pf-v6-c-card__body">
@@ -408,7 +420,7 @@
 
         <div class="grafica-contenedor ancho-completo pf-v6-c-card">
           <div class="pf-v6-c-card__body">
-          <h3 id="titulo-backlog-vs-revenue" class="pf-v6-c-title pf-m-md">Backlog vs. Revenue · todo el portafolio</h3>
+          <h3 id="titulo-backlog-vs-revenue" class="pf-v6-c-title pf-m-md">Commit y Upside mensual · todo el portafolio</h3>
           <div id="selector-backlog-vs-revenue"></div>
           <svg id="grafica-backlog-vs-revenue" class="grafica-svg"></svg>
           <p class="nota-grafica" id="nota-backlog-vs-revenue"></p>
@@ -417,6 +429,7 @@
         </details>
 
         <h3 class="pf-v6-c-title pf-m-lg">¿Qué cambió entre dos fechas?</h3>
+        <p class="nota-grafica">Cada fecha es un corte del portafolio completo: reúne los años disponibles y conserva el último dato de los archivos sin cambios. El periodo global determina qué meses se comparan.</p>
         <div class="selector-snapshot">
           <label for="select-snap-a">Desde</label>
           <select id="select-snap-a"></select>
@@ -425,7 +438,7 @@
           <span class="atajos-rango">
             <button type="button" class="atajo-rango pf-v6-c-button pf-m-secondary pf-m-small" data-rango="ultimo">Último movimiento</button>
             <button type="button" class="atajo-rango pf-v6-c-button pf-m-secondary pf-m-small" data-rango="mes">Último mes</button>
-            <button type="button" class="atajo-rango pf-v6-c-button pf-m-secondary pf-m-small" data-rango="semana">Semana del 14-20 sep</button>
+            <button type="button" class="atajo-rango pf-v6-c-button pf-m-secondary pf-m-small" data-rango="semana">Últimos 7 días</button>
             <button type="button" class="atajo-rango pf-v6-c-button pf-m-secondary pf-m-small" data-rango="todo">Todo el histórico</button>
           </span>
         </div>
@@ -517,9 +530,9 @@
           Mostrar completados
         </label>
         <p class="nota-periodo">
-          Commit, Upside y los promedios responden al periodo de revenue elegido.
+          Los proyectos, Commit, Upside y los promedios responden al rango global seleccionado.
           El backlog por estado (In Progress / On Hold / Planned / Completed), el total de
-          proyectos y el Total Ejecutado son del estado actual: no tienen
+          proyectos y el Total Ejecutado corresponden a los proyectos visibles, con su estado actual: no tienen
           apertura mensual.
         </p>
 
@@ -628,6 +641,6 @@
     </section>
   </div>
 
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=42"></script>
 </body>
 </html>

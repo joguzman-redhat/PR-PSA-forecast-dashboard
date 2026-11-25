@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { MESES, QUARTERS } = require('../dominio');
+const { resolverForecast, metaForecast, historiaVacia } = require('../forecast');
 
 const router = express.Router();
 
@@ -10,9 +11,8 @@ const router = express.Router();
 // ninguna senal de que estaba desactualizada -- y uno termina buscando el
 // fallo en la base, que estaba bien. Ahora la cache se valida sola contra una
 // huella barata del estado; /api/reload queda como atajo manual.
-let cache = null;
-let cacheHuella = null;
-function invalidarCache() { cache = null; cacheHuella = null; }
+const cache = new Map();
+function invalidarCache() { cache.clear(); }
 
 async function huellaActual() {
   const { rows } = await pool.query(
@@ -32,37 +32,48 @@ function nuevoAcumuladoMes() {
   return porMes;
 }
 
-async function construirHistoria() {
+async function construirHistoria(ctx) {
   const { rows: cargas } = await pool.query(
     `SELECT id, codigo, etiqueta, tipo, fecha_referencia,
             to_char(ejecutada_en, 'YYYY-MM-DD"T"HH24:MI:SS') AS ejecutada_en
-       FROM carga ORDER BY id`,
+       FROM carga WHERE anio_forecast = $1
+         AND archivo_id IS NOT DISTINCT FROM $2::text AND id <= $3
+       ORDER BY id`,
+    [ctx.anio, ctx.archivoId, ctx.carga.id],
   );
   if (!cargas.length) return null;
+  const ids = cargas.map(c => c.id);
 
   const { rows: filasMes } = await pool.query(
     `SELECT r.carga_id, r.mes, r.commit_usd, r.upside_usd,
             coalesce(nullif(p.clave_historia,''), nullif(p.num_pa,''), 'fila-' || p.id) AS clave_historia
        FROM revenue_mes r
        JOIN proyecto p ON p.id = r.proyecto_id
+      WHERE r.carga_id = ANY($1::bigint[])
       ORDER BY r.carga_id, p.id, r.mes`,
+    [ids],
   );
   const { rows: filasAnual } = await pool.query(
     `SELECT ra.carga_id, ra.acum_2025, ra.backlog,
             coalesce(nullif(p.clave_historia,''), nullif(p.num_pa,''), 'fila-' || p.id) AS clave_historia
        FROM revenue_anual ra
-       JOIN proyecto p ON p.id = ra.proyecto_id`,
+       JOIN proyecto p ON p.id = ra.proyecto_id
+      WHERE ra.carga_id = ANY($1::bigint[])`,
+    [ids],
   );
   const { rows: filasMov } = await pool.query(
     `SELECT coalesce(c.codigo, 'c' || c.id) AS snapshot_id, p.num_pa,
             coalesce(nullif(p.clave_historia,''), nullif(p.num_pa,''), 'fila-' || p.id) AS clave_historia,
             to_char(c.ejecutada_en, 'YYYY-MM-DD"T"HH24:MI:SS') AS ejecutada_en,
-            p.nombre, m.tipo, m.mes, m.monto,
+            coalesce(s.atributos->>'nombre', '(sin nombre historico)') AS nombre, m.tipo, m.mes, m.monto,
             m.commit_anterior, m.commit_nuevo, m.upside_anterior, m.upside_nuevo
        FROM movimiento m
        JOIN carga c    ON c.id = m.carga_id
        JOIN proyecto p ON p.id = m.proyecto_id
+       LEFT JOIN proyecto_snapshot s ON s.carga_id=m.carga_id AND s.proyecto_id=m.proyecto_id
+      WHERE m.carga_id = ANY($1::bigint[])
       ORDER BY m.id`,
+    [ids],
   );
 
   // Los movimientos se pueden CALCULAR: son la resta entre dos cargas. Que el
@@ -73,7 +84,9 @@ async function construirHistoria() {
   // haga nada. Si el ETL si los escribio, mandan los suyos.
   const { rows: filasMovDerivadas } = await pool.query(
     `WITH pares AS (
-       SELECT id AS carga_id, lag(id) OVER (ORDER BY id) AS previa_id FROM carga
+       SELECT id AS carga_id,
+              lag(id) OVER (PARTITION BY anio_forecast, archivo_id ORDER BY id) AS previa_id
+         FROM carga WHERE id = ANY($1::bigint[])
      ), sin_movimientos AS (
        SELECT pr.* FROM pares pr
         WHERE pr.previa_id IS NOT NULL
@@ -82,7 +95,7 @@ async function construirHistoria() {
      SELECT coalesce(c.codigo, 'c' || c.id) AS snapshot_id, p.num_pa,
             coalesce(nullif(p.clave_historia,''), nullif(p.num_pa,''), 'fila-' || p.id) AS clave_historia,
             to_char(c.ejecutada_en, 'YYYY-MM-DD"T"HH24:MI:SS') AS ejecutada_en,
-            p.nombre, n.mes, NULL::text AS tipo,
+            coalesce(ps.atributos->>'nombre', '(sin nombre historico)') AS nombre, n.mes, NULL::text AS tipo,
             a.commit_usd AS commit_anterior, n.commit_usd AS commit_nuevo,
             a.upside_usd AS upside_anterior, n.upside_usd AS upside_nuevo
        FROM sin_movimientos s
@@ -91,12 +104,14 @@ async function construirHistoria() {
                          AND a.proyecto_id = n.proyecto_id AND a.mes = n.mes
        JOIN carga c       ON c.id = s.carga_id
        JOIN proyecto p    ON p.id = n.proyecto_id
+       LEFT JOIN proyecto_snapshot ps ON ps.carga_id=n.carga_id AND ps.proyecto_id=n.proyecto_id
       -- Umbral de 1 USD en CUALQUIERA de los dos campos: por debajo es ruido
       -- de redondeo, no una decision de negocio. commit y upside se evaluan
       -- por separado (no se asume que uno se mueve porque el otro se movio).
       WHERE abs(n.commit_usd - a.commit_usd) >= 1.0
          OR abs(n.upside_usd - a.upside_usd) >= 1.0
       ORDER BY s.carga_id, p.id, n.mes`,
+    [ids],
   );
 
   const movimientos = filasMov.concat(filasMovDerivadas);
@@ -177,6 +192,8 @@ async function construirHistoria() {
     }
     return {
       id: c.codigo || `c${c.id}`,
+      anio_forecast: ctx.anio,
+      archivo_id: ctx.archivoId,
       timestamp: c.ejecutada_en,
       etiqueta: c.etiqueta,
       tipo: c.tipo,
@@ -184,7 +201,8 @@ async function construirHistoria() {
       totales: {
         fijo: a.fijo,
         upside: a.upside,
-        acum_2025: a.acum_2025,
+        acumulado_anterior: a.acum_2025,
+        ...(ctx.anio === 2026 ? { acum_2025: a.acum_2025 } : {}),
         total: a.fijo + a.acum_2025,
         backlog: a.backlog,
         ...quarters,
@@ -243,7 +261,7 @@ async function construirHistoria() {
 
   return {
     meta: {
-      origen: 'postgres',
+      ...metaForecast(ctx),
       generado_en: new Date().toISOString(),
       total_snapshots: snapshots.length,
       total_proyectos: Object.keys(series).length,
@@ -259,15 +277,19 @@ async function construirHistoria() {
   };
 }
 
-router.get('/', async (_req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
+    const ctx = await resolverForecast(req.query);
+    if (!ctx.carga) return res.json(historiaVacia(ctx));
+    const key = JSON.stringify([ctx.anio, ctx.archivoId, ctx.carga.id]);
     const huella = await huellaActual();
-    if (!cache || huella !== cacheHuella) {
-      cache = await construirHistoria();
-      cacheHuella = huella;
+    let entry = cache.get(key);
+    if (!entry || huella !== entry.huella) {
+      entry = { datos: await construirHistoria(ctx), huella };
+      if (cache.size >= 8) cache.delete(cache.keys().next().value);
+      cache.set(key, entry);
     }
-    if (!cache) return res.status(503).json({ error: 'No hay historia en la base de datos' });
-    res.json(cache);
+    res.json(entry.datos || historiaVacia(ctx));
   } catch (err) {
     next(err);
   }
