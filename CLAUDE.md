@@ -44,3 +44,17 @@ El ETL en Python del PoC original (`etl.py`, `generar_historia.py`,
 `actualizar.sh`, `serve.sh`, `data/*.json`) y los exports viejos de n8n
 (`flows/` en el workspace original) se retiraron: ya no se usan. No los
 reconstruyas.
+
+## Agent skills
+
+### Issue tracker
+
+Los issues y specs viven como markdown local en `.scratch/<feature>/`. Ver `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Vocabulario por defecto (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). Ver `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: un `GLOSSARY.md` y `docs/adr/` en la raíz. Ver `docs/agents/domain.md`.
