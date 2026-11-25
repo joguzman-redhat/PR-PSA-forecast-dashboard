@@ -2,9 +2,10 @@
 // pagina simulada y expone sus funciones de calculo como `ui`. Es el unico
 // seam de las pruebas: si cambia la forma de cargar el front, solo cambia aqui.
 const vm = require('node:vm');
-const fs = require('node:fs');
-const path = require('node:path');
-const code = fs.readFileSync(path.resolve(__dirname,'../../../app.js'),'utf8');
+const { codigoUnido } = require('./modulos-front');
+// El front se carga como lo recibe el navegador (modulos ES) pero se ejecuta
+// unido en un solo ambito, para que las pruebas lean y reemplacen sus funciones.
+const code = codigoUnido();
 function pagina(search='') {
   const clases=new Set();const controles=new Map();
   for(const id of ['forecast-desde','forecast-hasta','forecast-estado','forecast-unidad'])controles.set(id,{

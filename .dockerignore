@@ -4,6 +4,8 @@
 !index.html
 !app.js
 !styles.css
+!js/
+!js/**
 !vendor/
 !vendor/**
 !infra/

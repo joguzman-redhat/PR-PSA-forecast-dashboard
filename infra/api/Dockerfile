@@ -10,6 +10,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 COPY infra/api/src ./src
 COPY index.html app.js styles.css ./public/
+COPY js ./public/js
 COPY vendor ./public/vendor
 
 EXPOSE 3000

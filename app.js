@@ -3,117 +3,16 @@
  * Aplicación principal en JavaScript vanilla
  */
 
-// ============================================================================
-// ESTADO GLOBAL
-// ============================================================================
-
-const estado = {
-  forecast: { anio: 2026, archivoId: null, catalogo: null },
-  proyectos: [],
-  backlog: [],
-  historia: null,
-  filtros: {
-    estado: [],
-    zona: [],
-    pais: [],
-    billing_type: [],
-    billing_arrangement: [],
-    pm_lider: [],
-    vendedor: [],
-    tsm: [],
-    estado_contrato: [],
-    tipo_de_ejecucion: [],
-    periodo_fin: [],
-    cliente: [],
-    riesgo: [],
-    executive_watchlist: [],
-    project_status: [],
-    texto: '',
-  },
-  // Los cancelados se esconden por defecto: ensucian conteos y gráficas, y
-  // los 24 que hay valen $0 de Valor OF. El interruptor los trae de vuelta.
-  territorio: 'todos',
-  incluirCancelados: false,
-  incluirCompletados: false,
-  proyectosFiltrados: [],
-  proyectoSeleccionado: null,
-  expandedPMs: new Set(),
-  metadataProyectos: null,
-  metadataBacklog: null,
-  backlogPorPA: null,
-  backlogPorNombre: null,
-
-  // Periodo del calendario de revenue que se está mirando. Es un eje distinto
-  // al de los snapshots: aquí se elige "qué meses del año", allá "en qué
-  // momento se tomó la foto". Vale para todas las pestañas.
-  periodo: 'anio',
-  // Rango de snapshots a comparar (índices). null = desde el primero al último.
-  rangoSnapshots: null,
-};
-
-// ============================================================================
-// FUNCIONES DE FORMATEO
-// ============================================================================
-
-function formatearDinero(valor) {
-  if (valor === null || valor === undefined || isNaN(valor)) return '—';
-  const num = parseFloat(valor);
-  if (num === 0) return '$0';
-  // Hay notas de credito: sin tratar el signo aparte, -1792.5 salia como
-  // '$-1793' en vez de '-$1.8K'.
-  const signo = num < 0 ? '-' : '';
-  const abs = Math.abs(num);
-  if (abs >= 1000000) return signo + '$' + (abs / 1000000).toFixed(2) + 'M';
-  if (abs >= 10000) return signo + '$' + (abs / 1000).toFixed(0) + 'K';
-  if (abs >= 1000) return signo + '$' + (abs / 1000).toFixed(1) + 'K';
-  return signo + '$' + abs.toFixed(0);
-}
-
-function formatearNumero(valor) {
-  if (valor === null || valor === undefined || isNaN(valor)) return '—';
-  return Math.round(parseFloat(valor)).toLocaleString('es-CO');
-}
-
-/**
- * Dinero al dólar exacto. La versión abreviada ($42K) es cómoda para leer de
- * lejos pero no se puede sumar: 14.179 y 27.361 se muestran como $14K y $27K,
- * que suman 41K, mientras su total 41.541 se muestra como $42K. Donde el
- * usuario está auditando cifras hay que dar el número completo.
- */
-function formatearDineroExacto(valor) {
-  if (valor === null || valor === undefined || isNaN(valor)) return '—';
-  const num = Math.round(parseFloat(valor));
-  return (num < 0 ? '−$' : '$') + Math.abs(num).toLocaleString('en-US');
-}
-
-function formatearPorcentaje(valor) {
-  if (valor === null || valor === undefined || isNaN(valor)) return '—';
-  return (parseFloat(valor) * 100).toFixed(1) + '%';
-}
-
-function formatearFecha(valor) {
-  if (!valor) return '—';
-  try {
-    const fecha = new Date(valor);
-    return fecha.toLocaleDateString('es-CO');
-  } catch {
-    return valor;
-  }
-}
-
-function normalizarValor(valor) {
-  if (valor === null || valor === undefined || valor === '' || valor === 'N/A') {
-    return null;
-  }
-  return valor;
-}
-
-function obtenerEtiquetaValor(valor) {
-  if (valor === null || valor === undefined || valor === '' || valor === 'N/A') {
-    return '—';
-  }
-  return String(valor);
-}
+import { estado } from './js/estado.js';
+import {
+  formatearDinero,
+  formatearNumero,
+  formatearDineroExacto,
+  formatearPorcentaje,
+  formatearFecha,
+  normalizarValor,
+  obtenerEtiquetaValor,
+} from './js/formato.js';
 
 // ============================================================================
 // FUNCIONES DE CARGA DE DATOS
