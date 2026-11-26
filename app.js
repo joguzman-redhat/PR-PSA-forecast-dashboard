@@ -54,6 +54,31 @@ import {
 import {
   calcularKPIs,
 } from './js/kpis.js';
+import {
+  DIMENSIONES,
+  SIN_DATO,
+  valorDimension,
+  pasaTerritorio,
+  pasaVisibilidadProyecto,
+} from './js/filtros.js';
+import {
+  aplicarFiltros,
+  inicializarFiltroTerritorio,
+  inicializarFiltros,
+  cerrarDropdowns,
+} from './js/filtros-ui.js';
+import { configurarSelectorForecast } from './js/selector-forecast.js';
+import { construirSelectorPeriodo } from './js/selector-periodo.js';
+import { registrarVistas } from './js/vistas.js';
+
+// Las vistas que los filtros repintan siguen aquí; se registran con llamadas
+// que se resuelven al ejecutar, como antes cuando eran funciones del mismo archivo.
+registrarVistas({
+  actualizarUI: () => actualizarUI(),
+  renderizarDetalle: () => renderizarDetalle(),
+  renderizarTrazabilidad: () => renderizarTrazabilidad(),
+  renderizarPMs: () => renderizarPMs(),
+});
 
 // ============================================================================
 // FUNCIONES DE CARGA DE DATOS
@@ -87,59 +112,6 @@ async function cargarDatos() {
   }
 }
 
-function limitePeriodoForecast(valor, extremo) {
-  const trimestre = /^(\d{4})-q([1-4])$/.exec(valor);
-  if (!trimestre) return valor;
-  const mes = (Number(trimestre[2]) - 1) * 3 + (extremo === 'desde' ? 1 : 3);
-  return `${trimestre[1]}-${String(mes).padStart(2, '0')}`;
-}
-function configurarSelectorForecast() {
-  if (!estado.forecast.timeline) return;
-  const unidad = document.getElementById('forecast-unidad');
-  const desde = document.getElementById('forecast-desde');
-  const hasta = document.getElementById('forecast-hasta');
-  const periodos = estado.forecast.periodos;
-  const trimestres = [...new Set(periodos.map(p => `${p.slice(0,4)}-q${Math.ceil(Number(p.slice(5))/3)}`))];
-  unidad.value = estado.unidadTimeline;
-  const poblar = () => {
-    const porQ = unidad.value === 'trimestres';
-    const opciones = porQ ? trimestres : periodos;
-    for (const control of [desde, hasta]) {
-      control.replaceChildren(...opciones.map(p => new Option(porQ
-        ? `Q${p.at(-1)} ${p.slice(0,4)} · ${NOMBRES_MESES[(Number(p.at(-1))-1)*3].slice(0,3)}–${NOMBRES_MESES[Number(p.at(-1))*3-1].slice(0,3)}`
-        : etiquetaPeriodoCalendario(p), p)));
-      control.disabled = !opciones.length;
-      control.setCustomValidity('');
-    }
-    const convertir = p => porQ && p ? `${p.slice(0,4)}-q${Math.ceil(Number(p.slice(5))/3)}` : p;
-    desde.value = convertir(estado.rangoTimeline.desde);
-    hasta.value = convertir(estado.rangoTimeline.hasta);
-  };
-  const cambiar = () => {
-    const inicio = limitePeriodoForecast(desde.value, 'desde');
-    const fin = limitePeriodoForecast(hasta.value, 'hasta');
-    if (!inicio || !fin || inicio > fin) {
-      hasta.setCustomValidity('El final debe ser igual o posterior al inicio');
-      hasta.reportValidity(); return;
-    }
-    hasta.setCustomValidity('');
-    estado.unidadTimeline = unidad.value;
-    estado.rangoTimeline = {desde: inicio, hasta: fin}; estado.periodo = 'rango';
-    const u = new URL(location.href); u.search = '';
-    u.searchParams.set('desde', inicio); u.searchParams.set('hasta', fin);
-    if (unidad.value === 'trimestres') u.searchParams.set('unidad', 'trimestres');
-    history.replaceState(null, '', u);
-    aplicarFiltros();
-    if (estado.proyectoSeleccionado) renderizarDetalle();
-    if (estado.historia) renderizarTrazabilidad();
-    renderizarPMs();
-  };
-  poblar();
-  unidad.disabled = !periodos.length;
-  unidad.addEventListener('change', () => { poblar(); if (periodos.length) cambiar(); });
-  desde.addEventListener('change', cambiar);
-  hasta.addEventListener('change', cambiar);
-}
 
 // ============================================================================
 // FUNCIONES DE FILTRADO
@@ -160,16 +132,6 @@ function configurarSelectorForecast() {
 
 
 
-function actualizarResumenRango() {
-  if (!estado.forecast.timeline) return;
-  const visibles = estado.proyectos.filter(pasaVisibilidadProyecto);
-  const sinInicio = visibles.filter(p => !vidaProyecto(p).inicio).length;
-  const sinFin = visibles.filter(p => !vidaProyecto(p).fin).length;
-  const aviso = document.getElementById('forecast-estado');
-  if (aviso && estado.proyectos.length) aviso.textContent =
-    `${visibles.length} proyectos en el rango · ${estado.proyectos.length} cargados` +
-    (sinInicio ? ` · ${sinInicio} sin primer commit` : '') + (sinFin ? ` · ${sinFin} sin fecha fin` : '');
-}
 
 
 
@@ -202,61 +164,12 @@ function pintarProyeccionBacklogRevenue(svg, proyectos, nota) {
 // FILTROS
 // ============================================================================
 
-// Dimensiones filtrables, en el orden en que aparecen en la barra.
-const DIMENSIONES = [
-  { campo: 'estado', etiqueta: 'Estado' },
-  { campo: 'cliente', etiqueta: 'Cliente' },
-  { campo: 'pm_lider', etiqueta: 'PM/Líder' },
-  { campo: 'vendedor', etiqueta: 'Vendedor' },
-  { campo: 'tsm', etiqueta: 'TSM' },
-  { campo: 'zona', etiqueta: 'Zona' },
-  { campo: 'pais', etiqueta: 'País' },
-  { campo: 'periodo_fin', etiqueta: 'Fecha finalización proyecto' },
-  { campo: 'billing_type', etiqueta: 'Billing Type' },
-  { campo: 'billing_arrangement', etiqueta: 'Billing Arrangement' },
-  { campo: 'estado_contrato', etiqueta: 'Estado contrato' },
-  { campo: 'riesgo', etiqueta: 'Riesgo' },
-  { campo: 'executive_watchlist', etiqueta: 'Handover' },
-  { campo: 'project_status', etiqueta: 'Project Status' },
-];
-
-const SIN_DATO = '(sin dato)';
 
 
 
 
 
-/**
- * Selector de periodo. Se dibuja en varias pestañas pero todas comparten el
- * mismo estado, para que cambiar de vista no pierda lo que ya elegiste.
- */
-function construirSelectorPeriodo(alCambiar) {
-  const cont = document.createElement('div');
-  cont.className = 'selector-periodo';
 
-  const lbl = document.createElement('label');
-  lbl.textContent = 'Periodo de revenue:';
-  const sel = document.createElement('select');
-  sel.className = 'select-periodo';
-  const opcionesPeriodo=estado.forecast.timeline?[...PERIODOS,{...periodoActual(),id:'rango',etiqueta:estado.periodo==='rango'?periodoActual().etiqueta:'Rango personalizado'}]:PERIODOS;
-  opcionesPeriodo.forEach(pr => {
-    const o = document.createElement('option');
-    o.value = pr.id;
-    o.textContent = pr.etiqueta;
-    if (pr.id === estado.periodo) o.selected = true;
-    sel.appendChild(o);
-  });
-  sel.addEventListener('change', () => {
-    estado.periodo = sel.value;
-    // Mantener sincronizados los selectores de las otras pestañas.
-    document.querySelectorAll('.select-periodo').forEach(s2 => { s2.value = sel.value; });
-    if(estado.forecast.timeline){const indices=mesesActivos();document.getElementById('forecast-desde').value=MESES_ES[indices[0]]||'';document.getElementById('forecast-hasta').value=MESES_ES[indices.at(-1)]||'';}
-    alCambiar();
-  });
-
-  cont.append(lbl, sel);
-  return cont;
-}
 
 // Qué columnas son plata y cuáles porcentaje. Sin esto el detalle muestra
 // cosas como "7610377.23" en vez de "$7.61M".
@@ -311,336 +224,26 @@ function claseVencimiento(dias) {
   return 'venc-bueno';
 }
 
-// Muchos campos vienen nulos por los errores del Excel. En vez de esconder
-// esos proyectos, se agrupan bajo una opción propia: "no sabemos" también
-// es una respuesta que el negocio necesita poder filtrar.
-function valorDimension(proyecto, campo) {
-  if (campo === 'periodo_fin') return periodoFinProyecto(proyecto) || SIN_DATO;
-  if (campo === 'riesgo') {
-    return proyecto.start_at_risk ? 'Start at risk' : 'Sin marca de riesgo';
-  }
-  if (campo === 'executive_watchlist') {
-    const v = proyecto[campo];
-    if (v === null || v === undefined) return SIN_DATO;
-    return v ? 'Sí' : 'No';
-  }
-  if (campo === 'project_status') {
-    const v = proyecto[campo];
-    if (v === null || v === undefined || v === '') return SIN_DATO;
-    // Map internal values to Spanish display
-    const mapa = { 'Red': 'Rojo', 'Yellow': 'Amarillo', 'Green': 'Verde' };
-    return mapa[v] || String(v);
-  }
-  const v = proyecto[campo];
-  return (v === null || v === undefined || v === '') ? SIN_DATO : String(v);
-}
 
-function etiquetaDimension(campo, valor) {
-  return campo === 'periodo_fin' && valor !== SIN_DATO ? etiquetaPeriodoCalendario(valor) : valor;
-}
 
-function pasaDimension(proyecto, campo) {
-  const marcados = estado.filtros[campo];
-  if (!marcados || marcados.length === 0) return true;
-  return marcados.includes(valorDimension(proyecto, campo));
-}
 
-function pasaTexto(proyecto) {
-  const texto = (estado.filtros.texto || '').trim().toLowerCase();
-  if (texto === '') return true;
-  return [
-    proyecto.cliente, proyecto.nombre_del_proyecto,
-    proyecto.num_pa, proyecto.project_id,
-  ].map(v => String(v ?? '')).join(' ').toLowerCase().includes(texto);
-}
 
-function pasaTerritorio(proyecto) {
-  const mexico=String(proyecto?.pais||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').trim().toLowerCase()==='mexico';
-  return estado.territorio==='mexico'?mexico:estado.territorio==='nssa'?!mexico:true;
-}
-function inicializarFiltroTerritorio() {
-  document.querySelectorAll('[name="forecast-territorio"]').forEach(control=>{
-    control.checked=control.value===estado.territorio;
-    control.addEventListener('change',()=>{
-      if(!control.checked)return;
-      estado.territorio=control.value;estado.filtros.pais=[];
-      aplicarFiltros();
-      if(estado.proyectoSeleccionado)renderizarDetalle();
-      if(estado.historia)renderizarTrazabilidad();
-      renderizarPMs();
-    });
-  });
-}
-function pasaVisibilidadProyecto(proyecto) {
-  return (estado.incluirCompletados || proyecto?.estado !== 'Completed')
-    && (estado.incluirCancelados || proyecto?.estado !== 'Canceled')
-    && pasaTerritorio(proyecto) && pasaPeriodoProyecto(proyecto);
-}
 
 function clavesProyectosOcultos() {
   return new Set(estado.proyectos
     .filter(p => !pasaVisibilidadProyecto(p)).map(claveProyecto));
 }
 
-function sincronizarMostrarCompletados() {
-  document.querySelectorAll('[data-mostrar-completados]').forEach(chk => {
-    chk.checked = estado.incluirCompletados;
-  });
-}
 
-function cambiarMostrarCompletados(incluir) {
-  estado.incluirCompletados = incluir;
-  sincronizarMostrarCompletados();
-  aplicarFiltros();
-  const vista = document.querySelector('.pestana-contenido.activa')?.id;
-  if (vista === 'pestana-detalle') renderizarDetalle();
-  if (vista === 'pestana-trazabilidad') renderizarTrazabilidad();
-  if (vista === 'pestana-pms') renderizarPMs();
-}
 
-function aplicarFiltros() {
-  estado.proyectosFiltrados = estado.proyectos.filter(p => {
-    if (!pasaVisibilidadProyecto(p)) return false;
-    if (!estado.incluirCancelados && p.estado === 'Canceled') return false;
-    return DIMENSIONES.every(d => pasaDimension(p, d.campo)) && pasaTexto(p);
-  });
-  DIMENSIONES.forEach(d => refrescarConteos(d.campo));
-  renderizarChips();
-  actualizarUI();
-  actualizarResumenRango();
-}
 
-/**
- * Conteos de una dimensión aplicando todos los demás filtros MENOS el suyo.
- * Así el número junto a cada opción dice cuántos proyectos quedarían si la
- * marcas, no el total global. Sin esto los conteos mienten en cuanto hay
- * dos filtros puestos.
- */
-function conteosDe(campo) {
-  const conteos = new Map();
-  estado.proyectos.forEach(p => {
-    if (!pasaVisibilidadProyecto(p)) return;
-    if (!estado.incluirCancelados && p.estado === 'Canceled' && campo !== 'estado') return;
-    const pasa = DIMENSIONES.every(d => d.campo === campo || pasaDimension(p, d.campo));
-    if (!pasa || !pasaTexto(p)) return;
-    const v = valorDimension(p, campo);
-    conteos.set(v, (conteos.get(v) || 0) + 1);
-  });
-  return conteos;
-}
 
-function opcionesDe(campo) {
-  const vistos = new Set();
-  estado.proyectos.forEach(p => vistos.add(valorDimension(p, campo)));
-  const lista = Array.from(vistos);
-  // El estado sigue el flujo del negocio, no el alfabeto.
-  const orden = (estado.metadataProyectos || {}).orden_estado;
-  if (campo === 'estado' && orden) {
-    return lista.sort((a, b) => {
-      const ia = orden.indexOf(a), ib = orden.indexOf(b);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-    });
-  }
-  // (sin dato) siempre al final; el resto alfabético, con los años al revés.
-  lista.sort((a, b) => {
-    if (a === SIN_DATO) return 1;
-    if (b === SIN_DATO) return -1;
-    return a.localeCompare(b, 'es', { numeric: true });
-  });
-  return lista;
-}
 
-function inicializarFiltros() {
-  const fila = document.getElementById('fila-dropdowns');
-  fila.innerHTML = '';
-  DIMENSIONES.forEach(dim => fila.appendChild(construirDropdown(dim)));
 
-  document.getElementById('filtro-texto').addEventListener('input', e => {
-    estado.filtros.texto = e.target.value;
-    aplicarFiltros();
-  });
 
-  document.getElementById('btn-limpiar-filtros').addEventListener('click', limpiarFiltros);
 
-  sincronizarMostrarCompletados();
-  // Delegación para incluir el control que se crea al abrir Otros proyectos del cliente.
-  document.addEventListener('change', e => {
-    if (!e.target.matches('[data-mostrar-completados]')) return;
-    const id = e.target.id;
-    cambiarMostrarCompletados(e.target.checked);
-    document.getElementById(id)?.focus({ preventScroll: true });
-  });
 
-  const chk = document.getElementById('incluir-cancelados');
-  if (chk) {
-    chk.checked = estado.incluirCancelados;
-    chk.addEventListener('change', () => {
-      estado.incluirCancelados = chk.checked;
-      aplicarFiltros();
-    });
-  }
 
-  const anfitrion = document.getElementById('periodo-listado');
-  if (!estado.forecast.timeline && anfitrion && !anfitrion.children.length) {
-    anfitrion.appendChild(construirSelectorPeriodo(actualizarUI));
-  }
-
-  // Un clic fuera cierra cualquier dropdown abierto.
-  document.addEventListener('click', e => {
-    if (!e.target.closest('.dropdown-filtro')) cerrarDropdowns();
-  });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') cerrarDropdowns();
-  });
-
-  aplicarFiltros();
-}
-
-function cerrarDropdowns(excepto) {
-  document.querySelectorAll('.dropdown-filtro.abierto').forEach(d => {
-    if (d !== excepto) {
-      d.classList.remove('abierto');
-      d.querySelector('.dropdown-boton').setAttribute('aria-expanded', 'false');
-    }
-  });
-}
-
-function construirDropdown(dim) {
-  const cont = document.createElement('div');
-  cont.className = 'dropdown-filtro';
-  cont.dataset.campo = dim.campo;
-
-  const boton = document.createElement('button');
-  boton.type = 'button';
-  boton.className = 'dropdown-boton';
-  boton.setAttribute('aria-expanded', 'false');
-  boton.setAttribute('aria-controls', `opciones-${dim.campo}`);
-  boton.innerHTML = `<span class="dropdown-etiqueta">${dim.etiqueta}</span>
-                     <span class="dropdown-badge"></span>
-                     <span class="dropdown-flecha" aria-hidden="true">▾</span>`;
-  boton.addEventListener('click', e => {
-    e.stopPropagation();
-    const abierto = cont.classList.contains('abierto');
-    cerrarDropdowns(cont);
-    cont.classList.toggle('abierto', !abierto);
-    boton.setAttribute('aria-expanded', String(!abierto));
-  });
-
-  const panel = document.createElement('div');
-  panel.className = 'dropdown-panel';
-  panel.id = `opciones-${dim.campo}`;
-
-  const opciones = opcionesDe(dim.campo);
-  if (opciones.length > 10) {
-    const buscador = document.createElement('input');
-    buscador.type = 'text';
-    buscador.className = 'dropdown-buscar';
-    buscador.placeholder = 'Filtrar opciones...';
-    buscador.setAttribute('aria-label', `Buscar opciones de ${dim.etiqueta}`);
-    buscador.addEventListener('click', e => e.stopPropagation());
-    buscador.addEventListener('input', () => {
-      const q = buscador.value.toLowerCase();
-      panel.querySelectorAll('.dropdown-opcion').forEach(fila => {
-        fila.style.display = (fila.dataset.valor+' '+etiquetaDimension(dim.campo,fila.dataset.valor)).toLowerCase().includes(q) ? '' : 'none';
-      });
-    });
-    panel.appendChild(buscador);
-  }
-
-  const lista = document.createElement('div');
-  lista.className = 'dropdown-lista';
-  opciones.forEach(valor => {
-    const fila = document.createElement('label');
-    fila.className = 'dropdown-opcion';
-    fila.dataset.valor = valor;
-    fila.innerHTML = `<input type="checkbox" value="${valor.replace(/"/g, '&quot;')}">
-                      <span class="opcion-texto">${etiquetaDimension(dim.campo,valor)}</span>
-                      <span class="opcion-conteo" data-conteo-de="${valor.replace(/"/g, '&quot;')}"></span>`;
-    fila.querySelector('input').addEventListener('change', ev => {
-      const marcados = estado.filtros[dim.campo];
-      if (ev.target.checked) marcados.push(valor);
-      else marcados.splice(marcados.indexOf(valor), 1);
-      aplicarFiltros();
-    });
-    lista.appendChild(fila);
-  });
-  panel.appendChild(lista);
-
-  const pie = document.createElement('button');
-  pie.type = 'button';
-  pie.className = 'dropdown-limpiar';
-  pie.textContent = 'Quitar selección';
-  pie.addEventListener('click', e => {
-    e.stopPropagation();
-    estado.filtros[dim.campo] = [];
-    aplicarFiltros();
-  });
-  panel.appendChild(pie);
-
-  cont.appendChild(boton);
-  cont.appendChild(panel);
-  return cont;
-}
-
-function refrescarConteos(campo) {
-  const cont = document.querySelector(`.dropdown-filtro[data-campo="${campo}"]`);
-  if (!cont) return;
-  const conteos = conteosDe(campo);
-  const marcados = estado.filtros[campo];
-
-  cont.querySelectorAll('.dropdown-opcion').forEach(fila => {
-    const valor = fila.dataset.valor;
-    const n = conteos.get(valor) || 0;
-    fila.querySelector('.opcion-conteo').textContent = n;
-    fila.querySelector('input').checked = marcados.includes(valor);
-    // Una opción que no sumaría nada se atenúa, pero sigue marcable.
-    fila.classList.toggle('vacia', n === 0 && !marcados.includes(valor));
-  });
-
-  const badge = cont.querySelector('.dropdown-badge');
-  badge.textContent = marcados.length ? marcados.length : '';
-  cont.classList.toggle('activo', marcados.length > 0);
-}
-
-function renderizarChips() {
-  const zona = document.getElementById('chips-activos');
-  if (!zona) return;
-  const chips = [];
-  DIMENSIONES.forEach(dim => {
-    estado.filtros[dim.campo].forEach(valor => {
-      chips.push({ campo: dim.campo, etiqueta: dim.etiqueta, valor });
-    });
-  });
-
-  zona.innerHTML = '';
-  if (chips.length === 0) { zona.classList.add('vacio'); return; }
-  zona.classList.remove('vacio');
-
-  chips.forEach(c => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'chip';
-    chip.innerHTML = `<span class="chip-dim">${c.etiqueta}</span>
-                      <span class="chip-valor">${etiquetaDimension(c.campo,c.valor)}</span>
-                      <span class="chip-x" aria-hidden="true">×</span>`;
-    chip.title = `Quitar filtro ${c.etiqueta}: ${c.valor}`;
-    chip.addEventListener('click', () => {
-      const m = estado.filtros[c.campo];
-      m.splice(m.indexOf(c.valor), 1);
-      aplicarFiltros();
-    });
-    zona.appendChild(chip);
-  });
-}
-
-function limpiarFiltros() {
-  estado.territorio='todos';
-  document.querySelectorAll('[name="forecast-territorio"]').forEach(c=>{c.checked=c.value==='todos';});
-  DIMENSIONES.forEach(d => { estado.filtros[d.campo] = []; });
-  estado.filtros.texto = '';
-  document.getElementById('filtro-texto').value = '';
-  aplicarFiltros();
-}
 
 // ============================================================================
 // RENDERIZADO DE TABLA
