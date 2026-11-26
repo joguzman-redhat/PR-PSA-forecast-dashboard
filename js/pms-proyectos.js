@@ -3,7 +3,7 @@
 import { identificador } from './campos-proyecto.js';
 import { chip } from './chip.js';
 import { abrirDetalle } from './detalle.js';
-import { backlogHoy, ejecutadoProyecto, valorBooking } from './dinero-proyecto.js';
+import { backlogHoy, ejecutadoProyecto, porcentajeEjecucionProyecto, valorBooking } from './dinero-proyecto.js';
 import { estado } from './estado.js';
 import { aplicarFiltros } from './filtros-ui.js';
 import { DIMENSIONES } from './filtros.js';
@@ -53,10 +53,11 @@ export function crearFilaProyectosPM(filaPM) {
     trp.className = 'fila-proyecto-pm';
     trp.addEventListener('click', () => abrirDetalle(p));
 
-    const booking = valorBooking(p) || 0;
-    const acum = ejecutadoProyecto(p) || 0;
-    const backlog = backlogHoy(p) || 0;
-    const pctEjec = booking > 0 ? (acum / booking * 100) : 0;
+    // Sin cifra es sin dato ("—"), no cero.
+    const booking = valorBooking(p);
+    const acum = ejecutadoProyecto(p);
+    const backlog = backlogHoy(p);
+    const pctEjec = porcentajeEjecucionProyecto(p);
 
     // PA
     const tdPA = document.createElement('td');
@@ -132,7 +133,7 @@ export function crearFilaProyectosPM(filaPM) {
 
     // % ejecución
     const tdPct = document.createElement('td');
-    tdPct.textContent = pctEjec.toFixed(1) + '%';
+    tdPct.textContent = pctEjec === null ? '—' : pctEjec.toFixed(1) + '%';
     tdPct.className = 'celda-numero';
     trp.appendChild(tdPct);
 

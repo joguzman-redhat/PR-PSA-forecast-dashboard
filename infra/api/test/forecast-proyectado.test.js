@@ -47,9 +47,9 @@ test('un Commit de febrero de 2027 descuenta el Backlog en la curva y en el Proy
   const { ui, proyecto } = await cargar(base);
   let r = ui.resumenFinanciero([proyecto]);
   assert.equal(r.booking, 1000); // una sola vez
-  assert.equal(r.backlog, 620); // el Backlog de la fuente no se toca
+  assert.equal(r.backlogFuente, 620); // el Backlog de la fuente es solo un dato de entrada
   assert.equal(r.proyectado, 420);
-  assert.equal(r.backlogSinPlanear, 580); // 620 - 40
+  assert.equal(r.backlog, 580); // el Backlog mostrado es continuo: 620 - 40
   assert.equal(r.diferencia, 0); // 1000 - 420 - 580
   let serie = ui.serieSaldoProyecto(proyecto);
   assert.equal(serie.saldo, 580);
@@ -58,7 +58,7 @@ test('un Commit de febrero de 2027 descuenta el Backlog en la curva y en el Proy
   const otra = await cargar({ ...base, commits: { ...base.commits, '2027-02': 90 } });
   r = otra.ui.resumenFinanciero([otra.proyecto]);
   assert.equal(r.proyectado, 470);
-  assert.equal(r.backlogSinPlanear, 530);
+  assert.equal(r.backlog, 530);
   assert.equal(r.diferencia, 0);
   serie = otra.ui.serieSaldoProyecto(otra.proyecto);
   assert.equal(serie.saldo, 530);
@@ -68,7 +68,7 @@ test('un Commit de febrero de 2027 descuenta el Backlog en la curva y en el Proy
 test('la identidad no se fuerza: si el Backlog de la fuente no cuadra, la diferencia lo muestra', async () => {
   const { ui, proyecto } = await cargar({ ...base, fila: { ...base.fila, backlog: 600 } });
   const r = ui.resumenFinanciero([proyecto]);
-  assert.equal(r.backlogSinPlanear, 560); // 600 - 40
+  assert.equal(r.backlog, 560); // 600 - 40
   assert.equal(r.diferencia, 20); // 1000 - 420 - 560
 });
 
@@ -84,12 +84,13 @@ test('cuando el mes actual ya es de 2027 el Ejecutado incluye 2027 sin contar do
   assert.equal(ui.serieSaldoProyecto(proyecto).saldo, 495); // 1000 - 505
 });
 
-test('un mes sin cobertura dentro de la vida deja el Proyectado sin dato, no en cero', async () => {
+test('un mes sin cobertura dentro de la vida deja el Proyectado parcial, sin contar el mes como cero', async () => {
   const { ui, proyecto } = await cargar({ ...base, fin: '03/31/2027', sinCobertura: ['2027-02'] });
-  assert.equal(ui.commitPendienteProyecto(proyecto), null);
-  assert.equal(ui.proyeccionReferencia(proyecto), null);
+  assert.equal(ui.commitPendienteProyecto(proyecto), 30); // solo dic 2026; feb 2027 no cuenta como cero
+  assert.equal(ui.proyeccionReferencia(proyecto), 380); // 350 + 30
+  assert.equal(ui.coberturaProyectado(proyecto).hasta, '2027-01');
   const r = ui.resumenFinanciero([proyecto]);
-  assert.equal(r.proyectado, null);
+  assert.equal(r.proyectado, 380);
   assert.equal(r.diferencia, null);
   assert.equal(r.faltantes, 1);
 });

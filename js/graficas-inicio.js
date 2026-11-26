@@ -2,7 +2,7 @@
 // proyectos filtrados del estado.
 
 import { identificador } from './campos-proyecto.js';
-import { backlogHoy, ejecutadoProyecto, proyectadoProyecto, valorBooking } from './dinero-proyecto.js';
+import { backlogHoy, ejecutadoProyecto, ejecucionPonderada, proyectadoProyecto, sumaConDato, valorBooking } from './dinero-proyecto.js';
 import { estado } from './estado.js';
 import { DIMENSIONES, SIN_DATO, valorDimension } from './filtros.js';
 import { aplicarFiltros } from './filtros-ui.js';
@@ -39,10 +39,12 @@ export function actualizarGraficas() {
     cardVendedor.style.display = 'block';
     // Calcular estadísticas del vendedor
     const proysVendedor = proyectos.filter(p => valorDimension(p, 'vendedor') === vendedorUnico);
-    const bookingTotal = proysVendedor.reduce((a, p) => a + (valorBooking(p) || 0), 0);
-    const acum = proysVendedor.reduce((a, p) => a + (ejecutadoProyecto(p) || 0), 0);
-    const backlogTotal = proysVendedor.reduce((a, p) => a + (backlogHoy(p) || 0), 0);
-    const pctEjec = bookingTotal > 0 ? (acum / bookingTotal * 100).toFixed(1) : '—';
+    // Un proyecto sin cifras no cuenta como cero: se ignora en cada total.
+    const bookingTotal = sumaConDato(proysVendedor, valorBooking);
+    const acum = sumaConDato(proysVendedor, ejecutadoProyecto);
+    const backlogTotal = sumaConDato(proysVendedor, backlogHoy);
+    const ejecucionVendedor = ejecucionPonderada(proysVendedor);
+    const pctEjec = ejecucionVendedor === null ? '—' : ejecucionVendedor.toFixed(1);
 
     const porEstado = new Map();
     proysVendedor.forEach(p => {

@@ -9,8 +9,12 @@ Importe total contratado de un proyecto, ya convertido a USD. Es el valor contra
 _Avoid_: Valor OF, valor_of, valor del contrato
 
 **Backlog**:
-Importe del Booking que falta por ejecutar en toda la vida restante del proyecto, incluidos los años posteriores. Es el saldo pendiente y se descuenta a medida que se ejecuta el Commit.
-_Avoid_: Saldo contractual, saldo pendiente, remanente
+Importe del Booking que falta por planear en toda la vida restante del proyecto, continuo entre años: el Backlog de la fuente menos el Commit posterior a su Año fuente. Es el único Backlog que se muestra, y puede diferir del Excel de un solo año.
+_Avoid_: Saldo contractual, saldo pendiente, remanente, Backlog sin planear
+
+**Backlog fuente**:
+Columna `Backlog` del Excel de una Carga: Booking menos acumulado anterior menos el Commit de su Año fuente. Es un dato de entrada, no se muestra como Backlog.
+_Avoid_: Backlog del Excel
 
 **Commit**:
 Revenue que se planea reconocer en un mes con alta certeza. En meses ya pasados es un hecho ejecutado y no cambia; solo puede cambiar del mes actual en adelante.
@@ -25,7 +29,7 @@ Revenue de un proyecto hasta hoy: el acumulado anterior más el Commit de los me
 _Avoid_: Acumulado a hoy, acumulado al corte
 
 **Proyectado**:
-Ejecutado más el Commit de los meses futuros, sobre toda la vida del proyecto. No incluye Upside.
+Ejecutado más el Commit de los meses futuros, sobre toda la vida del proyecto. No incluye Upside. Nunca desaparece: si faltan meses de Commit es **parcial** (se calcula con el Commit que existe y se marca).
 _Avoid_: Acumulado proyectado
 
 ## Proyectos

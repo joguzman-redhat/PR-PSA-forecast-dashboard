@@ -46,3 +46,6 @@
   }
 }
 
+
+.kpi-aviso-parcial { margin-top: 2px; font-size: 0.72rem; color: #8a5f00; }
+.kpi-aviso-parcial:empty { display: none; }

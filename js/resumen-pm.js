@@ -1,7 +1,7 @@
 // Resumen del PM seleccionado en el Inicio.
 
 import { chip } from './chip.js';
-import { backlogHoy, ejecutadoProyecto, valorBooking } from './dinero-proyecto.js';
+import { backlogHoy, ejecucionPonderada, ejecutadoProyecto, valorBooking } from './dinero-proyecto.js';
 import { estado } from './estado.js';
 import { SIN_DATO, valorDimension } from './filtros.js';
 import { formatearDinero, formatearDineroExacto, formatearNumero } from './formato.js';
@@ -23,7 +23,7 @@ export function renderizarResumenPM(proyectos) {
   const booking = sumar(valorBooking);
   const acumulado = sumar(ejecutadoProyecto);
   const backlog = sumar(backlogHoy);
-  const porcentaje = booking > 0 && acumulado !== null ? acumulado / booking * 100 : null;
+  const porcentaje = ejecucionPonderada(portafolio);
 
   document.getElementById('pm-nombre').textContent = pm;
   document.getElementById('pm-n-proyectos').textContent = formatearNumero(portafolio.length);

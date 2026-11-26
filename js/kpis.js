@@ -2,10 +2,10 @@
 import { estado } from './estado.js';
 import { formatearDinero, formatearDineroExacto } from './formato.js';
 import { periodoActual, etiquetaPeriodoCalendario, mesReferenciaFinanciera } from './calendario.js';
-import { valorBooking, ejecutadoProyecto, backlogHoy, revenuePeriodo, upsidePeriodo, resumenFinanciero } from './dinero-proyecto.js';
+import { valorBooking, ejecutadoProyecto, backlogHoy, revenuePeriodo, upsidePeriodo, resumenFinanciero, sumaConDato, ejecucionPonderada } from './dinero-proyecto.js';
 
 export function textoAyudaGlobal() {
-  return 'El rango selecciona proyectos cuya vida registrada se solapa con las fechas elegidas: desde el primer commit distinto de cero hasta su fecha fin, ambos inclusive. No exige tener commit en cada trimestre. Si falta un límite, se usa solo el conocido. México filtra país México; NSSA incluye el resto de NOLA. Commit y Upside suman los meses del rango. Booking, Ejecutado, Proyectado y Backlog usan una sola fuente por proyecto, con preferencia por el año actual, y cubren toda la vida del proyecto. El detalle muestra la vida completa, sin recortarla por este rango.';
+  return 'El rango selecciona proyectos cuya vida registrada se solapa con las fechas elegidas: desde el primer commit distinto de cero hasta su fecha fin, ambos inclusive. No exige tener commit en cada trimestre. Si falta un límite, se usa solo el conocido. México filtra país México; NSSA incluye el resto de NOLA. Commit y Upside suman los meses del rango. Booking, Ejecutado, Proyectado y Backlog (continuo entre años) usan una sola fuente por proyecto, con preferencia por el año actual, y cubren toda la vida del proyecto. El detalle muestra la vida completa, sin recortarla por este rango.';
 }
 
 export function actualizarAyudas() {
@@ -15,13 +15,13 @@ export function actualizarAyudas() {
     'kpi-total-proyectos':'Proyectos que cumplen el rango, territorio, estado y filtros seleccionados.',
     'kpi-valor-of-total':`Booking de BackLog NOLA, una vez por proyecto. Año fuente: ${ref}; no se suman Bookings de distintos años.`,
     'kpi-acumulado-hoy':`Ejecutado: acumulado anterior más el Commit de todos los meses hasta ${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}, inclusive, sobre toda la vida del proyecto. No es solo el revenue del rango seleccionado.`,
-    'kpi-backlog-2026':`Backlog de la Carga más reciente (Año fuente ${ref}), tal cual viene en el Excel: ya descuenta el Commit de ese año. El Commit de años posteriores se descuenta en el Proyectado. No es Booking menos Ejecutado.`,
+    'kpi-backlog-2026':`Backlog continuo entre años: el Backlog de la Carga más reciente (Año fuente ${ref}) menos el Commit de los años posteriores a ese Año fuente; lo que falta por planear de toda la vida del proyecto. Por eso puede no coincidir con el Excel de un solo año (suma de las fuentes: ${formatearDineroExacto(r.backlogFuente)}). No es Booking menos Ejecutado.`,
     'kpi-pct-ejecucion':'Ejecutado dividido por Booking; ponderado por monto.',
     'kpi-revenue-periodo':`Suma de Commit en ${periodoActual().etiqueta}; cambia con el rango global.`,
     'kpi-upside-periodo':`Suma de Upside en ${periodoActual().etiqueta}; no se considera revenue comprometido.`,
     'kpi-commit-pendiente':`Commit de los meses posteriores a ${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}, de cualquier año hasta el fin de la vida del proyecto (incluido 2027); independiente del rango de revenue. Nunca incluye Upside.`,
-    'kpi-proyectado':`Proyectado: Ejecutado más el Commit pendiente (${formatearDineroExacto(r.pendiente)}), sobre toda la vida del proyecto. Sin Upside.`,
-    'kpi-diferencia-booking':`Booking − Proyectado − Backlog sin planear (Backlog de la fuente menos el Commit registrado después de su Año fuente, que el Excel aún no descuenta). Cero significa conciliado. Positivo: valor sin explicar; negativo: excedente. ${r.faltantes?r.faltantes+' proyectos tienen cifras incompletas.':'Se usan importes fuente sin ajustar para forzar igualdad.'}`,
+    'kpi-proyectado':`Proyectado: Ejecutado más el Commit pendiente (${formatearDineroExacto(r.pendiente)}), sobre toda la vida del proyecto. Sin Upside.${r.parciales?` ${r.parciales} proyectos son parciales: su vida llega más allá del Commit cargado, y esos meses no se cuentan como cero; el cálculo se completa cuando se cargue ese Commit.`:''}`,
+    'kpi-diferencia-booking':`Booking − Proyectado − Backlog (continuo). Cero significa conciliado. Positivo: valor sin explicar; negativo: excedente. ${r.faltantes?r.faltantes+' proyectos tienen cifras incompletas.':'No se ajusta ningún importe para forzar igualdad.'}`,
   };
   document.querySelectorAll('.fila-kpis-pms .kpi-etiqueta').forEach(label=>{
     if(label.querySelector('.ayuda-kpi'))return;
@@ -48,14 +48,9 @@ export function actualizarAyudas() {
  */
 export function calcularKPIs() {
   const proyectos = estado.proyectosFiltrados;
-  const sumaCalculado = fn => proyectos.reduce((acc, p) => {
-    const v = fn(p);
-    return acc + (typeof v === 'number' ? v : 0);
-  }, 0);
-
-  const booking = sumaCalculado(valorBooking);
-  const acumulado = sumaCalculado(ejecutadoProyecto);
-  const backlog = sumaCalculado(backlogHoy);
+  const booking = sumaConDato(proyectos, valorBooking);
+  const acumulado = sumaConDato(proyectos, ejecutadoProyecto);
+  const backlog = sumaConDato(proyectos, backlogHoy);
 
   const texto = (id, valor) => {
     const el = document.getElementById(id);
@@ -68,7 +63,8 @@ export function calcularKPIs() {
   texto('kpi-backlog-2026', formatearDinero(backlog));
   // Ejecución global = lo ejecutado sobre lo contratado, no el promedio de
   // los porcentajes: un proyecto de 2 millones no pesa igual que uno de 20 mil.
-  texto('kpi-pct-ejecucion', booking > 0 ? (acumulado / booking * 100).toFixed(1) + '%' : '—');
+  const ejecucion = ejecucionPonderada(proyectos);
+  texto('kpi-pct-ejecucion', ejecucion === null ? '—' : ejecucion.toFixed(1) + '%');
 
   const importesPeriodo=proyectos.map(revenuePeriodo).filter(Number.isFinite);
   const rev=importesPeriodo.length||!proyectos.length?importesPeriodo.reduce((a,b)=>a+b,0):null;
@@ -79,6 +75,7 @@ export function calcularKPIs() {
   texto('kpi-upside-periodo',formatearDinero(upsides.length||!proyectos.length?upsides.reduce((a,b)=>a+b,0):null));
   texto('kpi-commit-pendiente',formatearDinero(financiero.pendiente));
   texto('kpi-proyectado',formatearDinero(financiero.proyectado));
+  texto('kpi-proyectado-aviso',financiero.parciales?`Parcial en ${financiero.parciales} de ${proyectos.length} proyectos`:'');
   texto('kpi-diferencia-booking',formatearDinero(financiero.diferencia));
   actualizarAyudas();
 }

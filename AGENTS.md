@@ -33,8 +33,9 @@ rápido que el propio export del workflow.
 ## Antes de tocar un cálculo de dinero
 
 Lee `docs/REGLAS_DE_DATOS.md`: todo el dinero sale de BackLog NOLA (Info
-Proyectos no tiene el factor de conversión) y el Backlog es la columna del Excel,
-no Booking − Acumulado.
+Proyectos no tiene el factor de conversión) y el Backlog mostrado es el continuo
+(ADR 0002: el de la fuente menos el Commit posterior a su Año fuente), no
+Booking − Acumulado.
 Los cambios de esquema van en `01_schema.sql` y en una migración en
 `infra/db/migraciones/`.
 

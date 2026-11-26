@@ -215,6 +215,11 @@
   color: var(--text-dim);
 }
 
+.hero-cifra-parcial-nota { margin-top: var(--spacing-xs); font-size: 0.75rem; line-height: 1.35; color: #8a5f00;
+  background: color-mix(in srgb, var(--color-advertencia) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-advertencia) 45%, transparent);
+  border-radius: var(--radius-sm); padding: 4px var(--spacing-sm); }
+
 .hero-avance { margin-top: var(--spacing-xl); }
 .hero-avance-cab {
   display: flex; flex-wrap: wrap; justify-content: space-between;

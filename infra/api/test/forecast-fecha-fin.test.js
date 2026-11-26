@@ -92,6 +92,6 @@ test('un mes sin cobertura hasta la Fecha fin queda sin dato, no cero', async ()
   const serie = ui.serieSaldoProyecto(proyecto);
   assert.equal(serie.datos['dic 2027']['Backlog'], 620);
   assert.equal(serie.datos['mar 2028']['Backlog'], null);
-  assert.equal(ui.proyeccionReferencia(proyecto), null);
+  assert.equal(ui.proyeccionReferencia(proyecto), 380); // parcial: 350 + 30; 2028 no cuenta como cero
   assert.equal(ui.serieSaldoProyecto(proyecto).saldo, null);
 });

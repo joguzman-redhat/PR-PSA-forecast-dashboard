@@ -1,8 +1,9 @@
 # Reglas del dato en el dashboard
 
 Reglas confirmadas con el negocio (reuniones del 19 y 22 de oct 2026).
-Corregido el 26 de nov 2026 según el ADR 0001
-(`docs/adr/0001-backlog-proyectado-toda-la-vida.md`): esta versión reemplaza lo
+Corregido el 26 de nov 2026 según los ADR 0001 y 0002
+(`docs/adr/0001-backlog-proyectado-toda-la-vida.md`,
+`docs/adr/0002-backlog-continuo-entre-anios.md`): esta versión reemplaza lo
 del 22 y 24 de nov en lo que se contradice. Vocabulario en `GLOSSARY.md`. Si un
 cálculo del dashboard, de la API o del agente de n8n contradice esto, el error
 es del cálculo.
@@ -26,29 +27,42 @@ de dinero y marcado "sin backlog"**. No se cae a los valores de Info.
 
 ## Cómo se calcula cada cifra
 
-Todo es por proyecto y sobre su **Vida del proyecto**. Booking y Backlog se
-toman **una sola vez** de la Carga más reciente; no se suman entre Años fuente.
+Todo es por proyecto y sobre su **Vida del proyecto**. Booking y el Backlog de la
+fuente se toman **una sola vez** de la Carga más reciente; no se suman entre
+Años fuente.
 
 | Cifra | Regla |
 |---|---|
 | **Booking** | `Valor OF` de BackLog NOLA, una vez por proyecto. En la BD sigue siendo `valor_of` |
-| **Backlog** | La columna `Backlog` de BackLog NOLA, tal cual (Carga más reciente). El Excel la calcula como Booking − acumulado anterior − Commit de los 12 meses de su Año fuente |
+| **Backlog fuente** (dato de entrada) | La columna `Backlog` de BackLog NOLA (Carga más reciente). El Excel la calcula como Booking − acumulado anterior − Commit de los 12 meses de su Año fuente. No se muestra como tal |
+| **Backlog** | El **continuo entre años**: Backlog fuente − Commit posterior al Año fuente. Es lo que falta por planear de toda la vida y lo único que se muestra como Backlog |
 | **Ejecutado** | Acumulado anterior + Commit desde el inicio del calendario hasta el mes actual, inclusive. Se calcula; no se lee de la API |
-| **Proyectado** | Ejecutado + Commit de los meses posteriores al actual, incluidos los de años posteriores al Año fuente. **Solo Commit, nunca Upside** |
-| **Commit pendiente** | Commit de los meses posteriores al actual, hasta el fin de la Vida del proyecto |
+| **Proyectado** | Ejecutado + Commit de los meses posteriores al actual, incluidos los de años posteriores al Año fuente. **Solo Commit, nunca Upside**. Nunca desaparece: si faltan meses de Commit se calcula con el que existe y se marca **parcial** |
+| **Commit pendiente** | Commit de los meses posteriores al actual, hasta el fin de la Vida del proyecto (solo los meses con dato; ver Proyectado parcial) |
 | **% ejecución** | Ejecutado / Booking, ponderado por monto (no el promedio de porcentajes) |
 
-El Backlog de la Carga solo descuenta el Commit de su Año fuente. El Commit de
-años posteriores sigue sin descontar, y esa parte es el **Backlog sin planear**
-(Backlog − Commit posterior al Año fuente). La identidad es:
+El Backlog fuente solo descuenta el Commit de su Año fuente; el Commit de años
+posteriores sigue sin descontar. Como este dashboard reemplaza a los dos Excel
+(FY26 y FY27) y se ve como uno solo, sin «cambio de año», el Backlog mostrado
+descuenta también ese Commit (ADR 0002). La identidad es:
 
-**Booking = Ejecutado + Commit pendiente + Backlog sin planear.**
+**Booking = Ejecutado + Commit pendiente + Backlog.**
 
-La columna y el KPI Backlog muestran el Backlog del Excel; el descuento del
-Commit posterior se ve en el Proyectado, en la curva del detalle y en la
-Diferencia vs. Booking. Es el número de las tablas dinámicas del negocio
-(verificado el 22 de oct 2026: In Progress 142 · 5.244.100, On Hold 21 ·
-2.120.585, Planned 34 · 1.569.347, total 197 · 8.934.032).
+Ejemplo, PA 66600: Backlog fuente $20.996, Commit de 2027 $19.975, **Backlog
+mostrado $1.021**. En tarjetas, listado, detalle, PMs, estadísticas de vendedor
+y PM e informe se muestra este número. Por eso ya no coincide con el Excel de un
+solo año ni con las tablas dinámicas del negocio: la suma del Backlog de todos
+los proyectos pasó de 9,69M (fuente) a 8,48M (continuo) el 26 de nov 2026. Antes
+(22 de oct 2026, solo FY26, sin Commit de 2027) sí coincidían: In Progress 142 ·
+5.244.100, On Hold 21 · 2.120.585, Planned 34 · 1.569.347, total 197 · 8.934.032;
+esas cifras son históricas, no las de hoy.
+
+La verificación de negocio es que Excel 2026 + Excel 2027 coincidan con el
+dashboard. Para los proyectos que están en ambas fuentes, el Backlog continuo
+debe coincidir con la columna Backlog del Excel FY27 (que ya descuenta el
+acumulado de 2026 y el Commit de 2027). El 26 de nov 2026 coincide (±$1) en 320
+de 331 proyectos con cifras; las 11 diferencias son cambios de Booking o de
+acumulado anterior entre los dos Excel, que hay que revisar con el negocio.
 
 > Antes se calculaba como Booking − Ejecutado. Daba, por ejemplo, 7,09M en
 > In Progress en vez de 5,24M, porque no restaba el Commit de noviembre y
@@ -62,8 +76,15 @@ Diferencia vs. Booking. Es el número de las tablas dinámicas del negocio
 - Con Fecha fin, las gráficas y la proyección llegan hasta ella.
 - Un Commit o Upside posterior a la Fecha fin se advierte en el detalle, sin
   recortar el importe: se conserva en el Proyectado y en las gráficas.
-- Un mes sin cobertura es **sin dato**, no cero. Con meses sin dato el
-  Proyectado y el Commit pendiente quedan sin dato; no se rellena.
+- Un mes sin cobertura es **sin dato**, no cero: en series mensuales y gráficas
+  queda sin dato y no se rellena.
+- **Proyectado parcial**: si la Fecha fin (o la vida) llega más allá del último
+  mes cargado, el Proyectado y el Commit pendiente se calculan con el Commit que
+  existe y se marcan parciales («cubre hasta dic 2027; faltan meses de 2028»),
+  sin inventar importes. Cuando llegue una fuente con ese Commit, el cálculo se
+  completa solo. La Diferencia vs. Booking no se afirma con proyectos parciales.
+- Un proyecto sin cifras no cuenta como cero: se ignora en el Backlog total y en
+  el % de ejecución, que solo usa proyectos con Booking y Ejecutado.
 - La fecha de inicio real no se importa: el calendario comienza con las Cargas.
 - La curva del detalle es el **Backlog** restante: parte de un Booking, incorpora
   una sola vez el acumulado anterior al calendario y descuenta el Commit mes a
@@ -113,7 +134,7 @@ se reimporta en n8n.
   el detalle, que muestra la Vida del proyecto completa.
 - Sin rango en la URL se selecciona el trimestre actual (hora de Colombia) hasta
   Q4 del año siguiente. Un enlace con rango explícito lo conserva.
-- Booking, Ejecutado, Proyectado y Backlog son por proyecto, no por rango; los
+- Booking, Ejecutado, Proyectado y Backlog (continuo) son por proyecto, no por rango; los
   totales varían solo porque el rango incluye o excluye proyectos.
 - Prioridad de la fuente por proyecto: Año fuente igual al Año fiscal en
   America/Bogota; si falta, el anterior más cercano; si solo hay futuro, el más

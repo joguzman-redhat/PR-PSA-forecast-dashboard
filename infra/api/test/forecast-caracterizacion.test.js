@@ -55,7 +55,7 @@ test('un importe que no es numero (N/A, texto) se trata como ausente, no como ce
   assert.equal(ui.acumuladoAnterior(p), null);
 });
 
-test('Backlog es la columna del Excel tal cual, no Booking menos acumulado', async () => {
+test('Backlog sin Commit posterior al Año fuente es el de la columna del Excel, no Booking menos acumulado', async () => {
   const { ui } = await cargar(d => {
     d.backlog = [entidad('123', { valor_of: 920541, acumulado_a_fecha: 333086, backlog: 13547 })];
   });
@@ -71,7 +71,9 @@ test('Ejecutado se lee de la fila cuando no hay meses, y el Proyectado ya no se 
   const p = ui.estado.proyectos[0];
   assert.equal(ui.acumuladoHoy(p), 880000);
   // ADR 0001: Proyectado se calcula sobre toda la vida; total_ejecutado_acumulado (906994) solo llega al fin del Año fuente.
-  assert.equal(ui.proyectadaAnio(p), null);
+  // ADR 0002: sin meses futuros con dato el Proyectado no desaparece: es el Ejecutado, marcado parcial.
+  assert.equal(ui.proyectadaAnio(p), 880000);
+  assert.notEqual(ui.coberturaProyectado(p), null);
 });
 
 test('el porcentaje de ejecucion es Ejecutado sobre Booking y falta sin Booking positivo', async () => {
@@ -107,13 +109,14 @@ test('con una fuente de 2027 todo ese año esta pendiente', async () => {
   assert.equal(ui.commitPendienteProyecto(ui.estado.proyectos[0]), 120);
 });
 
-test('Commit pendiente queda sin dato si falta un mes pendiente, no se cuenta como cero', async () => {
+test('Commit pendiente suma solo los meses con dato si falta uno pendiente, y el Proyectado queda parcial', async () => {
   const { ui } = await cargar(d => {
     d.backlog = [entidad('123', { anio_atributos: 2026, '2026-11_fijo': 700 })]; // falta diciembre
   });
   const p = ui.estado.proyectos[0];
-  assert.equal(ui.commitPendienteProyecto(p), null);
-  assert.equal(ui.proyeccionReferencia(p), null);
+  assert.equal(ui.commitPendienteProyecto(p), 0); // diciembre sin dato no se cuenta como cero: no hay Commit futuro que sumar
+  assert.equal(ui.proyeccionReferencia(p), ui.acumuladoHoy(p));
+  assert.notEqual(ui.coberturaProyectado(p), null);
 });
 
 test('el Proyectado de referencia es Ejecutado mas Commit pendiente', async () => {

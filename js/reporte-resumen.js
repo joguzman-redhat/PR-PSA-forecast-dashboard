@@ -2,7 +2,7 @@
 import { estado } from './estado.js';
 import { formatearNumero, formatearDineroExacto } from './formato.js';
 import { anioRevenue, periodoActual } from './calendario.js';
-import { valorBooking, revenuePeriodo, ejecutadoProyecto, backlogHoy } from './dinero-proyecto.js';
+import { valorBooking, revenuePeriodo, ejecutadoProyecto, backlogHoy, ejecucionPonderada } from './dinero-proyecto.js';
 import { SIN_DATO, valorDimension, pasaVisibilidadProyecto } from './filtros.js';
 import { identificador } from './campos-proyecto.js';
 import { calcularCambios } from './snapshots-cambios.js';
@@ -80,7 +80,7 @@ export function construirResumenReporte(contenido, vista, nombreVista, partes) {
     ['Booking', formatearDineroExacto(booking)],
     ['Ejecutado', formatearDineroExacto(acumulado)],
     ['Backlog', formatearDineroExacto(sumar(backlogHoy))],
-    ['Ejecución', booking > 0 && acumulado !== null ? (acumulado / booking * 100).toFixed(1) + '%' : '—'],
+    ['Ejecución', ejecucionPonderada(proyectos) === null ? '—' : ejecucionPonderada(proyectos).toFixed(1) + '%'],
     [`Commit · ${periodoActual().etiqueta}`, formatearDineroExacto(sumar(revenuePeriodo))],
   ];
   metricas.forEach(([etiqueta, valor]) => {

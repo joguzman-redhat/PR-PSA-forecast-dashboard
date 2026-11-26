@@ -3,7 +3,7 @@
 import { identificador } from './campos-proyecto.js';
 import { chip } from './chip.js';
 import { anioRevenue } from './calendario.js';
-import { acumuladoAnterior, backlogHoy, ejecutadoProyecto, proyectadoProyecto, valorBooking } from './dinero-proyecto.js';
+import { acumuladoAnterior, backlogHoy, ejecutadoProyecto, proyectadoProyecto, textoProyectadoParcial, valorBooking } from './dinero-proyecto.js';
 import { formatearDinero } from './formato.js';
 
 const ESTADO_CONTRATO_NIVEL = {
@@ -26,6 +26,7 @@ export function renderizarEncabezadoProyecto(contenedor, proyecto) {
   const acum = ejecutadoProyecto(proyecto);
   const backlog = backlogHoy(proyecto);
   const proyectado = proyectadoProyecto(proyecto);
+  const parcial = textoProyectadoParcial(proyecto);
   const consumido = acumuladoAnterior(proyecto);
   const pct = (booking && acum !== null) ? (acum / booking) * 100 : null;
 
@@ -76,8 +77,8 @@ export function renderizarEncabezadoProyecto(contenedor, proyecto) {
   [
     ['Valor Booking', booking, 'Por cuánto se vendió el proyecto'],
     ['Ejecutado', acum, 'Acumulado anterior más el Commit hasta el mes actual, sobre toda la vida del proyecto'],
-    ['Proyectado', proyectado, 'Ejecutado más el Commit de los meses futuros, incluido 2027. No incluye Upside'],
-    ['Backlog', backlog, 'Backlog de la fuente: ya descuenta el Commit de su Año fuente'],
+    ['Proyectado', proyectado, 'Ejecutado más el Commit de los meses futuros, incluido 2027. No incluye Upside' + (parcial ? '. ' + parcial : '')],
+    ['Backlog', backlog, 'Backlog continuo entre años: el de la fuente menos el Commit posterior a su Año fuente; lo que falta por planear de toda la vida'],
     [`Acumulado anterior a ${anioRevenue()}`, consumido, `Revenue acumulado previo al Año fuente ${anioRevenue()}`],
   ].forEach(([et, v, tip]) => {
     const d = document.createElement('div');
@@ -91,6 +92,13 @@ export function renderizarEncabezadoProyecto(contenedor, proyecto) {
     l.textContent = et;
     const ayuda=document.createElement('button');ayuda.type='button';ayuda.className='ayuda-kpi';ayuda.textContent='?';ayuda.title=tip;ayuda.setAttribute('aria-label',tip);l.appendChild(ayuda);
     d.append(n, l);
+    if (et === 'Proyectado' && parcial) {
+      d.classList.add('hero-cifra-parcial');
+      const marca = document.createElement('div');
+      marca.className = 'hero-cifra-parcial-nota';
+      marca.textContent = parcial;
+      d.appendChild(marca);
+    }
     cifras.appendChild(d);
   });
   hero.appendChild(cifras);

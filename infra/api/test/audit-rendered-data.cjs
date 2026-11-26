@@ -12,7 +12,8 @@ vm.runInContext(require('./modulos-front').codigoUnido()+'\nglobalThis.ui={estad
 let count=0;const issues=[];
 function check(name,e,a){count++;const ok=typeof e==='number'?typeof a==='number'&&Math.abs(e-a)<.01:e===a;if(!ok)issues.push({name,expected:e,actual:a});}
 function money(n){const sign=n<0?'-':'';n=Math.abs(n);return sign+'$'+(n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e4?(n/1e3).toFixed(0)+'K':n>=1e3?(n/1e3).toFixed(1)+'K':n.toFixed(0));}
-// Formula del ADR 0001 sobre los datos guardados, sin usar las funciones del front.
+// Formula de los ADR 0001 y 0002 sobre los datos guardados, sin usar las funciones del front.
+const mesesEntre=(a,z)=>{const r=[];let n=Number(a.slice(0,4))*12+Number(a.slice(5))-1;const u=Number(z.slice(0,4))*12+Number(z.slice(5))-1;for(;n<=u;n++)r.push(Math.floor(n/12)+'-'+String(n%12+1).padStart(2,'0'));return r;};
 const hoy=data.meta.fecha_referencia.slice(0,7);
 function esperado(p,b){
  const months=data.meta.periodos;
@@ -21,19 +22,22 @@ function esperado(p,b){
  const f=typeof p.fecha_fin==='string'?p.fecha_fin.match(/^(\d{2})\/(\d{2})\/(\d{4})$/):null,fin=f?f[3]+'-'+f[1]:null;
  const registrados=months.filter(m=>typeof fijo(m)==='number'&&fijo(m)!==0);
  const finVida=fin||registrados.at(-1)||'';
- const enRango=(a,z)=>months.filter(m=>m>=a&&m<=z);
  // Ejecutado = acumulado anterior + Commit de los meses del Año fuente en adelante hasta hoy.
  const tramo=months.filter(m=>Number(m.slice(0,4))>=fuente&&m<=hoy);
  const previos=months.filter(m=>inicio&&m>=inicio&&Number(m.slice(0,4))<fuente);
  const ejecutado=typeof b.acumulado_anterior==='number'&&previos.every(m=>typeof fijo(m)==='number')&&tramo.every(m=>typeof fijo(m)==='number')
    ?b.acumulado_anterior+tramo.reduce((a,m)=>a+fijo(m),0):null;
- const desde=[months[months.indexOf(hoy)+1],fuente+'-01'].sort().at(-1),hasta=[fuente+'-12',finVida].sort().at(-1);
- const cobertura=enRango(desde,hasta).every(m=>typeof fijo(m)==='number');
- const pendiente=cobertura?months.filter(m=>m>hoy&&typeof fijo(m)==='number').reduce((a,m)=>a+fijo(m),0):null;
- return {booking:b.valor_of??null,backlog:b.backlog??null,ejecutado,pendiente,
-   proyectado:ejecutado!==null&&pendiente!==null?ejecutado+pendiente:null,
-   posterior:months.filter(m=>Number(m.slice(0,4))>fuente).reduce((a,m)=>a+(typeof fijo(m)==='number'?fijo(m):0),0),
-   inicio,fin,registrados,fuente};
+ const siguiente=mesesEntre(hoy,(Number(hoy.slice(0,4))+1)+'-12')[1];
+ const desde=[siguiente,fuente+'-01'].sort().at(-1),hasta=[fuente+'-12',finVida].sort().at(-1);
+ // Mes sin cobertura = sin dato, no cero: se suma solo el Commit que existe y el Proyectado queda parcial.
+ const faltantes=desde<=hasta?mesesEntre(desde,hasta).filter(m=>typeof fijo(m)!=='number'):[];
+ const pendiente=months.filter(m=>m>hoy&&typeof fijo(m)==='number').reduce((a,m)=>a+fijo(m),0);
+ const posterior=months.filter(m=>Number(m.slice(0,4))>fuente).reduce((a,m)=>a+(typeof fijo(m)==='number'?fijo(m):0),0);
+ return {booking:b.valor_of??null,backlogFuente:b.backlog??null,
+   // ADR 0002: el Backlog mostrado es el de la fuente menos el Commit posterior al Año fuente.
+   backlog:typeof b.backlog==='number'?b.backlog-posterior:null,ejecutado,pendiente,parcial:faltantes.length>0,
+   proyectado:ejecutado!==null?ejecutado+pendiente:null,
+   posterior,inicio,fin,registrados,fuente};
 }
 (async()=>{
 const ui=context.ui;check('load',true,await ui.cargarDatos());
@@ -63,18 +67,27 @@ const selectedMonths=months.filter(m=>m>=defaultDesde&&m<=defaultHasta);
 const visible=elegibles(defaultDesde,defaultHasta);
 const sumRows=(rows,f)=>rows.reduce((s,p)=>s+(backlog.get(p.clave_timeline)[f]||0),0);
 const sum=f=>sumRows(visible,f);
-for(const p of data.proyectos){const b=backlog.get(p.clave_timeline);check('booking '+p.clave_timeline,b.valor_of,ui.valorBooking(p));check('backlog '+p.clave_timeline,b.backlog,ui.backlogHoy(p));check('accrued '+p.clave_timeline,b.acumulado_a_fecha,ui.acumuladoHoy(p));}
+for(const p of data.proyectos){const b=backlog.get(p.clave_timeline);check('booking '+p.clave_timeline,b.valor_of,ui.valorBooking(p));check('backlog continuo '+p.clave_timeline,esperado(p,b).backlog,ui.backlogHoy(p));check('accrued '+p.clave_timeline,b.acumulado_a_fecha,ui.acumuladoHoy(p));}
 for(const [name,start,end] of [['pantalla',months.findIndex(m=>m>=defaultDesde),months.findLastIndex(m=>m<=defaultHasta)],['rango',9,23],['fy27',12,23]]){
  const selected=elegibles(months[start],months[end]);const sumPage=f=>sumRows(selected,f);
- const d=dom[name];check(name+' count',String(selected.length),d['kpi-total-proyectos']);check(name+' booking',money(sumPage('valor_of')),d['kpi-valor-of-total']);check(name+' backlog',money(sumPage('backlog')),d['kpi-backlog-2026']);check(name+' accrued',money(sumPage('acumulado_a_fecha')),d['kpi-acumulado-hoy']);check(name+' execution',(100*sumPage('acumulado_a_fecha')/sumPage('valor_of')).toFixed(1)+'%',d['kpi-pct-ejecucion']);
+ const d=dom[name];check(name+' count',String(selected.length),d['kpi-total-proyectos']);check(name+' booking',money(sumPage('valor_of')),d['kpi-valor-of-total']);
+ // Un proyecto sin cifras no cuenta como cero: Backlog y % de ejecucion usan solo los que tienen dato.
+ const calc0=selected.map(p=>esperado(p,backlog.get(p.clave_timeline)));
+ const conBacklog=calc0.map(c=>c.backlog).filter(v=>v!==null);
+ check(name+' backlog continuo',conBacklog.length?money(conBacklog.reduce((a,b)=>a+b,0)):'\u2014',d['kpi-backlog-2026']);
+ check(name+' accrued',money(sumPage('acumulado_a_fecha')),d['kpi-acumulado-hoy']);
+ const ambos=calc0.filter(c=>c.booking!==null&&c.ejecutado!==null);
+ check(name+' execution',ambos.length?(100*ambos.reduce((a,c)=>a+c.ejecutado,0)/ambos.reduce((a,c)=>a+c.booking,0)).toFixed(1)+'%':'\u2014',d['kpi-pct-ejecucion']);
  const expected=months.slice(start,end+1).reduce((s,m)=>s+sumPage(m+'_fijo'),0);check(name+' revenue',money(expected),d['kpi-revenue-periodo']);
  // Ticket 13/14: Proyectado y Commit pendiente, calculados aqui con la formula del ADR 0001.
  const calc=selected.map(p=>esperado(p,backlog.get(p.clave_timeline)));
  const total=f=>{const n=calc.map(f).filter(v=>v!==null);return n.length?n.reduce((a,b)=>a+b,0):null;};
  check(name+' commit pendiente',money(total(c=>c.pendiente)),d['kpi-commit-pendiente']);
  check(name+' proyectado',money(total(c=>c.proyectado)),d['kpi-proyectado']);
- const incompletos=calc.filter(c=>[c.booking,c.ejecutado,c.backlog,c.pendiente].some(v=>v===null)).length;
- const dif=total(c=>c.booking)-(total(c=>c.backlog)-total(c=>c.posterior))-total(c=>c.proyectado);
+ const incompletos=calc.filter(c=>c.parcial||[c.booking,c.ejecutado,c.backlog].some(v=>v===null)).length;
+ const parciales=calc.filter(c=>c.parcial).length;
+ check(name+' aviso parcial',parciales?`Parcial en ${parciales} de ${selected.length} proyectos`:'',d['kpi-proyectado-aviso']);
+ const dif=total(c=>c.booking)-total(c=>c.backlog)-total(c=>c.proyectado);
  check(name+' diferencia vs booking',incompletos?'—':money(Math.abs(dif)<.01?0:dif),d['kpi-diferencia-booking']);
 }
 const ps=new Map();for(const p of visible){const pm=p.pm_lider||'(sin dato)';if(!ps.has(pm))ps.set(pm,[]);ps.get(pm).push(p);}
@@ -83,6 +96,8 @@ for(const pm of ui.calcularPMs()){
  for(const [field,suffix] of [['commit','fijo'],['upside','upside']])check('pm '+field+' '+pm.pm,group.reduce((s,p)=>s+selectedMonths.reduce((s,m)=>s+(backlog.get(p.clave_timeline)[m+'_'+suffix]||0),0),0),pm[field]);
 }
 check('rendered PM count',String(ps.size),dom.pms['kpi-pms-total']);
+const bl=visible.map(p=>esperado(p,backlog.get(p.clave_timeline)).backlog).filter(v=>v!==null);
+check('rendered PM total backlog continuo',bl.length?money(bl.reduce((a,b)=>a+b,0)):'\u2014',dom.pms['kpi-pms-total-backlog']);
 for(const [status,id] of [['In Progress','in-progress'],['On Hold','on-hold'],['Planned','planned'],['Completed','completed']])check('rendered PM '+status,String(visible.filter(p=>p.estado===status).length),dom.pms['kpi-pms-'+id]);
 const graph=Object.values(ui.serieBacklogRevenuePorMes(visible));check('chart selected months',selectedMonths.length,graph.length);selectedMonths.forEach((m,i)=>{check('chart commit '+m,sum(m+'_fijo'),graph[i].Commit);check('chart upside '+m,sum(m+'_upside'),graph[i].Upside);});
 // Por proyecto: Ejecutado, Commit pendiente, Proyectado y Backlog sin planear.

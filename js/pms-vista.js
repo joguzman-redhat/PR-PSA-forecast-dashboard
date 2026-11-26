@@ -1,7 +1,7 @@
 // Vista de PMs (pestaña PMs): tabla, gráficas y orden.
 
 import { mesesActivos } from './calendario.js';
-import { backlogHoy, valorBooking } from './dinero-proyecto.js';
+import { backlogHoy, sumaConDato, valorBooking } from './dinero-proyecto.js';
 import { estado } from './estado.js';
 import { formatearDinero, formatearDineroExacto, formatearNumero } from './formato.js';
 import { crearGraficaBarrasSimple } from './grafica-barras-simple.js';
@@ -76,9 +76,9 @@ export function renderizarPMs() {
     onHold: filas.reduce((a, f) => a + f.onHoldN, 0),
     planned: filas.reduce((a, f) => a + f.plannedN, 0),
     completed: filas.reduce((a, f) => a + f.completedN, 0),
-    totalBooking: filas.reduce((a, f) => a + f.proyectos.reduce((s, p) => s + (valorBooking(p) || 0), 0), 0),
-    // Total Backlog KPI: sum backlogHoy over all projects (same as main tab)
-    totalBacklog: filas.reduce((a, f) => a + f.proyectos.reduce((s, p) => s + (backlogHoy(p) || 0), 0), 0),
+    totalBooking: sumaConDato(filas.flatMap(f => f.proyectos), valorBooking),
+    // Total Backlog (continuo): suma de backlogHoy; los proyectos sin cifra no cuentan como cero.
+    totalBacklog: sumaConDato(filas.flatMap(f => f.proyectos), backlogHoy),
   };
   document.getElementById('kpi-pms-total').textContent = kpisData.totalPMs;
   document.getElementById('kpi-pms-in-progress').textContent = kpisData.inProgress;

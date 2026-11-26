@@ -4,7 +4,7 @@
 import { estado } from './estado.js';
 import { backlogDe } from './fila-backlog.js';
 import { vidaProyecto } from './vida-proyecto.js';
-import { MESES_ES, mesesActivos, mesesEjecutadosForecast, mesReferenciaFinanciera } from './calendario.js';
+import { MESES_ES, mesesActivos, mesesEjecutadosForecast, mesReferenciaFinanciera, etiquetaPeriodoCalendario } from './calendario.js';
 
 /**
  * Valor Booking de un proyecto. TODA LA PLATA viene de BackLog NOLA, nunca de
@@ -109,15 +109,26 @@ export function ejecutadoProyecto(proyecto) {
 }
 
 /**
- * Backlog de un proyecto: la columna "Backlog" de BackLog NOLA, tal cual. El
- * Excel lo calcula como Booking − acumulado anterior − Commit de los 12 meses
- * de su Año fuente, o sea, ya descuenta lo planeado para ese año. Es el número de las tablas
- * dinámicas del negocio, así que manda sobre cualquier cálculo propio.
- * Consecuencia: Booking = Ejecutado + Commit pendiente + Backlog sin planear.
+ * Backlog de la fuente: la columna "Backlog" de BackLog NOLA, tal cual. El Excel
+ * lo calcula como Booking − acumulado anterior − Commit de los 12 meses de su
+ * Año fuente, o sea, solo descuenta lo planeado para ese año. Es un dato de
+ * entrada; lo que se muestra es el Backlog continuo (backlogHoy).
  */
-export function backlogHoy(proyecto) {
+export function backlogDeLaFuente(proyecto) {
   const fila = backlogDe(proyecto);
   return fila && typeof fila.backlog === 'number' ? fila.backlog : null;
+}
+
+/**
+ * Backlog de un proyecto, continuo entre años (ADR 0002): el de la fuente menos
+ * el Commit posterior a su Año fuente, o sea, lo que falta por planear de toda
+ * la vida. Es el único Backlog que se muestra: así FY26 y FY27 se ven como un
+ * solo Excel, aunque no cuadre con el Backlog de la fuente.
+ * Consecuencia: Booking = Ejecutado + Commit pendiente + Backlog.
+ */
+export function backlogHoy(proyecto) {
+  const fuente = backlogDeLaFuente(proyecto);
+  return fuente === null ? null : fuente - commitPosteriorAlAnioFuente(proyecto);
 }
 
 /**
@@ -153,37 +164,69 @@ function mesesEntre(desde, hasta) {
 }
 
 /**
- * Commit de los meses posteriores al actual, sobre toda la vida del proyecto
- * (incluido 2027). Deben tener dato todos los meses futuros hasta el fin de su
- * Año fuente y hasta el fin de su vida (Fecha fin, o el último mes con Commit);
- * si falta uno, sin dato, nunca cero. Un Commit posterior a la Fecha fin se
- * suma igual: se advierte, no se recorta.
+ * Cobertura del Commit futuro de un proyecto: la suma del Commit de los meses
+ * posteriores al actual que SÍ tienen dato, y los meses que deberían tenerlo
+ * (desde el siguiente al actual, y no antes de enero del Año fuente, hasta el
+ * fin de su Año fuente y de su vida: Fecha fin, o el último mes con Commit) y
+ * no lo tienen. Un mes sin cobertura no es cero: no se suma. Un Commit posterior
+ * a la Fecha fin se suma igual: se advierte, no se recorta.
  */
-export function commitPendienteProyecto(p) {
+function coberturaCommitFuturo(p) {
   const b=backlogDe(p);if(!b)return null;
   const anio=b.anio_atributos??estado.forecast.anio;
-  if(!estado.forecast.timeline){
-    const meses=Array.from({length:12},(_,i)=>`${anio}-${String(i+1).padStart(2,'0')}`).filter(m=>m>mesReferenciaFinanciera());
-    const valores=meses.map(m=>b[MESES_ES[Number(m.slice(5))-1]+'_fijo']);
-    return valores.every(Number.isFinite)?valores.reduce((a,b)=>a+b,0):null;
-  }
   const hoy=mesReferenciaFinanciera(),periodos=estado.forecast.periodos||[];
   const registrados=periodos.filter(m=>Number.isFinite(b[m+'_fijo'])&&b[m+'_fijo']!==0);
   const finVida=vidaProyecto(p).fin||registrados.at(-1)||'';
   const obligado=[`${anio}-12`,finVida].sort().at(-1);
-  // Cobertura exigida: desde el mes siguiente al actual, y no antes de enero del Año fuente.
   const n=Number(hoy.slice(0,4))*12+Number(hoy.slice(5)),siguiente=`${Math.floor(n/12)}-${String(n%12+1).padStart(2,'0')}`;
   const desde=[siguiente,`${anio}-01`].sort().at(-1);
-  const sinDato=desde<=obligado&&mesesEntre(desde,obligado).some(m=>!Number.isFinite(b[m+'_fijo']));
-  if(sinDato)return null;
-  return periodos.filter(m=>m>hoy&&Number.isFinite(b[m+'_fijo'])).reduce((a,m)=>a+b[m+'_fijo'],0);
+  const faltantes=desde<=obligado?mesesEntre(desde,obligado).filter(m=>!Number.isFinite(b[m+'_fijo'])):[];
+  const valor=periodos.filter(m=>m>hoy&&Number.isFinite(b[m+'_fijo'])).reduce((a,m)=>a+b[m+'_fijo'],0);
+  return {valor,faltantes,siguiente};
+}
+
+/**
+ * Commit de los meses posteriores al actual, sobre toda la vida del proyecto
+ * (incluido 2027). Con meses sin cobertura es parcial: suma solo el Commit que
+ * existe (ver coberturaProyectado), nunca cero inventado. Sin fila de backlog,
+ * sin dato. En el modo anterior, sin timeline, exige los meses del año.
+ */
+export function commitPendienteProyecto(p) {
+  const b=backlogDe(p);if(!b)return null;
+  if(!estado.forecast.timeline){
+    const anio=b.anio_atributos??estado.forecast.anio;
+    const meses=Array.from({length:12},(_,i)=>`${anio}-${String(i+1).padStart(2,'0')}`).filter(m=>m>mesReferenciaFinanciera());
+    const valores=meses.map(m=>b[MESES_ES[Number(m.slice(5))-1]+'_fijo']);
+    return valores.every(Number.isFinite)?valores.reduce((a,b)=>a+b,0):null;
+  }
+  return coberturaCommitFuturo(p).valor;
+}
+
+/**
+ * Cobertura del Proyectado: null si está completo (o no se puede calcular); si
+ * faltan meses de Commit, `{hasta, faltantes, anios}`: el último mes con
+ * cobertura contigua, los meses sin ella y sus años.
+ */
+export function coberturaProyectado(p) {
+  if(!estado.forecast.timeline)return null;
+  const c=coberturaCommitFuturo(p);
+  if(!c||!c.faltantes.length)return null;
+  const n=Number(c.faltantes[0].slice(0,4))*12+Number(c.faltantes[0].slice(5))-2;
+  const hasta=`${Math.floor(n/12)}-${String(n%12+1).padStart(2,'0')}`;
+  return {hasta,faltantes:c.faltantes,anios:[...new Set(c.faltantes.map(m=>Number(m.slice(0,4))))]};
+}
+
+/** Aviso visible de un Proyectado parcial, o null si está completo. */
+export function textoProyectadoParcial(p) {
+  const c=coberturaProyectado(p);if(!c)return null;
+  return `Proyectado parcial: cubre hasta ${etiquetaPeriodoCalendario(c.hasta)}; faltan meses de ${c.anios.join(' y ')}. Los meses sin cobertura no se cuentan como cero.`;
 }
 
 /**
  * Commit de los meses posteriores al Año fuente. El Backlog de la fuente ya
  * descuenta el Commit de su propio año; lo que se registre después (2027 para
- * una fuente FY26) todavía no está descontado, y por eso baja el Backlog sin
- * planear: Booking = Ejecutado + Commit pendiente + Backlog sin planear.
+ * una fuente FY26) todavía no está descontado, y se resta para obtener el
+ * Backlog continuo (backlogHoy).
  */
 export function commitPosteriorAlAnioFuente(p) {
   const b=backlogDe(p);if(!b)return null;
@@ -197,13 +240,34 @@ export function proyeccionReferencia(p) {
   return Number.isFinite(acum)&&Number.isFinite(pendiente)?acum+pendiente:null;
 }
 
+/**
+ * Suma de una medida por proyecto, ignorando los que no tienen dato: un
+ * proyecto sin cifras no cuenta como cero. Sin ningún dato, null (no 0), salvo
+ * que no haya proyectos.
+ */
+export function sumaConDato(proyectos, medida) {
+  const n=proyectos.map(medida).filter(Number.isFinite);
+  return n.length||!proyectos.length?n.reduce((a,b)=>a+b,0):null;
+}
+
+/**
+ * Ejecución ponderada por monto (Ejecutado / Booking), solo con los proyectos
+ * que tienen ambas cifras: uno sin Ejecutado no baja el porcentaje. Sin
+ * proyectos con ambas, o con Booking cero, sin dato.
+ */
+export function ejecucionPonderada(proyectos) {
+  const con=proyectos.filter(p=>Number.isFinite(valorBooking(p))&&Number.isFinite(ejecutadoProyecto(p)));
+  const booking=con.reduce((a,p)=>a+valorBooking(p),0),ejecutado=con.reduce((a,p)=>a+ejecutadoProyecto(p),0);
+  return booking>0?100*ejecutado/booking:null;
+}
+
 export function resumenFinanciero(proyectos) {
-  const suma=fn=>{const n=proyectos.map(fn).filter(Number.isFinite);return n.length||!proyectos.length?n.reduce((a,b)=>a+b,0):null;};
-  const faltantes=proyectos.filter(p=>![valorBooking(p),ejecutadoProyecto(p),backlogHoy(p),commitPendienteProyecto(p)].every(Number.isFinite)).length;
+  const suma=fn=>sumaConDato(proyectos,fn);
+  const incompleto=p=>![valorBooking(p),ejecutadoProyecto(p),backlogHoy(p),commitPendienteProyecto(p)].every(Number.isFinite)||coberturaProyectado(p)!==null;
+  const faltantes=proyectos.filter(incompleto).length;
+  const parciales=proyectos.filter(p=>coberturaProyectado(p)!==null).length;
   const booking=suma(valorBooking),backlog=suma(backlogHoy),proyectado=suma(proyeccionReferencia),pendiente=suma(commitPendienteProyecto);
-  const posterior=suma(commitPosteriorAlAnioFuente);
-  const backlogSinPlanear=Number.isFinite(backlog)&&Number.isFinite(posterior)?backlog-posterior:null;
-  const diferencia=faltantes||![booking,backlogSinPlanear,proyectado].every(Number.isFinite)?null:booking-backlogSinPlanear-proyectado;
-  return {booking,backlog,backlogSinPlanear,proyectado,pendiente,faltantes,diferencia:diferencia!==null&&Math.abs(diferencia)<.01?0:diferencia,
+  const diferencia=faltantes||![booking,backlog,proyectado].every(Number.isFinite)?null:booking-backlog-proyectado;
+  return {booking,backlog,backlogFuente:suma(backlogDeLaFuente),proyectado,pendiente,faltantes,parciales,diferencia:diferencia!==null&&Math.abs(diferencia)<.01?0:diferencia,
     referencias:[...new Set(proyectos.map(p=>backlogDe(p)?.anio_atributos??estado.forecast.anio))].sort()};
 }

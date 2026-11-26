@@ -140,7 +140,7 @@
         </div>
         <div class="kpi-tile pf-v6-c-card"><div class="pf-v6-c-card__body"><div class="kpi-valor" id="kpi-upside-periodo">—</div><div class="kpi-etiqueta">Upside del periodo</div></div></div>
         <div class="kpi-tile pf-v6-c-card"><div class="pf-v6-c-card__body"><div class="kpi-valor" id="kpi-commit-pendiente">—</div><div class="kpi-etiqueta">Commit pendiente</div></div></div>
-        <div class="kpi-tile pf-v6-c-card"><div class="pf-v6-c-card__body"><div class="kpi-valor" id="kpi-proyectado">—</div><div class="kpi-etiqueta">Proyectado</div></div></div>
+        <div class="kpi-tile pf-v6-c-card"><div class="pf-v6-c-card__body"><div class="kpi-valor" id="kpi-proyectado">—</div><div class="kpi-etiqueta">Proyectado</div><div class="kpi-aviso-parcial" id="kpi-proyectado-aviso"></div></div></div>
         <div class="kpi-tile pf-v6-c-card"><div class="pf-v6-c-card__body"><div class="kpi-valor" id="kpi-diferencia-booking">—</div><div class="kpi-etiqueta">Diferencia vs. Booking</div></div></div>
       </div>
       <div id="periodo-listado"></div>
@@ -330,7 +330,7 @@
                 <option value="On Hold">Solo On Hold</option>
               </select>
             </div>
-            <p class="nota-grafica">Las barras muestran el porcentaje ejecutado del Booking de cada proyecto. El importe de Backlog fuente se muestra por separado.</p>
+            <p class="nota-grafica">Las barras muestran el porcentaje ejecutado del Booking de cada proyecto. El importe de Backlog (continuo entre años) se muestra por separado.</p>
             <div class="contenedor-tabla-scroll tabla-no-iniciados-scroll">
               <table id="tabla-no-iniciados" class="tabla-proyectos tabla-no-iniciados pf-v6-c-table pf-m-compact">
                 <thead>
@@ -662,6 +662,6 @@
     </section>
   </div>
 
-  <script type="module" src="js/main.js?v=44"></script>
+  <script type="module" src="js/main.js?v=45"></script>
 </body>
 </html>
