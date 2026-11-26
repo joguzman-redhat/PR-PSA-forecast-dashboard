@@ -77,7 +77,7 @@ export function renderizarEncabezadoProyecto(contenedor, proyecto) {
   [
     ['Valor Booking', booking, 'Por cuánto se vendió el proyecto'],
     ['Ejecutado', acum, 'Acumulado anterior más el Commit hasta el mes actual, sobre toda la vida del proyecto'],
-    ['Proyectado', proyectado, 'Ejecutado más el Commit de los meses futuros, incluido 2027. No incluye Upside' + (parcial ? '. ' + parcial : '')],
+    ['Proyectado', proyectado, 'Ejecutado más el Commit de los meses futuros de toda su vida. No incluye Upside' + (parcial ? '. ' + parcial : '')],
     ['Backlog', backlog, 'Backlog continuo entre años: el de la fuente menos el Commit posterior a su Año fuente; lo que falta por planear de toda la vida'],
     [`Acumulado anterior a ${anioRevenue()}`, consumido, `Revenue acumulado previo al Año fuente ${anioRevenue()}`],
   ].forEach(([et, v, tip]) => {

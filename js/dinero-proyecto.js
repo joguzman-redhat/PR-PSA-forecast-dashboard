@@ -25,7 +25,7 @@ export function valorBooking(proyecto) {
   return typeof fila.booking === 'number' ? fila.booking : null;
 }
 
-/** Acumulado del año pasado (2025), desde BackLog NOLA. */
+/** Acumulado previo al Año fuente, desde BackLog NOLA. */
 export function acumuladoAnterior(proyecto) {
   const fila = backlogDe(proyecto);
   return fila && typeof fila.acumulado_anterior === 'number' ? fila.acumulado_anterior : null;
@@ -56,7 +56,7 @@ export function upsidePeriodo(proyecto) {
 /**
  * Arrastre de un proyecto: lo ejecutado antes del primer mes con Commit de su
  * vida. El acumulado anterior de la fila llega hasta el inicio de su Año fuente;
- * si la vida empieza antes (un proyecto con Commit en 2026 cuya fuente es FY27),
+ * si la vida empieza antes (un proyecto con Commit en un año anterior a su fuente),
  * esos meses ya vienen dentro del acumulado anterior y se restan para no
  * contarlos dos veces cuando se suman mes a mes. Sin dato si falta el acumulado
  * anterior o algún mes de ese tramo.
@@ -122,7 +122,7 @@ export function backlogDeLaFuente(proyecto) {
 /**
  * Backlog de un proyecto, continuo entre años (ADR 0002): el de la fuente menos
  * el Commit posterior a su Año fuente, o sea, lo que falta por planear de toda
- * la vida. Es el único Backlog que se muestra: así FY26 y FY27 se ven como un
+ * la vida. Es el único Backlog que se muestra: así las fuentes de todos los años se ven como un
  * solo Excel, aunque no cuadre con el Backlog de la fuente.
  * Consecuencia: Booking = Ejecutado + Commit pendiente + Backlog.
  */
@@ -133,7 +133,7 @@ export function backlogHoy(proyecto) {
 
 /**
  * Proyectado de un proyecto: Ejecutado más el Commit de los meses futuros sobre
- * toda su vida, incluido 2027. Nunca incluye Upside. Sin dato si falta el
+ * toda su vida. Nunca incluye Upside. Sin dato si falta el
  * Ejecutado o algún mes futuro de su vida. En el modo anterior, sin timeline,
  * sigue siendo el cierre del año: acum_2025 + los 12 meses fijo.
  */
@@ -187,7 +187,7 @@ function coberturaCommitFuturo(p) {
 
 /**
  * Commit de los meses posteriores al actual, sobre toda la vida del proyecto
- * (incluido 2027). Con meses sin cobertura es parcial: suma solo el Commit que
+ * Con meses sin cobertura es parcial: suma solo el Commit que
  * existe (ver coberturaProyectado), nunca cero inventado. Sin fila de backlog,
  * sin dato. En el modo anterior, sin timeline, exige los meses del año.
  */
@@ -224,7 +224,7 @@ export function textoProyectadoParcial(p) {
 
 /**
  * Commit de los meses posteriores al Año fuente. El Backlog de la fuente ya
- * descuenta el Commit de su propio año; lo que se registre después (2027 para
+ * descuenta el Commit de su propio año; lo que se registre después (el de 2027 y 2028 para
  * una fuente FY26) todavía no está descontado, y se resta para obtener el
  * Backlog continuo (backlogHoy).
  */

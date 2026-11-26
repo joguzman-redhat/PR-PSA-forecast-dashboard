@@ -19,7 +19,7 @@ export function actualizarAyudas() {
     'kpi-pct-ejecucion':'Ejecutado dividido por Booking; ponderado por monto.',
     'kpi-revenue-periodo':`Suma de Commit en ${periodoActual().etiqueta}; cambia con el rango global.`,
     'kpi-upside-periodo':`Suma de Upside en ${periodoActual().etiqueta}; no se considera revenue comprometido.`,
-    'kpi-commit-pendiente':`Commit de los meses posteriores a ${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}, de cualquier año hasta el fin de la vida del proyecto (incluido 2027); independiente del rango de revenue. Nunca incluye Upside.`,
+    'kpi-commit-pendiente':`Commit de los meses posteriores a ${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}, de cualquier año hasta el fin de la vida del proyecto; independiente del rango de revenue. Nunca incluye Upside.`,
     'kpi-proyectado':`Proyectado: Ejecutado más el Commit pendiente (${formatearDineroExacto(r.pendiente)}), sobre toda la vida del proyecto. Sin Upside.${r.parciales?` ${r.parciales} proyectos son parciales: su vida llega más allá del Commit cargado, y esos meses no se cuentan como cero; el cálculo se completa cuando se cargue ese Commit.`:''}`,
     'kpi-diferencia-booking':`Booking − Proyectado − Backlog (continuo). Cero significa conciliado. Positivo: valor sin explicar; negativo: excedente. ${r.faltantes?r.faltantes+' proyectos tienen cifras incompletas.':'No se ajusta ningún importe para forzar igualdad.'}`,
   };

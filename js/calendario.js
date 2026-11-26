@@ -27,11 +27,11 @@ export function configurarCalendarioTimeline(meta) {
   const anio=Number(fecha.slice(0,4)) || meta.anio_actual;
   const mes=Number(fecha.slice(5,7)) || 1;
   const inicioQ=`${anio}-${String(Math.floor((mes-1)/3)*3+1).padStart(2,'0')}`;
-  const finQ=`${anio+1}-12`;
-  if(!explicito && MESES_ES.length && MESES_ES.at(-1)<finQ){
-    let n=Number(MESES_ES.at(-1).slice(0,4))*12+Number(MESES_ES.at(-1).slice(5));
-    for(;n<=(anio+1)*12+11;n++)MESES_ES.push(`${Math.floor(n/12)}-${String(n%12+1).padStart(2,'0')}`);
-  }
+  // El calendario son exactamente los periodos que trae la API: un Año fuente
+  // nuevo aparece solo cuando llega su Carga, sin tocar codigo.
+  const primero=MESES_ES[0],ultimo=MESES_ES.at(-1);
+  const hastaPorDefecto=ultimo||meta.hasta||inicioQ;
+  const desdePorDefecto=primero&&inicioQ<primero?primero:(inicioQ>hastaPorDefecto?(primero||inicioQ):inicioQ);
   PERIODOS.splice(0,PERIODOS.length,{id:'todos',etiqueta:'Todo el histórico',meses:MESES_ES.map((_,i)=>i)});
   for(const anio of [...new Set(MESES_ES.map(p=>p.slice(0,4)))]) {
     PERIODOS.push({id:'y'+anio,etiqueta:anio,meses:MESES_ES.map((p,i)=>p.startsWith(anio)?i:-1).filter(i=>i>=0)});
@@ -40,7 +40,7 @@ export function configurarCalendarioTimeline(meta) {
   }
   PERIODOS.push(...MESES_ES.map((p,i)=>({id:p,etiqueta:etiquetaPeriodoCalendario(p),meses:[i]})));
   estado.forecast.periodos=[...MESES_ES];
-  estado.rangoTimeline=explicito?{desde:url.get('desde')||meta.desde,hasta:url.get('hasta')||meta.hasta}:{desde:inicioQ,hasta:finQ};
+  estado.rangoTimeline=explicito?{desde:url.get('desde')||meta.desde,hasta:url.get('hasta')||meta.hasta}:{desde:desdePorDefecto,hasta:hastaPorDefecto};
   estado.periodo='rango';
   estado.unidadTimeline=url.get('unidad')==='trimestres'||!explicito?'trimestres':'meses';
 }

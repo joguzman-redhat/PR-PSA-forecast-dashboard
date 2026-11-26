@@ -7,7 +7,7 @@ import { valorBooking, acumuladoAnterior, backlogHoy, arrastreProyecto } from '.
 import { backlogDe } from './fila-backlog.js';
 import { mesFinalizacion, vidaProyecto, calendarioVidaProyecto } from './vida-proyecto.js';
 
-/** Calendario de 2026 y reparto uniforme del Backlog fuente hasta cada fecha fin futura. */
+/** Calendario del Año fuente y reparto uniforme del Backlog fuente hasta cada fecha fin futura. */
 export function serieBacklogRevenuePorMes(proyectos) {
   if(estado.forecast.timeline) {
     return Object.fromEntries(mesesActivos().map(i=>{
@@ -74,7 +74,7 @@ export function serieSaldoProyecto(p) {
     datos[etiquetaPeriodoCalendario(m)]={'Revenue acumulado':completo?acumulado:null,'Backlog':completo?booking-acumulado:null};
   }
   const saldo=completo?booking-acumulado:null;
-  let nota='Backlog = Booking − revenue acumulado: lo que falta por ejecutar, descontando también el Commit de años posteriores al Año fuente (el Backlog del Excel solo descuenta el de su año). Se usa un solo Booking por proyecto. Hasta el mes actual el revenue acumulado es el Ejecutado; después es el Proyectado, que suma solo Commit (nunca Upside), incluidos los meses de 2027. ';
+  let nota='Backlog = Booking − revenue acumulado: lo que falta por ejecutar, descontando también el Commit de años posteriores al Año fuente (el Backlog del Excel solo descuenta el de su año). Se usa un solo Booking por proyecto. Hasta el mes actual el revenue acumulado es el Ejecutado; después es el Proyectado, que suma solo Commit (nunca Upside), incluidos los meses de años posteriores al Año fuente. ';
   if(Number.isFinite(arrastre)&&arrastre!==0)nota+=`El primer mes incorpora ${formatearDineroExacto(arrastre)} de acumulado anterior al calendario disponible. `;
   if(!vida.fin)nota+='Sin Fecha fin: la curva termina en el último mes con Commit registrado. ';
   nota+=saldo===null?'Hay meses sin cobertura: la curva queda sin dato; no se inventa revenue.':Math.abs(saldo)<.01?'Los commits cubren el Booking y el Backlog llega a cero.':`Backlog al finalizar según los Commit cargados: ${formatearDineroExacto(saldo)}${saldo<0?' de ejecución excedente':''}. No se fuerza a cero ni se reparte Backlog sin Commit.`;

@@ -22,9 +22,10 @@ function pagina(search='') {
   vm.runInContext(code+'\nglobalThis.ui={acumuladoHoy:ejecutadoProyecto,backlogHoy,proyectadaAnio:proyectadoProyecto,backlogDe,mesFinalizacion,periodoFinProyecto,proyeccionReferencia,corteFinanciero:mesReferenciaFinanciera,calcularKPIs,mesesActivos,etiquetaPeriodoCalendario,formatearDinero,formatearDineroExacto,formatearPorcentaje,estado,cargarDatos,configurarSelectorForecast,mesesEjecutadosForecast,serieBacklogRevenuePorMes,acumuladoAnterior,configurarCalendarioTimeline,periodoActual,revenuePeriodo,upsidePeriodo,valorBooking,claveProyecto,compararMeses,coberturaCalendario,vidaProyecto,pasaPeriodoProyecto,mesesTimelineProyecto,valorDimension,etiquetaDimension,calcularPMs,pasaTerritorio,porcentajeEjecucionProyecto,calendarioVidaProyecto,serieSaldoProyecto,advertenciaFueraDeFechaFin,resumenFinanciero,commitPendienteProyecto,backlogDeLaFuente,coberturaProyectado,textoProyectadoParcial,rangoSnapshots,DIMENSIONES};',context);
   return {context,ui:context.ui,controles,clases};
 }
-function datosTimeline() {
-  const periodos=Array.from({length:24},(_,i)=>`${2026+Math.floor(i/12)}-${String(i%12+1).padStart(2,'0')}`);
-  return {meta:{timeline:true,anio_actual:2026,fecha_referencia:'2026-11-24',estado:'disponible',periodos,desde:'2026-01',hasta:'2027-12'},
+// `anios` = cuantos Años fuente trae la API (2026 en adelante); por defecto dos.
+function datosTimeline(anios=2) {
+  const periodos=Array.from({length:12*anios},(_,i)=>`${2026+Math.floor(i/12)}-${String(i%12+1).padStart(2,'0')}`);
+  return {meta:{timeline:true,anio_actual:2026,fecha_referencia:'2026-11-24',estado:'disponible',periodos,desde:'2026-01',hasta:`${2025+anios}-12`},
     proyectos:[{_tipo_fila:'proyecto',num_pa:'123',clave_timeline:'PA:123'}],
     backlog:[{_tipo_fila:'proyecto',num_pa:'123',clave_timeline:'PA:123',valor_of:1000,acumulado_anterior:50,
       '2026-01_fijo':100,'2027-01_fijo':200,'2026-10_fijo':10,'2027-12_fijo':20}],

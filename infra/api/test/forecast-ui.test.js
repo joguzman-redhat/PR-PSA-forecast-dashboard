@@ -207,8 +207,8 @@ test('un proyecto que aparece solo en FY27 conserva el arrastre conocido sin inv
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();
   assert.equal(ui.calendarioVidaProyecto(ui.estado.proyectos[0])[0],'2027-01');assert.equal(ui.serieSaldoProyecto(ui.estado.proyectos[0]).saldo,600);
 });
-test('el rango inicial avanza al cambiar el año y deja sin cobertura los meses futuros',async()=>{
+test('el rango inicial avanza al cambiar el año y termina en el ultimo mes que trae la API',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();d.meta.fecha_referencia='2027-02-01';d.meta.anio_actual=2027;
-  context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();assert.equal(ui.estado.rangoTimeline.desde,'2027-01');assert.equal(ui.estado.rangoTimeline.hasta,'2028-12');
-  assert.equal(ui.estado.forecast.periodos.at(-1),'2028-12');ui.estado.periodo='2028-01';assert.equal(ui.revenuePeriodo(ui.estado.proyectos[0]),null);
+  context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();assert.equal(ui.estado.rangoTimeline.desde,'2027-01');assert.equal(ui.estado.rangoTimeline.hasta,'2027-12');
+  assert.equal(ui.estado.forecast.periodos.at(-1),'2027-12');assert.equal(ui.estado.forecast.periodos.length,24);
 });
