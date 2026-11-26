@@ -57,6 +57,9 @@ credencial Postgres (host `postgres`, puerto `5432`, mismas credenciales de
 | `down` | Apaga, conserva los volúmenes |
 | `destroy` | Apaga y **borra el histórico de Postgres** (el de n8n no se toca) |
 
+> Tras el refactor modular del front, la imagen de la API debe reconstruirse
+> (`./forecast.sh rebuild`) para que el contenedor sirva `js/` y `css/` nuevos.
+
 > `seed` depende de `PoC/data/*.json`, que ya no está en este repo (era del
 > ETL en Python, retirado). En esta máquina no hace falta — el volumen
 > `forecast_pgdata` ya tiene el histórico real. En una máquina nueva va a

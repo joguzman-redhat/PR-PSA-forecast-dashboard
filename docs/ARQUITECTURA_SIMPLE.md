@@ -320,7 +320,7 @@ Usuario ve los cambios
 |---------|--------|
 | `etl.py` | Agregar argumento `--destino=postgres`. Cuando se pase, conectar a BD en vez de escribir JSON |
 | `index.html` | Reemplazar 3 fetch de `data/*.json` por `http://api:3000/api/*` |
-| `app.js` | Sin cambios (lógica es igual, solo cambia de dónde vienen los datos) |
+| `js/` (antes `app.js`) | Sin cambios (lógica es igual, solo cambia de dónde vienen los datos) |
 | Nuevo: `infra/docker-compose.yml` | Define 3 servicios |
 | Nuevo: `infra/init.sql` | Esquema de BD |
 | Nuevo: `api/` | Carpeta con Node.js + Express |

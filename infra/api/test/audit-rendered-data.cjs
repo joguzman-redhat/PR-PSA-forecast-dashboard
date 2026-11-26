@@ -7,8 +7,8 @@ const dom=JSON.parse(fs.readFileSync(path.join(out,'pantallas.json')));
 const controls=new Map();
 const context=vm.createContext({Intl,URL,URLSearchParams,console,Map,Set,location:{search:''},
  document:{addEventListener(){},querySelector(){return {classList:{toggle(){},add(){}}};},getElementById(id){if(!controls.has(id))controls.set(id,{textContent:''});return controls.get(id);}},
- fetch:async()=>({ok:true,json:async()=>data})});
-vm.runInContext(require('./modulos-front').codigoUnido()+'\nglobalThis.ui={estado,cargarDatos,revenuePeriodo,upsidePeriodo,valorBooking,acumuladoHoy,backlogHoy,calcularPMs,serieBacklogRevenuePorMes};',context);
+ fetch:async()=>({ok:true,json:async()=>structuredClone(data)})});
+vm.runInContext(require('./modulos-front').codigoUnido()+'\nglobalThis.ui={estado,cargarDatos,revenuePeriodo,upsidePeriodo,valorBooking,acumuladoHoy:ejecutadoProyecto,backlogHoy,calcularPMs,serieBacklogRevenuePorMes};',context);
 let count=0;const issues=[];
 function check(name,e,a){count++;const ok=typeof e==='number'?typeof a==='number'&&Math.abs(e-a)<.01:e===a;if(!ok)issues.push({name,expected:e,actual:a});}
 function money(n){const sign=n<0?'-':'';n=Math.abs(n);return sign+'$'+(n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e4?(n/1e3).toFixed(0)+'K':n>=1e3?(n/1e3).toFixed(1)+'K':n.toFixed(0));}

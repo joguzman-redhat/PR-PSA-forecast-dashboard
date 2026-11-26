@@ -123,7 +123,7 @@ Metrics observados (2026-10-21):
 | **Cálculos recalculados** | `clave` (num_pa o nombre normalizado), `estado_contrato`, `dias_para_vencimiento` | Nodo "Recalcular Columnas Rotas" |
 | **AI Agent** | LangChain + OpenAI MaaS con 3 herramientas Postgres (proyectos, movimientos, métricas) | Nodos "AI Agent" + "Tool_Postgres_*" |
 | **Publish con Basic Auth** | Chat Trigger con autenticación Basic, Chat page funcional | Configurado en n8n, probado |
-| **Dashboard** | Gráficos de revenue (commit/upside), tabla de proyectos, sidebar de snapshots | `index.html` + `app.js` + `styles.css` |
+| **Dashboard** | Gráficos de revenue (commit/upside), tabla de proyectos, sidebar de snapshots | `index.html` + `js/` + `css/` |
 | **API REST** | Endpoints `/api/proyectos`, `/api/revenue-history`, `/api/ai/chat`, `/health` | Spec OpenAPI en `api/src/openapi.yaml` |
 | **Docker local** | Postgres + API + n8n + nginx en `docker-compose.yml` | Comando `./forecast.sh up` |
 | **OpenShift deploy** | Manifests kustomize, Argo CD sync, BuildConfig, ImageStream, Routes TLS | Rama `v2` desplegada |
@@ -222,7 +222,7 @@ Metrics observados (2026-10-21):
 **Decisión:** `context: ..` (repo root) en docker-compose, contexto para el build.
 
 **Justificación:**
-- Dashboard estático (index.html, app.js, styles.css) debe empacarse en imagen
+- Dashboard estático (index.html, js/, css/) debe empacarse en imagen
 - Podman local: bind-mount hacía cambios instantáneos, pero OpenShift no lo soporta
 - Solución: empaquetar en imagen vía `COPY` en Dockerfile
 - Efecto: cambios al dashboard requieren `./forecast.sh rebuild` (no instantáneo)
@@ -391,8 +391,8 @@ Leer si necesitas contexto de reglas de negocio, pero no son instrucciones de bu
 | Archivo | Función | Status |
 |---|---|---|
 | `index.html` | Dashboard: layout, tablas, botones | ✅ Funcional, gráficos de revenue |
-| `app.js` | Lógica: fetch a API, render gráficos, Chart.js | ✅ Funcional |
-| `styles.css` | Estilos CSS | ✅ Responsive |
+| `js/` | Módulos ES (entrada `js/main.js`): fetch a API, cálculo, render de gráficos | ✅ Funcional |
+| `css/` | 22 hojas de estilo que se cargan en orden | ✅ Responsive |
 | `vendor/` | Librerías (Chart.js, etc.) | ✅ Empaquetadas en imagen API |
 
 ---

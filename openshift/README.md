@@ -125,7 +125,7 @@ pantalla en blanco, revisa `oc logs deployment/forecast-api -n forecast-app`.
 - **`infra/api/Dockerfile` cambió de contexto** (de `infra/api/` al root del
   repo) para poder empaquetar el dashboard estático dentro de la imagen —
   OpenShift no soporta el bind-mount que usaba Podman Compose para montar
-  `index.html`/`app.js`/etc. en caliente. Efecto secundario: en Podman local,
+  `index.html`/`js/`/`css/` en caliente. Efecto secundario: en Podman local,
   un cambio a esos archivos ya **no se refleja al instante** — hay que
   reconstruir la imagen (`./forecast.sh rebuild`).
 

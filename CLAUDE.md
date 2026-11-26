@@ -24,6 +24,22 @@ cd infra && ./forecast.sh public   # lo mismo + ngrok (tunel publico para n8n)
 Detalle de comandos, puertos, credenciales y contrato de la API:
 `infra/README.md`.
 
+## Front
+
+Módulos ES nativos, sin build. Entrada `js/main.js`; módulos por responsabilidad
+en `js/`; 22 hojas en `css/` que `index.html` enlaza en orden (el orden importa,
+no las reordenes ni uses `@import`); PatternFly en `vendor/`. Mapa y detalle en
+`README.md` (sección Front).
+
+Forma de los módulos (la impone `infra/api/test/modulos-front.js`): imports con
+nombre y ruta relativa, sin alias, sin ciclos, exports en línea, sin
+`export default`. Las pruebas unen los módulos en un solo ámbito, por eso no ven
+un `import` olvidado: corre también `npm run lint:front`.
+
+```bash
+cd infra/api && npm test && npm run lint:front
+```
+
 ## Antes de afirmar algo sobre el estado del flujo de n8n
 
 Revisa `n8n/n8n_nola_completo.json` (lista de nodos) en vez de asumir desde
