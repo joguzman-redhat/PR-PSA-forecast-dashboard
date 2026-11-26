@@ -171,7 +171,8 @@ test('detalle conserva toda la vida, no duplica Bookings y no fuerza el saldo a 
   const p=ui.estado.proyectos[0],meses=ui.calendarioVidaProyecto(p);assert.equal(meses[0],'2026-03');assert.equal(meses.at(-1),'2027-06');assert.equal(meses.length,16);
   const serie=ui.serieSaldoProyecto(p);assert.equal(Object.values(serie.datos)[0]['Saldo contractual'],1000);assert.equal(serie.saldo,400);
   assert.match(serie.nota,/No se fuerza a cero/);
-  d.backlog[0]['2027-07_fijo']=999999;assert.equal(ui.serieSaldoProyecto(p).saldo,400);
+  // Ticket 14: un Commit posterior a la Fecha fin ya no se recorta de la curva (se advierte).
+  d.backlog[0]['2027-07_fijo']=999999;assert.equal(ui.serieSaldoProyecto(p).saldo,-999599);
 });
 test('meses sin cobertura no se convierten en ceros en la curva contractual',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();d.proyectos[0].fecha_fin='01/31/2028';

@@ -15,7 +15,7 @@ import { formatearDinero, formatearFecha, formatearNumero, formatearPorcentaje, 
 import { svgEl } from './grafica-base.js';
 import { crearGraficaLinea } from './grafica-linea.js';
 import { construirSelectorPeriodo } from './selector-periodo.js';
-import { vidaProyecto, calendarioVidaProyecto } from './vida-proyecto.js';
+import { vidaProyecto, calendarioVidaProyecto, advertenciaFueraDeFechaFin } from './vida-proyecto.js';
 import { vistas } from './vistas.js';
 
 export function abrirDetalle(proyecto) {
@@ -170,8 +170,14 @@ export function renderizarDetalle() {
       const vida = vidaProyecto(proyecto);
       const nota = document.createElement('p'); nota.className = 'nota-periodo';
       nota.textContent = `Primer commit registrado: ${vida.inicio ? etiquetaPeriodoCalendario(vida.inicio) : 'sin commit registrado'}. Fecha fin: ${vida.fin ? etiquetaPeriodoCalendario(vida.fin) : 'sin fecha fin'}.`;
-      if (vida.fueraDeVigencia) nota.textContent += ' La fuente contiene importes fuera de estas fechas; se conservan en los totales del periodo y requieren revisión.';
       divRevenue.appendChild(nota);
+      const advertencia = advertenciaFueraDeFechaFin(proyecto);
+      if (advertencia) {
+        const aviso = document.createElement('p'); aviso.className = 'nota-periodo aviso-fecha-fin';
+        aviso.setAttribute('role', 'alert');
+        aviso.textContent = advertencia;
+        divRevenue.appendChild(aviso);
+      }
     }
     if (!estado.forecast.timeline) divRevenue.appendChild(construirSelectorPeriodo(renderizarDetalle));
 

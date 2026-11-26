@@ -126,6 +126,8 @@
 
 .nota-periodo { margin: 0 0 var(--spacing-lg); font-size: 0.8125rem; color: var(--text-dim);
   max-width: 720px; line-height: 1.5; }
+.nota-periodo.aviso-fecha-fin { color: #8a5f00; background: color-mix(in srgb, var(--color-advertencia) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-advertencia) 45%, transparent); border-radius: var(--radius-sm); padding: var(--spacing-sm) var(--spacing-md); }
 /* El borde real de .pf-v6-c-card lo pinta un ::before, así que para
    distinguir esta tarjeta se tiñe el fondo en vez del borde. */
 .kpi-tile.kpi-periodo { background-color: color-mix(in srgb, var(--brand) 6%, var(--surface-1)); }
