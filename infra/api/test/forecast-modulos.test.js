@@ -145,3 +145,27 @@ test('el detalle del proyecto vive en modulos propios, sin ciclos con app.js', (
   }
   assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (abrirDetalle|renderizarDetalle|crearGraficaRevenueProyecto|renderizarEncabezadoProyecto|renderizarHermanosDeCliente|renderizarTrazabilidadProyecto)\b/m);
 });
+
+test('la trazabilidad global, la comparacion de Snapshots y la vista de PMs viven en modulos propios', () => {
+  const porNombre = new Map(grafoModulos().map(m => [path.basename(m.ruta), m]));
+  const esperado = {
+    'trazabilidad-global.js': ['renderizarTrazabilidad'],
+    'trazabilidad-backlog-revenue.js': ['renderizarGraficaBacklogVsRevenue'],
+    'snapshots-rango.js': ['rangoPredefinido', 'rangoSnapshots'],
+    'snapshots-cambios.js': ['calcularCambios', 'direccionDe'],
+    'snapshots-kpis.js': ['renderizarKpisRango'],
+    'snapshots-grafica-cambios.js': ['renderizarGraficaCambios'],
+    'snapshots-movimientos.js': ['actualizarTablaEventos'],
+    'snapshots-resumen-proyectos.js': ['renderizarResumenProyectos'],
+    'pms-calculo.js': ['calcularPMs'],
+    'pms-vista.js': ['renderizarPMs'],
+    'pms-proyectos.js': ['crearFilaProyectosPM', 'irAProyectosDePM'],
+    'clave-proyecto.js': ['clavesProyectosOcultos'],
+  };
+  for (const [archivo, nombres] of Object.entries(esperado)) {
+    assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
+    for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
+    assert.doesNotMatch(porNombre.get(archivo).fuente, /corte/i, `${archivo} usa "corte" en vez de Snapshot`);
+  }
+  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (renderizarTrazabilidad|calcularCambios|calcularPMs|renderizarPMs|actualizarTablaEventos)\b/m);
+});

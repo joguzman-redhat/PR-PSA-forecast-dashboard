@@ -1,6 +1,8 @@
 // Llave para cruzar un proyecto entre las fuentes.
 
 import { backlogDe } from './dinero-proyecto.js';
+import { estado } from './estado.js';
+import { pasaVisibilidadProyecto } from './filtros.js';
 
 /**
  * Llave para cruzar un proyecto entre las tres fuentes. No se puede usar
@@ -19,4 +21,9 @@ export function claveProyecto(p) {
   // PA la clave es el numero de fila DE ESA hoja, que no es el de esta.
   const enBacklog = backlogDe(p);
   return `fila-${enBacklog ? enBacklog._fila_excel : p._fila_excel}`;
+}
+
+export function clavesProyectosOcultos() {
+  return new Set(estado.proyectos
+    .filter(p => !pasaVisibilidadProyecto(p)).map(claveProyecto));
 }
