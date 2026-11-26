@@ -26,7 +26,7 @@ export function crearFilaProyectosPM(filaPM) {
   // Header
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
-  ['PA', 'Proyecto', 'Cliente', 'Estado', 'Handover', 'Status', 'Valor Booking', 'Revenue acum.', 'Backlog', '% ejecución']
+  ['PA', 'Proyecto', 'Cliente', 'Estado', 'Handover', 'Status', 'Valor Booking', 'Ejecutado', 'Backlog', '% ejecución']
     .forEach(txt => {
       const th = document.createElement('th');
       th.textContent = txt;
@@ -118,7 +118,7 @@ export function crearFilaProyectosPM(filaPM) {
     tdBooking.className = 'celda-numero';
     trp.appendChild(tdBooking);
 
-    // Revenue acum
+    // Ejecutado
     const tdAcum = document.createElement('td');
     tdAcum.textContent = formatearDinero(acum);
     tdAcum.className = 'celda-numero';

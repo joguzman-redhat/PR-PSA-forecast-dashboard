@@ -12,11 +12,11 @@ export function actualizarAyudas() {
   const texto=textoAyudaGlobal(),ayuda=document.getElementById('ayuda-rango-texto');if(ayuda)ayuda.textContent=texto;
   const r=resumenFinanciero(estado.proyectosFiltrados),ref=r.referencias.map(a=>'FY'+a).join(', ')||'sin fuente';
   const info={
-    'kpi-total-proyectos':'Proyectos que cumplen el rango de vigencia, territorio, estado y filtros seleccionados.',
-    'kpi-valor-of-total':`Booking de BackLog NOLA, una vez por proyecto. Referencia financiera: ${ref}; no se suman Bookings de distintos años.`,
+    'kpi-total-proyectos':'Proyectos que cumplen el rango, territorio, estado y filtros seleccionados.',
+    'kpi-valor-of-total':`Booking de BackLog NOLA, una vez por proyecto. Año fuente: ${ref}; no se suman Bookings de distintos años.`,
     'kpi-acumulado-hoy':`Ejecutado: acumulado anterior más el Commit de todos los meses hasta ${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}, inclusive, sobre toda la vida del proyecto. No es solo el revenue del rango seleccionado.`,
-    'kpi-backlog-2026':`Backlog fuente de ${ref}. Ya descuenta el Commit planeado de todo ese año; no es Booking menos acumulado a hoy.`,
-    'kpi-pct-ejecucion':'Revenue acumulado a hoy dividido por Booking; ponderado por monto.',
+    'kpi-backlog-2026':`Backlog de la Carga más reciente (Año fuente ${ref}), tal cual viene en el Excel: ya descuenta el Commit de ese año. El Commit de años posteriores se descuenta en el Proyectado. No es Booking menos Ejecutado.`,
+    'kpi-pct-ejecucion':'Ejecutado dividido por Booking; ponderado por monto.',
     'kpi-revenue-periodo':`Suma de Commit en ${periodoActual().etiqueta}; cambia con el rango global.`,
     'kpi-upside-periodo':`Suma de Upside en ${periodoActual().etiqueta}; no se considera revenue comprometido.`,
     'kpi-commit-pendiente':`Commit de los meses posteriores a ${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}, de cualquier año hasta el fin de la vida del proyecto (incluido 2027); independiente del rango de revenue. Nunca incluye Upside.`,
@@ -26,7 +26,7 @@ export function actualizarAyudas() {
   document.querySelectorAll('.fila-kpis-pms .kpi-etiqueta').forEach(label=>{
     if(label.querySelector('.ayuda-kpi'))return;
     const ayuda=document.createElement('button');ayuda.type='button';ayuda.className='ayuda-kpi';ayuda.textContent='?';
-    ayuda.title='Portafolio por PM: respeta el rango global de vigencia y el territorio. Commit y Upside suman los meses seleccionados; Booking y Backlog se toman una vez por proyecto del año de referencia, con su estado actual.';
+    ayuda.title='Portafolio por PM: respeta el rango global y el territorio. Commit y Upside suman los meses seleccionados; Booking y Backlog se toman una vez por proyecto del Año fuente, con su estado actual.';
     ayuda.setAttribute('aria-label',ayuda.title);label.appendChild(ayuda);
   });
   for(const [id,title]of Object.entries(info)){

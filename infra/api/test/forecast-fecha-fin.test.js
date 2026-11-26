@@ -34,7 +34,7 @@ test('con Fecha fin posterior al ultimo Commit, la curva y el calendario llegan 
   assert.equal(meses.at(-1), '2027-06');
   assert.equal(meses.length, 16);
   const serie = ui.serieSaldoProyecto(proyecto);
-  assert.equal(serie.datos['jun 2027']['Saldo contractual'], 620); // 1000 - (100 + 200 + 50 + 30)
+  assert.equal(serie.datos['jun 2027']['Backlog'], 620); // 1000 - (100 + 200 + 50 + 30)
   assert.equal(serie.datos['jun 2027']['Revenue acumulado'], 380);
   assert.equal(serie.saldo, 620);
   assert.equal(ui.proyeccionReferencia(proyecto), 380); // Proyectado: nada nuevo despues del ultimo Commit
@@ -54,7 +54,7 @@ test('un Commit posterior a la Fecha fin se conserva en la curva, el calendario 
   const meses = ui.calendarioVidaProyecto(proyecto);
   assert.equal(meses.at(-1), '2027-02'); // no se recorta en la Fecha fin
   const serie = ui.serieSaldoProyecto(proyecto);
-  assert.equal(serie.datos['feb 2027']['Saldo contractual'], 580);
+  assert.equal(serie.datos['feb 2027']['Backlog'], 580);
   assert.equal(ui.proyeccionReferencia(proyecto), 420);
 });
 
@@ -90,8 +90,8 @@ test('un mes sin cobertura hasta la Fecha fin queda sin dato, no cero', async ()
   const meses = ui.calendarioVidaProyecto(proyecto);
   assert.equal(meses.at(-1), '2028-03'); // la curva llega hasta la Fecha fin
   const serie = ui.serieSaldoProyecto(proyecto);
-  assert.equal(serie.datos['dic 2027']['Saldo contractual'], 620);
-  assert.equal(serie.datos['mar 2028']['Saldo contractual'], null);
+  assert.equal(serie.datos['dic 2027']['Backlog'], 620);
+  assert.equal(serie.datos['mar 2028']['Backlog'], null);
   assert.equal(ui.proyeccionReferencia(proyecto), null);
   assert.equal(ui.serieSaldoProyecto(proyecto).saldo, null);
 });

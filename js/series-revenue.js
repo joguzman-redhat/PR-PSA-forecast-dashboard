@@ -64,19 +64,19 @@ export function serieBacklogRevenuePorMes(proyectos) {
 
 export function serieSaldoProyecto(p) {
   const b=backlogDe(p),booking=valorBooking(p),vida=vidaProyecto(p),meses=calendarioVidaProyecto(p);
-  if(!b||!Number.isFinite(booking)||!meses.length)return {datos:{},nota:'Sin Booking, primer commit o vigencia válida suficiente para construir la curva.'};
+  if(!b||!Number.isFinite(booking)||!meses.length)return {datos:{},nota:'Sin Booking, primer Commit o Vida del proyecto suficiente para construir la curva.'};
   const arrastre=arrastreProyecto(p);
-  const datos={'Inicio del registro':{'Revenue acumulado':0,'Saldo contractual':booking}};
+  const datos={'Inicio del registro':{'Revenue acumulado':0,'Backlog':booking}};
   let acumulado=arrastre,completo=Number.isFinite(arrastre);
   for(const m of meses){
     if(!Number.isFinite(b[m+'_fijo']))completo=false;
     if(completo)acumulado+=b[m+'_fijo'];
-    datos[etiquetaPeriodoCalendario(m)]={'Revenue acumulado':completo?acumulado:null,'Saldo contractual':completo?booking-acumulado:null};
+    datos[etiquetaPeriodoCalendario(m)]={'Revenue acumulado':completo?acumulado:null,'Backlog':completo?booking-acumulado:null};
   }
   const saldo=completo?booking-acumulado:null;
-  let nota='Saldo contractual = Booking − revenue acumulado; es distinto del Backlog fuente, que ya descuenta los commits del año. Se usa un solo Booking por proyecto. Hasta el mes actual el revenue acumulado es el Ejecutado; después es el Proyectado, que suma solo Commit (nunca Upside), incluidos los meses de 2027. ';
+  let nota='Backlog = Booking − revenue acumulado: lo que falta por ejecutar, descontando también el Commit de años posteriores al Año fuente (el Backlog del Excel solo descuenta el de su año). Se usa un solo Booking por proyecto. Hasta el mes actual el revenue acumulado es el Ejecutado; después es el Proyectado, que suma solo Commit (nunca Upside), incluidos los meses de 2027. ';
   if(Number.isFinite(arrastre)&&arrastre!==0)nota+=`El primer mes incorpora ${formatearDineroExacto(arrastre)} de acumulado anterior al calendario disponible. `;
-  if(!vida.fin)nota+='Sin fecha fin: la curva termina en el último mes con commit registrado. ';
-  nota+=saldo===null?'Hay meses sin cobertura: la curva queda sin dato; no se inventa revenue.':Math.abs(saldo)<.01?'Los commits cubren el Booking y el saldo llega a cero.':`Saldo al finalizar según los commits cargados: ${formatearDineroExacto(saldo)}${saldo<0?' de ejecución excedente':''}. No se fuerza a cero ni se reparte saldo sin commit.`;
+  if(!vida.fin)nota+='Sin Fecha fin: la curva termina en el último mes con Commit registrado. ';
+  nota+=saldo===null?'Hay meses sin cobertura: la curva queda sin dato; no se inventa revenue.':Math.abs(saldo)<.01?'Los commits cubren el Booking y el Backlog llega a cero.':`Backlog al finalizar según los Commit cargados: ${formatearDineroExacto(saldo)}${saldo<0?' de ejecución excedente':''}. No se fuerza a cero ni se reparte Backlog sin Commit.`;
   return {datos,nota,saldo};
 }

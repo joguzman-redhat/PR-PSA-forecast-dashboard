@@ -108,7 +108,7 @@ for(const p of data.proyectos){
   const previos=months.filter(m=>m>=e.inicio&&Number(m.slice(0,4))<e.fuente);
   if(previos.some(m=>typeof b[m+'_fijo']!=='number'))completo=false;else if(completo)acum-=previos.reduce((a,m)=>a+b[m+'_fijo'],0);
   cal.forEach((m,i)=>{if(typeof b[m+'_fijo']!=='number')completo=false;if(completo)acum+=b[m+'_fijo'];
-   check('curva saldo '+k+' '+m,completo?e.booking-acum:null,serie[i]?.['Saldo contractual']??null);});
+   check('curva saldo '+k+' '+m,completo?e.booking-acum:null,serie[i]?.['Backlog']??null);});
  }
  // Advertencia: solo si hay Commit o Upside posterior a la Fecha fin, y nombra el importe sin alterarlo.
  const aviso=ui.advertenciaFueraDeFechaFin(p);check('advertencia presente '+k,importes.length>0,aviso!==null);

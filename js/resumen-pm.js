@@ -34,7 +34,7 @@ export function renderizarResumenPM(proyectos) {
   });
   const ejecucion = document.getElementById('pm-pct-ejec');
   ejecucion.textContent = porcentaje === null ? '—' : porcentaje.toFixed(1) + '%';
-  ejecucion.title = 'Revenue acumulado / Booking total; ponderado por monto, no promedio de porcentajes.';
+  ejecucion.title = 'Ejecutado / Booking total; ponderado por monto, no promedio de porcentajes.';
 
   const estados = new Map();
   const semaforo = new Map([['Rojo', 0], ['Amarillo', 0], ['Verde', 0], [SIN_DATO, 0]]);

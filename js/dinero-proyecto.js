@@ -110,10 +110,10 @@ export function ejecutadoProyecto(proyecto) {
 
 /**
  * Backlog de un proyecto: la columna "Backlog" de BackLog NOLA, tal cual. El
- * Excel lo calcula como Valor OF − Acum 2025 − commit de los 12 meses, o sea,
- * ya descuenta lo planeado para el resto del año. Es el número de las tablas
+ * Excel lo calcula como Booking − acumulado anterior − Commit de los 12 meses
+ * de su Año fuente, o sea, ya descuenta lo planeado para ese año. Es el número de las tablas
  * dinámicas del negocio, así que manda sobre cualquier cálculo propio.
- * Consecuencia: Booking = Acumulado a hoy + commit planeado resto del año + Backlog.
+ * Consecuencia: Booking = Ejecutado + Commit pendiente + Backlog sin planear.
  */
 export function backlogHoy(proyecto) {
   const fila = backlogDe(proyecto);

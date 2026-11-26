@@ -152,7 +152,7 @@ export function actualizarGraficas() {
     booking: vals.booking,
     series: [
       { nombre: 'Valor Booking', valor: vals.booking, color: COLORES_SERIES_COMPARACION.booking },
-      { nombre: 'Revenue acumulado a hoy', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
+      { nombre: 'Ejecutado', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
       { nombre: 'Proyectado', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
       { nombre: 'Backlog', valor: vals.backlog, color: COLORES_SERIES_COMPARACION.backlog },
     ],
@@ -179,7 +179,7 @@ export function actualizarGraficas() {
       booking: valorBooking(p),
       series: [
         { nombre: 'Valor Booking', valor: valorBooking(p), color: COLORES_SERIES_COMPARACION.booking },
-        { nombre: 'Revenue acumulado a hoy', valor: ejecutadoProyecto(p), color: COLORES_SERIES_COMPARACION.acumulado },
+        { nombre: 'Ejecutado', valor: ejecutadoProyecto(p), color: COLORES_SERIES_COMPARACION.acumulado },
         { nombre: 'Proyectado', valor: proyectadoProyecto(p), color: COLORES_SERIES_COMPARACION.proyectada },
         { nombre: 'Backlog', valor: backlogHoy(p), color: COLORES_SERIES_COMPARACION.backlog },
       ],
@@ -208,7 +208,7 @@ export function actualizarGraficas() {
     booking: vals.booking,
     series: [
       { nombre: 'Valor Booking', valor: vals.booking, color: COLORES_SERIES_COMPARACION.booking },
-      { nombre: 'Revenue acumulado a hoy', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
+      { nombre: 'Ejecutado', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
       { nombre: 'Proyectado', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
       { nombre: 'Backlog', valor: vals.backlog, color: COLORES_SERIES_COMPARACION.backlog },
     ],

@@ -78,7 +78,7 @@ export function construirResumenReporte(contenido, vista, nombreVista, partes) {
   const metricas = [
     ['Proyectos', formatearNumero(proyectos.length)],
     ['Booking', formatearDineroExacto(booking)],
-    ['Revenue acumulado', formatearDineroExacto(acumulado)],
+    ['Ejecutado', formatearDineroExacto(acumulado)],
     ['Backlog', formatearDineroExacto(sumar(backlogHoy))],
     ['Ejecución', booking > 0 && acumulado !== null ? (acumulado / booking * 100).toFixed(1) + '%' : '—'],
     [`Commit · ${periodoActual().etiqueta}`, formatearDineroExacto(sumar(revenuePeriodo))],

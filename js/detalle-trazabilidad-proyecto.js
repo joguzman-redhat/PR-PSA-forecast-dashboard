@@ -37,7 +37,7 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
     const divBVR = document.createElement('div');
     divBVR.className = 'detalle-revenue';
     const h4bvr = document.createElement('h4');
-    h4bvr.textContent = 'Backlog contractual vs. revenue acumulado · vida completa';
+    h4bvr.textContent = 'Backlog vs. revenue acumulado · Vida del proyecto';
     divBVR.appendChild(h4bvr);
     const notaBVR = document.createElement('p');
     notaBVR.className = 'nota-grafica';
@@ -47,7 +47,7 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
     svgBVR.setAttribute('class', 'grafica-svg');
     divBVR.appendChild(svgBVR);
     const saldo=serieSaldoProyecto(proyecto);
-    crearGraficaLinea(svgBVR,saldo.datos,{ejeX:'categoria',unidad:'Saldo contractual y revenue acumulado',etiquetasValores:true});
+    crearGraficaLinea(svgBVR,saldo.datos,{ejeX:'categoria',unidad:'Backlog y revenue acumulado',etiquetasValores:true});
     notaBVR.textContent=saldo.nota;
     div.appendChild(divBVR);
   }
@@ -93,7 +93,7 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
       : (Math.abs(t.fijo) < 1 && Math.abs(t.upside) < 1)
       ? `Este proyecto no tiene revenue en <strong>vida completa del proyecto</strong>.`
       : `El revenue de <strong>vida completa del proyecto</strong> nunca se movió: ` +
-        `${formatearDinero(t.fijo)} en Commit desde el primer corte hasta hoy.`;
+        `${formatearDinero(t.fijo)} en Commit desde el primer Snapshot hasta hoy.`;
   } else {
     resumen.innerHTML = `<strong>${fechasCambio.length}</strong> ` +
       `movimiento${fechasCambio.length === 1 ? '' : 's'} en ` +
@@ -103,7 +103,7 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.className.baseVal = 'grafica-svg';
     div.appendChild(svg);
-    // soloCambios: el punto se dibuja donde pasó algo, no en los 32 cortes.
+    // soloCambios: el punto se dibuja donde pasó algo, no en los 32 Snapshots.
     crearGraficaLinea(svg, evolucion, { soloCambios: true, etiquetasValores:true });
   }
 

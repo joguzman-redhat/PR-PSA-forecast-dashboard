@@ -77,8 +77,8 @@ export function renderizarEncabezadoProyecto(contenedor, proyecto) {
     ['Valor Booking', booking, 'Por cuánto se vendió el proyecto'],
     ['Ejecutado', acum, 'Acumulado anterior más el Commit hasta el mes actual, sobre toda la vida del proyecto'],
     ['Proyectado', proyectado, 'Ejecutado más el Commit de los meses futuros, incluido 2027. No incluye Upside'],
-    ['Backlog', backlog, 'Backlog de la fuente: ya descuenta el Commit planeado del año de referencia'],
-    [`Acumulado anterior a ${anioRevenue()}`, consumido, `Revenue acumulado previo al año de referencia ${anioRevenue()}`],
+    ['Backlog', backlog, 'Backlog de la fuente: ya descuenta el Commit de su Año fuente'],
+    [`Acumulado anterior a ${anioRevenue()}`, consumido, `Revenue acumulado previo al Año fuente ${anioRevenue()}`],
   ].forEach(([et, v, tip]) => {
     const d = document.createElement('div');
     d.className = 'hero-cifra';

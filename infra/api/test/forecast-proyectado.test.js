@@ -53,7 +53,7 @@ test('un Commit de febrero de 2027 descuenta el Backlog en la curva y en el Proy
   assert.equal(r.diferencia, 0); // 1000 - 420 - 580
   let serie = ui.serieSaldoProyecto(proyecto);
   assert.equal(serie.saldo, 580);
-  assert.equal(serie.datos['feb 2027']['Saldo contractual'], 580);
+  assert.equal(serie.datos['feb 2027']['Backlog'], 580);
   // Con 90 en lugar de 40 el efecto se ve en los tres sitios.
   const otra = await cargar({ ...base, commits: { ...base.commits, '2027-02': 90 } });
   r = otra.ui.resumenFinanciero([otra.proyecto]);

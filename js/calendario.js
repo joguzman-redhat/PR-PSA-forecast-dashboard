@@ -98,7 +98,7 @@ export function sumarMeses(pares, indices) {
   return { fijo, upside };
 }
 
-/** Variaciones solo en meses con cobertura en ambos cortes; añadir un año no es un movimiento. */
+/** Variaciones solo en meses con cobertura en ambos Snapshots; añadir un año no es un movimiento. */
 export function coberturaCalendario(snapshot,indices=mesesActivos()) {
   return !estado.forecast.timeline || !snapshot.anios_disponibles || indices.every(i=>snapshot.anios_disponibles.includes(Number(MESES_ES[i]?.slice(0,4))));
 }
