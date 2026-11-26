@@ -25,7 +25,7 @@ export const estado = {
     texto: '',
   },
   // Los cancelados se esconden por defecto: ensucian conteos y gráficas, y
-  // los 24 que hay valen $0 de Valor OF. El interruptor los trae de vuelta.
+  // los 24 que hay valen $0 de Booking. El interruptor los trae de vuelta.
   territorio: 'todos',
   incluirCancelados: false,
   incluirCompletados: false,

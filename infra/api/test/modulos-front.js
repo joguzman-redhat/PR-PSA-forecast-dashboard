@@ -19,8 +19,11 @@ function leer(ruta) {
   }));
   const exports = [...fuente.matchAll(EXPORT)].map(m => m[1]);
   const sinImports = fuente.replace(IMPORT, '');
-  const extra = sinImports.match(/^(?:import\b|export\s+(?:default\b|\{|\*))/m);
-  if (extra) throw new Error(`Forma de import/export no admitida en ${path.relative(RAIZ, ruta)}: "${extra[0]}"`);
+  const formaNoAdmitida = sinImports.match(/^(?:import\b|export\s+(?:default\b|\{|\*))/m);
+  if (formaNoAdmitida) throw new Error(`Forma de import/export no admitida en ${path.relative(RAIZ, ruta)}: "${formaNoAdmitida[0]}"`);
+  if (imports.some(i => i.nombres.some(n => /\s/.test(n)))) {
+    throw new Error(`Los imports con alias (a as b) no se admiten: ${path.relative(RAIZ, ruta)}`);
+  }
   return { ruta, fuente, imports, exports };
 }
 
@@ -46,8 +49,10 @@ function grafoModulos(entrada = ENTRADA) {
 }
 
 // Los modulos unidos en un solo script de ambito global, como se probaba antes.
+// Va en modo estricto, como lo ejecuta el navegador: una asignacion a una
+// variable sin declarar falla aqui y no solo en produccion.
 function codigoUnido(entrada = ENTRADA) {
-  return grafoModulos(entrada)
+  return "'use strict';\n" + grafoModulos(entrada)
     .map(m => m.fuente.replace(IMPORT, '').replace(/^export\s+/gm, ''))
     .join('\n');
 }

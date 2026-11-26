@@ -24,9 +24,11 @@ test('el estado y el formateo viven en modulos propios que importa la aplicacion
 });
 
 test('cada nombre importado existe como export del modulo de origen', () => {
-  for (const modulo of grafoModulos()) {
+  const grafo = grafoModulos();
+  const porRuta = new Map(grafo.map(m => [m.ruta, m]));
+  for (const modulo of grafo) {
     for (const imp of modulo.imports) {
-      const origen = grafoModulos(imp.ruta).at(-1);
+      const origen = porRuta.get(imp.ruta);
       for (const nombre of imp.nombres) {
         assert.ok(origen.exports.includes(nombre),
           `${path.relative(RAIZ, modulo.ruta)} importa ${nombre}, que ${imp.especificador} no exporta`);
