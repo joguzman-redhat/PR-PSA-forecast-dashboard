@@ -4,11 +4,11 @@ import { formatearDinero, formatearDineroExacto } from './formato.js';
 import { periodoActual, etiquetaPeriodoCalendario, mesReferenciaFinanciera } from './calendario.js';
 import { valorBooking, ejecutadoProyecto, backlogHoy, revenuePeriodo, upsidePeriodo, resumenFinanciero, sumaConDato, ejecucionPonderada } from './dinero-proyecto.js';
 
-export function textoAyudaGlobal() {
+function textoAyudaGlobal() {
   return 'El rango selecciona proyectos cuya vida registrada se solapa con las fechas elegidas: desde el primer commit distinto de cero hasta su fecha fin, ambos inclusive. No exige tener commit en cada trimestre. Si falta un límite, se usa solo el conocido. México filtra país México; NSSA incluye el resto de NOLA. Commit y Upside suman los meses del rango. Booking, Ejecutado, Proyectado y Backlog (continuo entre años) usan una sola fuente por proyecto, con preferencia por el año actual, y cubren toda la vida del proyecto. El detalle muestra la vida completa, sin recortarla por este rango.';
 }
 
-export function actualizarAyudas() {
+function actualizarAyudas() {
   const texto=textoAyudaGlobal(),ayuda=document.getElementById('ayuda-rango-texto');if(ayuda)ayuda.textContent=texto;
   const r=resumenFinanciero(estado.proyectosFiltrados),ref=r.referencias.map(a=>'FY'+a).join(', ')||'sin fuente';
   const info={

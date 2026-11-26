@@ -22,7 +22,7 @@ const NOMBRES_DINERO = {
  * glosario. Es idempotente: una fila ya traducida no cambia. acum_2025 era el
  * nombre anterior de acumulado_anterior y solo se usa si este no viene.
  */
-export function traducirFilaBacklog(fila) {
+function traducirFilaBacklog(fila) {
   for (const [antiguo, nuevo] of Object.entries(NOMBRES_DINERO)) {
     if (antiguo in fila) {
       fila[nuevo] = fila[antiguo];

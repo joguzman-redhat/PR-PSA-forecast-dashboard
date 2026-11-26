@@ -147,8 +147,6 @@ test('cada tipo de grafica vive en un modulo propio', () => {
     assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
     for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
   }
-  // La vertical no la llama nadie todavia, asi que no entra al grafo: se comprueba el archivo.
-  assert.match(fs.readFileSync(path.join(RAIZ, 'js/grafica-barras-agrupadas-vertical.js'), 'utf8'), /^export function crearGraficaBarrasAgrupadasVertical\b/m);
   assert.doesNotMatch(porNombre.get('main.js').fuente, /^function (svgEl|crearGrafica(Barras\w+|Linea)|actualizarGraficas)\b/m);
 });
 

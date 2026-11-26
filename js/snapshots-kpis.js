@@ -2,7 +2,6 @@
 
 import { periodoActual } from './calendario.js';
 import { formatearDinero } from './formato.js';
-import { direccionDe } from './snapshots-cambios.js';
 
 export function renderizarKpisRango(filas, snaps, iA, iB) {
   const cont = document.getElementById('kpis-rango');

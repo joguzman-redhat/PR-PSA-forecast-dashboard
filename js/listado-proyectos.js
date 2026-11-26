@@ -95,7 +95,7 @@ export function renderizarTabla() {
   });
 
   // Rows
-  estado.proyectosFiltrados.forEach((proyecto, idx) => {
+  estado.proyectosFiltrados.forEach((proyecto) => {
     const tr = document.createElement('tr');
     tr.addEventListener('click', () => vistas.abrirDetalle(proyecto));
 

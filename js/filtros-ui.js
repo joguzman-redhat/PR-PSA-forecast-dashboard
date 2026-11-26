@@ -19,7 +19,7 @@ export function aplicarFiltros() {
   actualizarResumenRango();
 }
 
-export function actualizarResumenRango() {
+function actualizarResumenRango() {
   if (!estado.forecast.timeline) return;
   const visibles = estado.proyectos.filter(pasaVisibilidadProyecto);
   const sinInicio = visibles.filter(p => !vidaProyecto(p).inicio).length;
@@ -30,13 +30,13 @@ export function actualizarResumenRango() {
     (sinInicio ? ` · ${sinInicio} sin primer commit` : '') + (sinFin ? ` · ${sinFin} sin fecha fin` : '');
 }
 
-export function sincronizarMostrarCompletados() {
+function sincronizarMostrarCompletados() {
   document.querySelectorAll('[data-mostrar-completados]').forEach(chk => {
     chk.checked = estado.incluirCompletados;
   });
 }
 
-export function cambiarMostrarCompletados(incluir) {
+function cambiarMostrarCompletados(incluir) {
   estado.incluirCompletados = incluir;
   sincronizarMostrarCompletados();
   aplicarFiltros();
@@ -115,7 +115,7 @@ export function cerrarDropdowns(excepto) {
   });
 }
 
-export function construirDropdown(dim) {
+function construirDropdown(dim) {
   const cont = document.createElement('div');
   cont.className = 'dropdown-filtro';
   cont.dataset.campo = dim.campo;
@@ -192,7 +192,7 @@ export function construirDropdown(dim) {
   return cont;
 }
 
-export function refrescarConteos(campo) {
+function refrescarConteos(campo) {
   const cont = document.querySelector(`.dropdown-filtro[data-campo="${campo}"]`);
   if (!cont) return;
   const conteos = conteosDe(campo);
@@ -212,7 +212,7 @@ export function refrescarConteos(campo) {
   cont.classList.toggle('activo', marcados.length > 0);
 }
 
-export function renderizarChips() {
+function renderizarChips() {
   const zona = document.getElementById('chips-activos');
   if (!zona) return;
   const chips = [];
@@ -243,7 +243,7 @@ export function renderizarChips() {
   });
 }
 
-export function limpiarFiltros() {
+function limpiarFiltros() {
   estado.territorio='todos';
   document.querySelectorAll('[name="forecast-territorio"]').forEach(c=>{c.checked=c.value==='todos';});
   DIMENSIONES.forEach(d => { estado.filtros[d.campo] = []; });

@@ -48,7 +48,6 @@ export function crearGraficaBarrasApiladas(svgId, datos, opciones) {
   })));
   const espacioTotal = 36;  // reserve space for total label at end of bar
   const areaAncho = ancho - margen.left - margen.right - espacioTotal;
-  const areaAlto = alto - margen.top - margen.bottom;
 
   svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
   svg.style.height = alto + 'px';

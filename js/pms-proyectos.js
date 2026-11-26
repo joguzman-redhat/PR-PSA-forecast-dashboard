@@ -1,7 +1,6 @@
 // Proyectos de un PM: fila expandida de la tabla y salto al listado.
 
 import { identificador } from './campos-proyecto.js';
-import { chip } from './chip.js';
 import { abrirDetalle } from './detalle.js';
 import { backlogHoy, ejecutadoProyecto, porcentajeEjecucionProyecto, valorBooking } from './dinero-proyecto.js';
 import { estado } from './estado.js';

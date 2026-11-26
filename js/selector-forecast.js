@@ -6,7 +6,7 @@ import { NOMBRES_MESES, etiquetaPeriodoCalendario } from './calendario.js';
 import { aplicarFiltros } from './filtros-ui.js';
 import { vistas } from './vistas.js';
 
-export function limitePeriodoForecast(valor, extremo) {
+function limitePeriodoForecast(valor, extremo) {
   const trimestre = /^(\d{4})-q([1-4])$/.exec(valor);
   if (!trimestre) return valor;
   const mes = (Number(trimestre[2]) - 1) * 3 + (extremo === 'desde' ? 1 : 3);

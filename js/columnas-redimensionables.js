@@ -93,7 +93,7 @@ export function asegurarResizers(tabla) {
   const lastHeaderRow = headerRows[headerRows.length - 1];
 
   // Añadir resizers a los th que no los tengan
-  lastHeaderRow.querySelectorAll('th').forEach((th, colIndex) => {
+  lastHeaderRow.querySelectorAll('th').forEach((th) => {
     if (!th.querySelector('.col-resizer')) {
       const resizer = document.createElement('span');
       resizer.className = 'col-resizer';

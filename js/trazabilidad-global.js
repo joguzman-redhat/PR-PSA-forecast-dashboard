@@ -13,7 +13,7 @@ import { renderizarResumenProyectos } from './snapshots-resumen-proyectos.js';
 import { renderizarGraficaBacklogVsRevenue } from './trazabilidad-backlog-revenue.js';
 
 /** Meses de cada Snapshot sin los proyectos actualmente Completed; conserva el histórico original. */
-export function mesesVisiblesPorSnapshot() {
+function mesesVisiblesPorSnapshot() {
   const hist = estado.historia;
   const porSnapshot = new Map(hist.snapshots.map(s => [s.id,
     Object.fromEntries(Object.entries(s.por_mes).map(([mes, valores]) => [mes, { ...valores }]))]));

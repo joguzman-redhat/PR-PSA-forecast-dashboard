@@ -8,7 +8,7 @@ import { crearGraficaLinea } from './grafica-linea.js';
 import { serieBacklogRevenuePorMes } from './series-revenue.js';
 import { mesFinalizacion } from './vida-proyecto.js';
 
-export function pintarProyeccionBacklogRevenue(svg, proyectos, nota) {
+function pintarProyeccionBacklogRevenue(svg, proyectos, nota) {
   if(estado.forecast.timeline) {
     svg.dataset.tituloReporte='Commit y Upside mensual · '+periodoActual().etiqueta;
     crearGraficaLinea(svg,serieBacklogRevenuePorMes(proyectos),{ejeX:'categoria',unidad:'Commit y Upside mensual'});

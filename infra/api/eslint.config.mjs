@@ -10,5 +10,6 @@ export default [{
     'no-import-assign': 'error',
     'no-redeclare': 'error',
     'no-dupe-keys': 'error',
+    'no-unused-vars': 'error',
   },
 }];

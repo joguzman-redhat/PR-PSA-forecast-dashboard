@@ -1,7 +1,6 @@
 // Resumen por proyecto de la comparación de Snapshots, con el detalle de movimientos desplegable.
 
 import { periodoActual } from './calendario.js';
-import { chip } from './chip.js';
 import { abrirDetalle } from './detalle.js';
 import { estado } from './estado.js';
 import { formatearDinero, formatearDineroExacto } from './formato.js';
@@ -22,7 +21,7 @@ function capitalizar(t) {
  * el mes afectado, la fecha, la dirección y cuánto se movió el Commit de ese
  * mes. Es lo que convierte "13 movimientos" en información.
  */
-export function filaDetalleMovimientos(f) {
+function filaDetalleMovimientos(f) {
   const tr = document.createElement('tr');
   tr.className = 'fila-detalle-mov';
   const td = document.createElement('td');
