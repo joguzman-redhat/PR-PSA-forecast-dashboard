@@ -7,7 +7,10 @@
 const API = './api';
 
 // Nombre de la API -> termino del glosario, para los campos de dinero de las
-// filas de backlog.
+// filas de backlog. total_ejecutado_acumulado es la columna "TOTAL EJECUTADO
+// ACUMULADO" del Excel (acumulado anterior + Commit del Año fuente): llega ya
+// calculada y llega hasta el fin de ese Año fuente, no sobre toda la vida del
+// proyecto. Se llama proyectado porque es el valor que el negocio usa como tal.
 const NOMBRES_DINERO = {
   valor_of: 'booking',
   acumulado_a_fecha: 'ejecutado',

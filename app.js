@@ -14,6 +14,46 @@ import {
   normalizarValor,
   obtenerEtiquetaValor,
 } from './js/formato.js';
+import {
+  NOMBRES_MESES,
+  MESES_ES,
+  PERIODOS,
+  configurarCalendarioTimeline,
+  etiquetaPeriodoCalendario,
+  anioRevenue,
+  periodoActual,
+  mesesActivos,
+  sumarMeses,
+  coberturaCalendario,
+  compararMeses,
+} from './js/calendario.js';
+import {
+  normalizarNombre,
+  backlogDe,
+  valorBooking,
+  acumuladoAnterior,
+  revenuePeriodo,
+  upsidePeriodo,
+  ejecutadoProyecto,
+  backlogHoy,
+  proyectadaAnio,
+  porcentajeEjecucionProyecto,
+} from './js/dinero-proyecto.js';
+import {
+  mesFinalizacion,
+  periodoFinProyecto,
+  vidaProyecto,
+  pasaPeriodoProyecto,
+  calendarioVidaProyecto,
+  indicesVidaProyecto,
+} from './js/vida-proyecto.js';
+import {
+  serieBacklogRevenuePorMes,
+  serieSaldoProyecto,
+} from './js/series-revenue.js';
+import {
+  calcularKPIs,
+} from './js/kpis.js';
 
 // ============================================================================
 // FUNCIONES DE CARGA DE DATOS
@@ -47,35 +87,6 @@ async function cargarDatos() {
   }
 }
 
-function configurarCalendarioTimeline(meta) {
-  MESES_ES=[...meta.periodos];
-  const url=new URLSearchParams(location.search);
-  const explicito=url.has('desde')||url.has('hasta');
-  const fecha=meta.fecha_referencia || new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const anio=Number(fecha.slice(0,4)) || meta.anio_actual;
-  const mes=Number(fecha.slice(5,7)) || 1;
-  const inicioQ=`${anio}-${String(Math.floor((mes-1)/3)*3+1).padStart(2,'0')}`;
-  const finQ=`${anio+1}-12`;
-  if(!explicito && MESES_ES.length && MESES_ES.at(-1)<finQ){
-    let n=Number(MESES_ES.at(-1).slice(0,4))*12+Number(MESES_ES.at(-1).slice(5));
-    for(;n<=(anio+1)*12+11;n++)MESES_ES.push(`${Math.floor(n/12)}-${String(n%12+1).padStart(2,'0')}`);
-  }
-  PERIODOS=[{id:'todos',etiqueta:'Todo el histórico',meses:MESES_ES.map((_,i)=>i)}];
-  for(const anio of [...new Set(MESES_ES.map(p=>p.slice(0,4)))]) {
-    PERIODOS.push({id:'y'+anio,etiqueta:anio,meses:MESES_ES.map((p,i)=>p.startsWith(anio)?i:-1).filter(i=>i>=0)});
-    for(let q=1;q<=4;q++)PERIODOS.push({id:anio+'-q'+q,etiqueta:`Q${q} ${anio}`,
-      meses:MESES_ES.map((p,i)=>p.startsWith(anio)&&Math.ceil(Number(p.slice(5))/3)===q?i:-1).filter(i=>i>=0)});
-  }
-  PERIODOS.push(...MESES_ES.map((p,i)=>({id:p,etiqueta:etiquetaPeriodoCalendario(p),meses:[i]})));
-  estado.forecast.periodos=[...MESES_ES];
-  estado.rangoTimeline=explicito?{desde:url.get('desde')||meta.desde,hasta:url.get('hasta')||meta.hasta}:{desde:inicioQ,hasta:finQ};
-  estado.periodo='rango';
-  estado.unidadTimeline=url.get('unidad')==='trimestres'||!explicito?'trimestres':'meses';
-}
-function etiquetaPeriodoCalendario(p) {
-  if(!/^\d{4}-\d{2}$/.test(p||''))return p;
-  return NOMBRES_MESES[Number(p.slice(5))-1].slice(0,3)+' '+p.slice(0,4);
-}
 function limitePeriodoForecast(valor, extremo) {
   const trimestre = /^(\d{4})-q([1-4])$/.exec(valor);
   if (!trimestre) return valor;
@@ -138,184 +149,17 @@ function configurarSelectorForecast() {
 // KPIs
 // ============================================================================
 
-/**
- * Los KPIs se recalculan sobre los proyectos filtrados, no sobre el total:
- * el punto de filtrar es ver los números de ese recorte.
- *
- * Los nulos se ignoran en vez de contarse como cero. Con 26 proyectos que
- * traen #N/A del Excel, tratarlos como cero bajaría los promedios y daría
- * una lectura falsa.
- */
-/** Revenue fijo de un proyecto en el periodo elegido, desde BackLog NOLA. */
-function normalizarNombre(valor) {
-  if (valor === null || valor === undefined) return '';
-  return String(valor).normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^0-9a-z]+/g, '');
-}
 
-// Devuelve null si no hay match. Antes caia de vuelta al numero de fila, que
-// es justamente lo que mezclaba el revenue entre proyectos distintos.
-function backlogDe(proyecto) {
-  if (proyecto.clave_timeline) return estado.backlogPorTimeline?.get(proyecto.clave_timeline) || null;
-  if (!proyecto) return null;
-  const pa = proyecto.num_pa;
-  if (pa !== null && pa !== undefined && pa !== '') {
-    const porPA = estado.backlogPorPA && estado.backlogPorPA.get(String(pa));
-    if (porPA) return porPA;
-  }
-  const n = normalizarNombre(proyecto.nombre_del_proyecto);
-  if (n && estado.backlogPorNombre) return estado.backlogPorNombre.get(n) || null;
-  return null;
-}
 
-/**
- * Valor Booking de un proyecto. TODA LA PLATA viene de BackLog NOLA, nunca de
- * Info Proyectos: los campos p.valor_of / p.acumulado_a_hoy / p.consumido_2025
- * / p.backlog_2026 NO están convertidos (carecen del factor de conversión).
- * Se reconstruye como lo calcula el propio Excel: Booking = Backlog + Proyectado,
- * las dos ya convertidas. Va primero porque las cargas
- * anteriores al arreglo del ETL guardaron en fila.booking el valor de Info (sin
- * convertir); fila.booking queda solo de respaldo.
- */
-function valorBooking(proyecto) {
-  const fila = backlogDe(proyecto);
-  if(estado.forecast.timeline)return typeof fila?.booking==='number'?fila.booking:null;
-  if (!fila) return null;
-  if (typeof fila.backlog === 'number' && typeof fila.proyectado === 'number') {
-    return fila.backlog + fila.proyectado;
-  }
-  return typeof fila.booking === 'number' ? fila.booking : null;
-}
 
-/** Acumulado del año pasado (2025), desde BackLog NOLA. */
-function acumuladoAnterior(proyecto) {
-  const fila = backlogDe(proyecto);
-  return fila && typeof fila.acumulado_anterior === 'number' ? fila.acumulado_anterior : null;
-}
 
-function revenuePeriodo(proyecto) {
-  const fila = backlogDe(proyecto);
-  if (!fila) return null;
-  if(estado.forecast.timeline&&!mesesActivos().some(i=>typeof fila[MESES_ES[i]+'_fijo']==='number'))return null;
-  return mesesActivos().reduce((acc, i) => {
-    const v = fila[MESES_ES[i] + '_fijo'];
-    return acc + (typeof v === 'number' ? v : 0);
-  }, 0);
-}
 
-/** Upside de un proyecto en el periodo elegido. Hermano de revenuePeriodo. */
-function upsidePeriodo(proyecto) {
-  const fila = backlogDe(proyecto);
-  if (!fila) return null;
-  if(estado.forecast.timeline&&!mesesActivos().some(i=>typeof fila[MESES_ES[i]+'_upside']==='number'))return null;
-  return mesesActivos().reduce((acc, i) => {
-    const v = fila[MESES_ES[i] + '_upside'];
-    return acc + (typeof v === 'number' ? v : 0);
-  }, 0);
-}
 
-/**
- * Revenue acumulado a hoy de un proyecto. acum_2025 es el saldo arrastrado del
- * año anterior; los meses de enero a hoy del año en curso suman el resto.
- * TODA LA PLATA viene de BackLog NOLA: si no hay fila de backlog, el proyecto
- * no tiene cifras de revenue (se muestra "—" en vez de cero).
- */
-function acumuladoHoy(proyecto) {
-  const fila = backlogDe(proyecto);
-  if(estado.forecast.timeline)return fila?.ejecutado ?? null;
-  if (!fila) return null;
-  const acum2025 = acumuladoAnterior(proyecto) ?? 0;
-  // Enero hasta el mes en curso, inclusive.
-  const commitHastaHoy = MESES_ES.slice(0, mesesEjecutadosForecast()).reduce((acc, m) => {
-    const v = fila[m + '_fijo'];
-    return acc + (typeof v === 'number' ? v : 0);
-  }, 0);
-  return acum2025 + commitHastaHoy;
-}
 
-/**
- * Backlog de un proyecto: la columna "Backlog" de BackLog NOLA, tal cual. El
- * Excel lo calcula como Valor OF − Acum 2025 − commit de los 12 meses, o sea,
- * ya descuenta lo planeado para el resto del año. Es el número de las tablas
- * dinámicas del negocio, así que manda sobre cualquier cálculo propio.
- * Consecuencia: Booking = Acumulado a hoy + commit planeado resto del año + Backlog.
- */
-function backlogHoy(proyecto) {
-  const fila = backlogDe(proyecto);
-  return fila && typeof fila.backlog === 'number' ? fila.backlog : null;
-}
 
-/**
- * Ejecución proyectada al cierre del año = acum_2025 + suma de los 12 meses fijo.
- */
-function proyectadaAnio(proyecto) {
-  const fila = backlogDe(proyecto);
-  if(estado.forecast.timeline)return fila?.proyectado ?? null;
-  if (!fila) return null;
-  const acum2025 = acumuladoAnterior(proyecto) ?? 0;
-  const totalFijo = MESES_ES.reduce((acc, m) => {
-    const v = fila[m + '_fijo'];
-    return acc + (typeof v === 'number' ? v : 0);
-  }, 0);
-  return acum2025 + totalFijo;
-}
 
-// El calendario pertenece al año seleccionado, no al año del navegador.
-function anioRevenue() { return estado.forecast.anio; }
-function mesesEjecutadosForecast(hoy = new Date()) {
-  const partes = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: 'numeric' }).formatToParts(hoy);
-  const anio = Number(partes.find(p => p.type === 'year').value);
-  const mes = Number(partes.find(p => p.type === 'month').value);
-  return anioRevenue() < anio ? 12 : anioRevenue() > anio ? 0 : mes;
-}
 
-/** Fecha fin de Info Proyectos, sin desplazar días/meses por la zona horaria. */
-function mesFinalizacion(proyecto) {
-  const valor = proyecto.fecha_fin;
-  let anio, mes, dia;
-  if (typeof valor === 'number' && Number.isFinite(valor)) {
-    const fecha = new Date(Date.UTC(1899, 11, 30) + Math.floor(valor) * 86400000);
-    anio = fecha.getUTCFullYear(); mes = fecha.getUTCMonth() + 1; dia = fecha.getUTCDate();
-  } else if (typeof valor === 'string') {
-    const iso = valor.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:T.*)?$/);
-    const americana = valor.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (iso) [, anio, mes, dia] = iso.map(Number);
-    else if (americana) { mes = +americana[1]; dia = +americana[2]; anio = +americana[3]; }
-    else return null;
-  } else return null;
-  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
-  if (fecha.getUTCFullYear() !== anio || fecha.getUTCMonth() !== mes - 1 || fecha.getUTCDate() !== dia) return null;
-  return anio * 12 + mes - 1;
-}
 
-/** Months are compared as YYYY-MM; unknown limits stay unknown. */
-function periodoFinProyecto(proyecto) {
-  const mes = mesFinalizacion(proyecto);
-  return mes === null ? null : `${Math.floor(mes / 12)}-${String(mes % 12 + 1).padStart(2, '0')}`;
-}
-function vidaProyecto(proyecto) {
-  const fila = backlogDe(proyecto);
-  const periodos = estado.forecast.periodos || [];
-  const inicio = periodos.find(p => Number.isFinite(fila?.[p+'_fijo']) && fila[p+'_fijo'] !== 0) || null;
-  const fin = periodoFinProyecto(proyecto);
-  const fueraDeVigencia = !!fin && periodos.some(p => p > fin &&
-    ((Number.isFinite(fila?.[p+'_fijo']) && fila[p+'_fijo'] !== 0) ||
-     (Number.isFinite(fila?.[p+'_upside']) && fila[p+'_upside'] !== 0)));
-  return {inicio, fin, fueraDeVigencia};
-}
-function pasaPeriodoProyecto(proyecto) {
-  if (!estado.forecast.timeline) return true;
-  const indices = mesesActivos();
-  if (!indices.length) return false;
-  const desde = MESES_ES[indices[0]], hasta = MESES_ES[indices.at(-1)];
-  const {inicio, fin} = vidaProyecto(proyecto);
-  return (!fin || fin >= desde) && (!inicio || inicio <= hasta);
-}
-function mesesTimelineProyecto(proyecto) {
-  if (!estado.forecast.timeline) return mesesActivos();
-  const {inicio, fin} = vidaProyecto(proyecto);
-  return mesesActivos().filter(i => (!inicio || MESES_ES[i] >= inicio) && (!fin || MESES_ES[i] <= fin));
-}
 function actualizarResumenRango() {
   if (!estado.forecast.timeline) return;
   const visibles = estado.proyectos.filter(pasaVisibilidadProyecto);
@@ -327,65 +171,7 @@ function actualizarResumenRango() {
     (sinInicio ? ` · ${sinInicio} sin primer commit` : '') + (sinFin ? ` · ${sinFin} sin fecha fin` : '');
 }
 
-function etiquetaMesRevenue(indice) {
-  const mes = NOMBRES_MESES[indice % 12];
-  return `${mes.charAt(0).toUpperCase() + mes.slice(1, 3)} ${Math.floor(indice / 12)}`;
-}
 
-/** Calendario de 2026 y reparto uniforme del Backlog fuente hasta cada fecha fin futura. */
-function serieBacklogRevenuePorMes(proyectos) {
-  if(estado.forecast.timeline) {
-    return Object.fromEntries(mesesActivos().map(i=>{
-      const m=MESES_ES[i];let fijo=0,upside=0,conDatos=false;
-      proyectos.forEach(p=>{const b=backlogDe(p);if(typeof b?.[m+'_fijo']==='number'){fijo+=b[m+'_fijo'];upside+=b[m+'_upside']||0;conDatos=true;}});
-      return [etiquetaPeriodoCalendario(m),{Commit:conDatos?fijo:null,Upside:conDatos?upside:null}];
-    }));
-  }
-  let valorOfTotal = 0;
-  let acum2025Total = 0;
-  const commitPorMes = new Array(12).fill(0);
-  const diciembre = anioRevenue() * 12 + 11;
-  const proyecciones = [];
-  let ultimoMes = diciembre;
-  proyectos.forEach(p => {
-    const booking = valorBooking(p);
-    const acum = acumuladoAnterior(p);
-    valorOfTotal += booking || 0;
-    acum2025Total += acum || 0;
-    const fila = backlogDe(p);
-    if (!fila) return;
-    const fin = mesFinalizacion(p);
-    if (fin !== null && fin > diciembre) {
-      ultimoMes = Math.max(ultimoMes, fin);
-      const saldo = backlogHoy(p);
-      if (Number.isFinite(saldo)) proyecciones.push({ saldo, meses: fin - diciembre });
-    }
-    MESES_ES.forEach((m, i) => {
-      const v = fila[m + '_fijo'];
-      commitPorMes[i] += typeof v === 'number' ? v : 0;
-    });
-  });
-
-  const datos = {};
-  let acumulado = 0;
-  MESES_ES.forEach((m, i) => {
-    acumulado += commitPorMes[i];
-    const etiqueta = etiquetaMesRevenue(anioRevenue() * 12 + i);
-    datos[etiqueta] = { Commit: acumulado, Backlog: valorOfTotal - acum2025Total - acumulado };
-  });
-  const commitAnual = acumulado;
-  const backlogDiciembre = valorOfTotal - acum2025Total - commitAnual;
-  for (let mes = diciembre + 1; mes <= ultimoMes; mes++) {
-    const transcurridos = mes - diciembre;
-    const estimado = proyecciones.reduce((suma, p) => suma +
-      (transcurridos >= p.meses ? p.saldo : p.saldo * transcurridos / p.meses), 0);
-    datos[etiquetaMesRevenue(mes)] = {
-      Commit: commitAnual + estimado,
-      Backlog: backlogDiciembre - estimado,
-    };
-  }
-  return datos;
-}
 
 function pintarProyeccionBacklogRevenue(svg, proyectos, nota) {
   if(estado.forecast.timeline) {
@@ -410,140 +196,7 @@ function pintarProyeccionBacklogRevenue(svg, proyectos, nota) {
   }
 }
 
-function porcentajeEjecucionProyecto(p) {
-  const booking=valorBooking(p),acum=acumuladoHoy(p);
-  return Number.isFinite(booking)&&booking>0&&Number.isFinite(acum)?100*acum/booking:null;
-}
-function corteFinanciero() {
-  const fecha=estado.metadataProyectos?.fecha_referencia;
-  if(/^\d{4}-\d{2}-\d{2}$/.test(fecha||''))return fecha.slice(0,7);
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit'}).formatToParts(new Date());
-  return parts.find(p=>p.type==='year').value+'-'+parts.find(p=>p.type==='month').value;
-}
-function commitPendienteProyecto(p) {
-  const b=backlogDe(p);if(!b)return null;
-  const anio=b.anio_atributos??estado.forecast.anio;
-  const meses=Array.from({length:12},(_,i)=>`${anio}-${String(i+1).padStart(2,'0')}`).filter(m=>m>corteFinanciero());
-  const valores=meses.map(m=>b[(estado.forecast.timeline?m:MESES_ES[Number(m.slice(5))-1])+'_fijo']);
-  return valores.every(Number.isFinite)?valores.reduce((a,b)=>a+b,0):null;
-}
-function proyeccionReferencia(p) {
-  const acum=acumuladoHoy(p),pendiente=commitPendienteProyecto(p);
-  return Number.isFinite(acum)&&Number.isFinite(pendiente)?acum+pendiente:null;
-}
-function resumenFinanciero(proyectos) {
-  const suma=fn=>{const n=proyectos.map(fn).filter(Number.isFinite);return n.length||!proyectos.length?n.reduce((a,b)=>a+b,0):null;};
-  const faltantes=proyectos.filter(p=>![valorBooking(p),acumuladoHoy(p),backlogHoy(p),commitPendienteProyecto(p)].every(Number.isFinite)).length;
-  const booking=suma(valorBooking),backlog=suma(backlogHoy),proyectado=suma(proyeccionReferencia),pendiente=suma(commitPendienteProyecto);
-  const diferencia=faltantes||![booking,backlog,proyectado].every(Number.isFinite)?null:booking-backlog-proyectado;
-  return {booking,backlog,proyectado,pendiente,faltantes,diferencia:diferencia!==null&&Math.abs(diferencia)<.01?0:diferencia,
-    referencias:[...new Set(proyectos.map(p=>backlogDe(p)?.anio_atributos??estado.forecast.anio))].sort()};
-}
-function calendarioVidaProyecto(p) {
-  const vida=vidaProyecto(p);if(!vida.inicio)return [];
-  const registrados=(estado.forecast.periodos||[]).filter(m=>Number.isFinite(backlogDe(p)?.[m+'_fijo'])&&backlogDe(p)[m+'_fijo']!==0);
-  const fin=vida.fin||registrados.at(-1);if(!fin||fin<vida.inicio)return [];
-  let n=Number(vida.inicio.slice(0,4))*12+Number(vida.inicio.slice(5))-1;
-  const ultimo=Number(fin.slice(0,4))*12+Number(fin.slice(5))-1;
-  if(ultimo-n>1200)return [];
-  const meses=[];for(;n<=ultimo;n++)meses.push(`${Math.floor(n/12)}-${String(n%12+1).padStart(2,'0')}`);
-  return meses;
-}
-function indicesVidaProyecto(p) {
-  const vida=calendarioVidaProyecto(p);
-  return vida.map(m=>MESES_ES.indexOf(m)).filter(i=>i>=0);
-}
-function serieSaldoProyecto(p) {
-  const b=backlogDe(p),booking=valorBooking(p),vida=vidaProyecto(p),meses=calendarioVidaProyecto(p);
-  if(!b||!Number.isFinite(booking)||!meses.length)return {datos:{},nota:'Sin Booking, primer commit o vigencia válida suficiente para construir la curva.'};
-  const referencia=b.anio_atributos??estado.forecast.anio;
-  const previos=(estado.forecast.periodos||[]).filter(m=>m>=vida.inicio&&Number(m.slice(0,4))<referencia);
-  let arrastre=b.acumulado_anterior;
-  if(!Number.isFinite(arrastre)||previos.some(m=>!Number.isFinite(b[m+'_fijo'])))arrastre=null;
-  else arrastre-=previos.reduce((a,m)=>a+b[m+'_fijo'],0);
-  const datos={'Inicio del registro':{'Revenue acumulado':0,'Saldo contractual':booking}};
-  let acumulado=arrastre,completo=Number.isFinite(arrastre);
-  for(const m of meses){
-    if(!Number.isFinite(b[m+'_fijo']))completo=false;
-    if(completo)acumulado+=b[m+'_fijo'];
-    datos[etiquetaPeriodoCalendario(m)]={'Revenue acumulado':completo?acumulado:null,'Saldo contractual':completo?booking-acumulado:null};
-  }
-  const saldo=completo?booking-acumulado:null;
-  let nota='Saldo contractual = Booking − revenue acumulado; es distinto del Backlog fuente, que ya descuenta los commits del año. Se usa un solo Booking por proyecto. ';
-  if(Number.isFinite(arrastre)&&arrastre!==0)nota+=`El primer mes incorpora ${formatearDineroExacto(arrastre)} de acumulado anterior al calendario disponible. `;
-  if(!vida.fin)nota+='Sin fecha fin: la curva termina en el último mes con commit registrado. ';
-  nota+=saldo===null?'Hay meses sin cobertura: la curva queda sin dato; no se inventa revenue.':Math.abs(saldo)<.01?'Los commits cubren el Booking y el saldo llega a cero.':`Saldo al finalizar según los commits cargados: ${formatearDineroExacto(saldo)}${saldo<0?' de ejecución excedente':''}. No se fuerza a cero ni se reparte saldo sin commit.`;
-  return {datos,nota,saldo};
-}
-function textoAyudaGlobal() {
-  return 'El rango selecciona proyectos cuya vida registrada se solapa con las fechas elegidas: desde el primer commit distinto de cero hasta su fecha fin, ambos inclusive. No exige tener commit en cada trimestre. Si falta un límite, se usa solo el conocido. México filtra país México; NSSA incluye el resto de NOLA. Commit y Upside suman los meses del rango. Booking, acumulado, proyectado y Backlog usan una sola fuente por proyecto, con preferencia por el año actual. El detalle muestra la vida completa, sin recortarla por este rango.';
-}
-function actualizarAyudas() {
-  const texto=textoAyudaGlobal(),ayuda=document.getElementById('ayuda-rango-texto');if(ayuda)ayuda.textContent=texto;
-  const r=resumenFinanciero(estado.proyectosFiltrados),ref=r.referencias.map(a=>'FY'+a).join(', ')||'sin fuente';
-  const info={
-    'kpi-total-proyectos':'Proyectos que cumplen el rango de vigencia, territorio, estado y filtros seleccionados.',
-    'kpi-valor-of-total':`Booking de BackLog NOLA, una vez por proyecto. Referencia financiera: ${ref}; no se suman Bookings de distintos años.`,
-    'kpi-acumulado-hoy':`Acumulado anterior más Commit hasta ${etiquetaPeriodoCalendario(corteFinanciero())}, inclusive, del año financiero de referencia (${ref}). No es solo el revenue del rango seleccionado.`,
-    'kpi-backlog-2026':`Backlog fuente de ${ref}. Ya descuenta el Commit planeado de todo ese año; no es Booking menos acumulado a hoy.`,
-    'kpi-pct-ejecucion':'Revenue acumulado a hoy dividido por Booking; ponderado por monto.',
-    'kpi-revenue-periodo':`Suma de Commit en ${periodoActual().etiqueta}; cambia con el rango global.`,
-    'kpi-upside-periodo':`Suma de Upside en ${periodoActual().etiqueta}; no se considera revenue comprometido.`,
-    'kpi-commit-pendiente':`Commit fuente posterior al corte (${etiquetaPeriodoCalendario(corteFinanciero())}) dentro del año de referencia ${ref}; independiente del rango de revenue.`,
-    'kpi-proyectado':`Acumulado al corte + Commit pendiente (${formatearDineroExacto(r.pendiente)}). Referencia ${ref}.`,
-    'kpi-diferencia-booking':`Booking − proyectado − Backlog fuente. Cero significa conciliado. Positivo: valor sin explicar; negativo: excedente. ${r.faltantes?r.faltantes+' proyectos tienen cifras incompletas.':'Se usan importes fuente sin ajustar para forzar igualdad.'}`,
-  };
-  document.querySelectorAll('.fila-kpis-pms .kpi-etiqueta').forEach(label=>{
-    if(label.querySelector('.ayuda-kpi'))return;
-    const ayuda=document.createElement('button');ayuda.type='button';ayuda.className='ayuda-kpi';ayuda.textContent='?';
-    ayuda.title='Portafolio por PM: respeta el rango global de vigencia y el territorio. Commit y Upside suman los meses seleccionados; Booking y Backlog se toman una vez por proyecto del año de referencia, con su estado actual.';
-    ayuda.setAttribute('aria-label',ayuda.title);label.appendChild(ayuda);
-  });
-  for(const [id,title]of Object.entries(info)){
-    const valor=document.getElementById(id),tile=valor?.closest('.kpi-tile');if(!tile)continue;
-    valor.title=title;
-    let ayuda=tile.querySelector('.ayuda-kpi');
-    if(!ayuda){ayuda=document.createElement('button');ayuda.type='button';ayuda.className='ayuda-kpi';ayuda.textContent='?';tile.querySelector('.kpi-etiqueta').appendChild(ayuda);}
-    ayuda.title=title;ayuda.setAttribute('aria-label',title);
-  }
-}
 
-function calcularKPIs() {
-  const proyectos = estado.proyectosFiltrados;
-  const sumaCalculado = fn => proyectos.reduce((acc, p) => {
-    const v = fn(p);
-    return acc + (typeof v === 'number' ? v : 0);
-  }, 0);
-
-  const booking = sumaCalculado(valorBooking);
-  const acumulado = sumaCalculado(acumuladoHoy);
-  const backlog = sumaCalculado(backlogHoy);
-
-  const texto = (id, valor) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = valor;
-  };
-
-  texto('kpi-total-proyectos', proyectos.length.toLocaleString('es'));
-  texto('kpi-valor-of-total', formatearDinero(booking));
-  texto('kpi-acumulado-hoy', formatearDinero(acumulado));
-  texto('kpi-backlog-2026', formatearDinero(backlog));
-  // Ejecución global = lo ejecutado sobre lo contratado, no el promedio de
-  // los porcentajes: un proyecto de 2 millones no pesa igual que uno de 20 mil.
-  texto('kpi-pct-ejecucion', booking > 0 ? (acumulado / booking * 100).toFixed(1) + '%' : '—');
-
-  const importesPeriodo=proyectos.map(revenuePeriodo).filter(Number.isFinite);
-  const rev=importesPeriodo.length||!proyectos.length?importesPeriodo.reduce((a,b)=>a+b,0):null;
-  texto('kpi-revenue-periodo', formatearDinero(rev));
-  texto('kpi-revenue-periodo-etq', `Commit · ${periodoActual().etiqueta}`);
-  const financiero=resumenFinanciero(proyectos);
-  const upsides=proyectos.map(upsidePeriodo).filter(Number.isFinite);
-  texto('kpi-upside-periodo',formatearDinero(upsides.length||!proyectos.length?upsides.reduce((a,b)=>a+b,0):null));
-  texto('kpi-commit-pendiente',formatearDinero(financiero.pendiente));
-  texto('kpi-proyectado',formatearDinero(financiero.proyectado));
-  texto('kpi-diferencia-booking',formatearDinero(financiero.diferencia));
-  actualizarAyudas();
-}
 
 // ============================================================================
 // FILTROS
@@ -569,67 +222,9 @@ const DIMENSIONES = [
 
 const SIN_DATO = '(sin dato)';
 
-// ---------------------------------------------------------------------------
-// Periodos del calendario de revenue
-// ---------------------------------------------------------------------------
 
-const NOMBRES_MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
-let MESES_ES = [...NOMBRES_MESES];
-let PERIODOS = [
-  { id: 'anio', etiqueta: 'Todo el año', meses: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
-  { id: 'q1', etiqueta: 'Q1 · ene-mar', meses: [0, 1, 2] },
-  { id: 'q2', etiqueta: 'Q2 · abr-jun', meses: [3, 4, 5] },
-  { id: 'q3', etiqueta: 'Q3 · jul-sep', meses: [6, 7, 8] },
-  { id: 'q4', etiqueta: 'Q4 · oct-dic', meses: [9, 10, 11] },
-  ...MESES_ES.map((m, i) => ({
-    id: m, etiqueta: m.charAt(0).toUpperCase() + m.slice(1), meses: [i],
-  })),
-];
 
-function periodoActual() {
-  if(estado.periodo==='rango'&&estado.rangoTimeline) {
-    const {desde,hasta}=estado.rangoTimeline;
-    return {id:'rango',etiqueta:etiquetaPeriodoCalendario(desde)+' – '+etiquetaPeriodoCalendario(hasta),
-      meses:MESES_ES.map((p,i)=>p>=desde&&p<=hasta?i:-1).filter(i=>i>=0)};
-  }
-  return PERIODOS.find(p => p.id === estado.periodo) || PERIODOS[0];
-}
-
-/** Índices de mes que entran en el periodo elegido. */
-function mesesActivos() {
-  return periodoActual().meses;
-}
-
-/** Suma fijo y upside de un tramo `meses` (12 pares [fijo, upside]). */
-function sumarMeses(pares, indices) {
-  let fijo = 0, upside = 0;
-  (indices || mesesActivos()).forEach(i => {
-    const par = pares[i];
-    if (!par) return;
-    fijo += par[0] || 0;
-    upside += par[1] || 0;
-  });
-  return { fijo, upside };
-}
-
-/** Variaciones solo en meses con cobertura en ambos cortes; añadir un año no es un movimiento. */
-function coberturaCalendario(snapshot,indices=mesesActivos()) {
-  return !estado.forecast.timeline || !snapshot.anios_disponibles || indices.every(i=>snapshot.anios_disponibles.includes(Number(MESES_ES[i]?.slice(0,4))));
-}
-function compararMeses(a,b,indices=mesesActivos()) {
-  let fijoA=0,fijoB=0,upsideA=0,upsideB=0,nuevos=0;
-  indices.forEach(i=>{
-    const anterior=a?.meses?.[i],nuevo=b?.meses?.[i];
-    if(!Number.isFinite(anterior?.[0])||!Number.isFinite(nuevo?.[0])) {
-      if(Number.isFinite(nuevo?.[0]))nuevos++;return;
-    }
-    fijoA+=anterior[0];fijoB+=nuevo[0];
-    upsideA+=anterior[1]||0;upsideB+=nuevo[1]||0;
-  });
-  return {fijoA,fijoB,upsideA,upsideB,nuevos};
-}
 
 /**
  * Selector de periodo. Se dibuja en varias pestañas pero todas comparten el
@@ -1148,7 +743,7 @@ function renderizarTabla() {
       } else if (key === 'valor_of') {
         valor = valorBooking(proyecto);
       } else if (key === 'acumulado_a_hoy') {
-        valor = acumuladoHoy(proyecto);
+        valor = ejecutadoProyecto(proyecto);
       } else if ((key === 'consumido_2025' || key === 'acumulado_anterior')) {
         valor = acumuladoAnterior(proyecto);
       } else if ((key === 'backlog_2026' || key === 'backlog')) {
@@ -1292,7 +887,7 @@ function ordenarTabla(columna) {
     if (columna === '__revenue_periodo') return revenuePeriodo(p);
     if (columna === '__identificador') return identificador(p).valor;
     if (columna === 'valor_of') return valorBooking(p);
-    if (columna === 'acumulado_a_hoy') return acumuladoHoy(p);
+    if (columna === 'acumulado_a_hoy') return ejecutadoProyecto(p);
     if ((columna === 'consumido_2025' || columna === 'acumulado_anterior')) return acumuladoAnterior(p);
     if ((columna === 'backlog_2026' || columna === 'backlog')) return backlogHoy(p);
     return p[columna];
@@ -2257,7 +1852,7 @@ function renderizarResumenPM(proyectos) {
     return valores.length || !portafolio.length ? valores.reduce((a, b) => a + b, 0) : null;
   };
   const booking = sumar(valorBooking);
-  const acumulado = sumar(acumuladoHoy);
+  const acumulado = sumar(ejecutadoProyecto);
   const backlog = sumar(backlogHoy);
   const porcentaje = booking > 0 && acumulado !== null ? acumulado / booking * 100 : null;
 
@@ -2301,7 +1896,7 @@ function renderizarResumenPM(proyectos) {
   });
 
   const completos = portafolio.filter(p =>
-    [valorBooking(p), acumuladoHoy(p), backlogHoy(p)].every(Number.isFinite)).length;
+    [valorBooking(p), ejecutadoProyecto(p), backlogHoy(p)].every(Number.isFinite)).length;
   const faltantes = portafolio.length - completos;
   document.getElementById('pm-cobertura').textContent = !portafolio.length
     ? 'No hay proyectos para este PM con los filtros activos.'
@@ -2334,7 +1929,7 @@ function actualizarGraficas() {
     // Calcular estadísticas del vendedor
     const proysVendedor = proyectos.filter(p => valorDimension(p, 'vendedor') === vendedorUnico);
     const bookingTotal = proysVendedor.reduce((a, p) => a + (valorBooking(p) || 0), 0);
-    const acum = proysVendedor.reduce((a, p) => a + (acumuladoHoy(p) || 0), 0);
+    const acum = proysVendedor.reduce((a, p) => a + (ejecutadoProyecto(p) || 0), 0);
     const backlogTotal = proysVendedor.reduce((a, p) => a + (backlogHoy(p) || 0), 0);
     const pctEjec = bookingTotal > 0 ? (acum / bookingTotal * 100).toFixed(1) : '—';
 
@@ -2404,12 +1999,12 @@ function actualizarGraficas() {
     formato: 'dinero', unidad: 'Valor Booking',
   });
 
-  // 4. Ejecución por PM (recalculado: acumuladoHoy / valorBooking)
+  // 4. Ejecución por PM (recalculado: ejecutadoProyecto / valorBooking)
   const suma = new Map(), cuenta = new Map();
   proyectos.forEach(p => {
     if (!p.pm_lider) return;
     const booking = valorBooking(p);
-    const acum = acumuladoHoy(p);
+    const acum = ejecutadoProyecto(p);
     if (booking === null || acum === null || booking <= 0) return;
     const pct = acum / booking;
     const k = String(p.pm_lider);
@@ -2436,7 +2031,7 @@ function actualizarGraficas() {
     }
     const acc = porCliente.get(cli);
     acc.booking += valorBooking(p) || 0;
-    acc.acumulado += acumuladoHoy(p) || 0;
+    acc.acumulado += ejecutadoProyecto(p) || 0;
     acc.proyectada += proyectadaAnio(p) || 0;
     acc.backlog += backlogHoy(p) || 0;
   });
@@ -2473,7 +2068,7 @@ function actualizarGraficas() {
       booking: valorBooking(p),
       series: [
         { nombre: 'Valor Booking', valor: valorBooking(p), color: COLORES_SERIES_COMPARACION.booking },
-        { nombre: 'Revenue acumulado a hoy', valor: acumuladoHoy(p), color: COLORES_SERIES_COMPARACION.acumulado },
+        { nombre: 'Revenue acumulado a hoy', valor: ejecutadoProyecto(p), color: COLORES_SERIES_COMPARACION.acumulado },
         { nombre: 'Ejecución proyectada', valor: proyectadaAnio(p), color: COLORES_SERIES_COMPARACION.proyectada },
         { nombre: 'Backlog', valor: backlogHoy(p), color: COLORES_SERIES_COMPARACION.backlog },
       ],
@@ -2493,7 +2088,7 @@ function actualizarGraficas() {
     }
     const acc = porVendedor.get(vend);
     acc.booking += valorBooking(p) || 0;
-    acc.acumulado += acumuladoHoy(p) || 0;
+    acc.acumulado += ejecutadoProyecto(p) || 0;
     acc.proyectada += proyectadaAnio(p) || 0;
     acc.backlog += backlogHoy(p) || 0;
   });
@@ -2646,7 +2241,7 @@ function renderizarTablaNoIniciados() {
     divBarra.className = 'inline-backlog-barra-container';
     const contexto = porcentaje === null
       ? 'Sin importes suficientes para calcular la ejecución del contrato.'
-      : `${etiquetaPorcentaje} ejecutado del Booking (${formatearDineroExacto(acumuladoHoy(p))} / ${formatearDineroExacto(valorBooking(p))}). El importe de backlog se muestra por separado.`;
+      : `${etiquetaPorcentaje} ejecutado del Booking (${formatearDineroExacto(ejecutadoProyecto(p))} / ${formatearDineroExacto(valorBooking(p))}). El importe de backlog se muestra por separado.`;
     divBarra.title = contexto;
     divBarra.setAttribute('aria-label', `Ejecución de ${nombre}. ${contexto}`);
     if (porcentaje !== null) {
@@ -3421,7 +3016,7 @@ function chip(texto, clase, titulo) {
  */
 function renderizarEncabezadoProyecto(contenedor, proyecto) {
   const booking = valorBooking(proyecto);
-  const acum = acumuladoHoy(proyecto);
+  const acum = ejecutadoProyecto(proyecto);
   const backlog = backlogHoy(proyecto);
   const consumido = acumuladoAnterior(proyecto);
   const pct = (booking && acum !== null) ? (acum / booking) * 100 : null;
@@ -5096,7 +4691,7 @@ function crearFilaProyectosPM(filaPM) {
     trp.addEventListener('click', () => abrirDetalle(p));
 
     const booking = valorBooking(p) || 0;
-    const acum = acumuladoHoy(p) || 0;
+    const acum = ejecutadoProyecto(p) || 0;
     const backlog = backlogHoy(p) || 0;
     const pctEjec = booking > 0 ? (acum / booking * 100) : 0;
 
@@ -5619,7 +5214,7 @@ function construirResumenReporte(contenido, vista, nombreVista, partes) {
     const valores = proyectos.map(fn).filter(Number.isFinite);
     return valores.length || !proyectos.length ? valores.reduce((s, v) => s + v, 0) : null;
   };
-  const booking = sumar(valorBooking), acumulado = sumar(acumuladoHoy);
+  const booking = sumar(valorBooking), acumulado = sumar(ejecutadoProyecto);
   const perfiles = [estado.forecast.timeline?'Timeline · '+periodoActual().etiqueta:`Forecast ${anioRevenue()}`];
   if (vista.id === 'pestana-listado') {
     if (estado.filtros.pm_lider.length === 1) perfiles.push(`PM: ${estado.filtros.pm_lider[0]}`);
@@ -5681,7 +5276,7 @@ function construirResumenReporte(contenido, vista, nombreVista, partes) {
     status.set(s, (status.get(s) || 0) + 1);
   });
   bloque('Proyectos por estado', [...estados].map(([e, n]) => `${e}: ${n}`));
-  const completos = proyectos.filter(p => [valorBooking(p), acumuladoHoy(p), backlogHoy(p)].every(Number.isFinite)).length;
+  const completos = proyectos.filter(p => [valorBooking(p), ejecutadoProyecto(p), backlogHoy(p)].every(Number.isFinite)).length;
   bloque('Semáforo y cobertura del dato', [
     ...[...status].map(([s, n]) => `${s === SIN_DATO ? 'Sin semáforo' : s}: ${n}`),
     `${completos} de ${proyectos.length} proyectos con cifras completas de BackLog NOLA.`,

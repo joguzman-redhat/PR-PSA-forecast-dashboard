@@ -63,3 +63,27 @@ test('solo js/api.js conoce los nombres de dinero con que la API entrega el back
     else if (path.basename(modulo.ruta) !== 'app.js') assert.doesNotMatch(codigo, antiguos, path.basename(modulo.ruta));
   }
 });
+
+test('los calculos de dinero, calendario y vida del proyecto viven en modulos propios', () => {
+  const porNombre = new Map(grafoModulos().map(m => [path.basename(m.ruta), m]));
+  const esperado = {
+    'calendario.js': ['MESES_ES', 'PERIODOS', 'configurarCalendarioTimeline', 'periodoActual', 'mesesActivos'],
+    'dinero-proyecto.js': ['valorBooking', 'ejecutadoProyecto', 'backlogHoy', 'revenuePeriodo', 'upsidePeriodo', 'resumenFinanciero'],
+    'vida-proyecto.js': ['mesFinalizacion', 'vidaProyecto', 'calendarioVidaProyecto'],
+    'series-revenue.js': ['serieBacklogRevenuePorMes', 'serieSaldoProyecto'],
+    'kpis.js': ['calcularKPIs'],
+  };
+  for (const [archivo, nombres] of Object.entries(esperado)) {
+    assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
+    for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
+  }
+  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (valorBooking|ejecutadoProyecto|vidaProyecto|calcularKPIs)\b/m);
+});
+
+test('los identificadores de los modulos de calculo no usan terminos prohibidos del glosario', () => {
+  const prohibidos = /\b(acumuladoHoy|corteFinanciero|valorOf|saldoContractual)\b/;
+  for (const archivo of ['calendario.js', 'dinero-proyecto.js', 'vida-proyecto.js', 'series-revenue.js', 'kpis.js']) {
+    const codigo = leer(path.join('js', archivo)).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    assert.doesNotMatch(codigo, prohibidos, archivo);
+  }
+});
