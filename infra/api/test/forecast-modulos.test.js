@@ -104,3 +104,27 @@ test('el listado de proyectos y las columnas redimensionables viven en modulos p
   }
   assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (renderizarTabla|ordenarTabla|asegurarResizers)\b/m);
 });
+
+test('cada tipo de grafica vive en un modulo propio', () => {
+  const porNombre = new Map(grafoModulos().map(m => [path.basename(m.ruta), m]));
+  const esperado = {
+    'grafica-tooltip.js': ['mostrarTooltip', 'moverTooltip', 'ocultarTooltip'],
+    'grafica-base.js': ['svgEl', 'colorDeEntidad', 'fijarColores', 'escalaTexto'],
+    'grafica-registro.js': ['registrarGrafica', 'ajustarGraficasVisibles'],
+    'grafica-barras-simple.js': ['crearGraficaBarrasSimple'],
+    'grafica-barras-agrupadas-horizontal.js': ['crearGraficaBarrasAgrupadasHorizontal'],
+    'grafica-barras-apiladas.js': ['crearGraficaBarrasApiladas'],
+    'grafica-linea.js': ['crearGraficaLinea'],
+    'graficas-inicio.js': ['actualizarGraficas'],
+    'semaforo-proyectos.js': ['renderizarSemaforoProyectos'],
+    'resumen-pm.js': ['renderizarResumenPM'],
+    'tabla-no-iniciados.js': ['renderizarTablaNoIniciados'],
+  };
+  for (const [archivo, nombres] of Object.entries(esperado)) {
+    assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
+    for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
+  }
+  // La vertical no la llama nadie todavia, asi que no entra al grafo: se comprueba el archivo.
+  assert.match(fs.readFileSync(path.join(RAIZ, 'js/grafica-barras-agrupadas-vertical.js'), 'utf8'), /^export function crearGraficaBarrasAgrupadasVertical\b/m);
+  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (svgEl|crearGrafica(Barras\w+|Linea)|actualizarGraficas)\b/m);
+});
