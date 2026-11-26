@@ -56,11 +56,14 @@ test('la imagen de la API y su lista blanca de construccion incluyen los modulos
 });
 
 test('solo js/api.js conoce los nombres de dinero con que la API entrega el backlog', () => {
+  // Los ids de columna de Info Proyectos (valor_of, ...) viven en el listado y en
+  // sus campos: son claves de la configuración de columnas, no filas de backlog.
+  const idsDeColumna = ['listado-proyectos.js', 'campos-proyecto.js'];
   const antiguos = /\b(valor_of|acumulado_a_fecha|total_ejecutado_acumulado|acum_2025)\b/;
   for (const modulo of grafoModulos()) {
     const codigo = modulo.fuente.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     if (path.basename(modulo.ruta) === 'api.js') assert.match(codigo, antiguos);
-    else if (path.basename(modulo.ruta) !== 'app.js') assert.doesNotMatch(codigo, antiguos, path.basename(modulo.ruta));
+    else if (path.basename(modulo.ruta) !== 'app.js' && !idsDeColumna.includes(path.basename(modulo.ruta))) assert.doesNotMatch(codigo, antiguos, path.basename(modulo.ruta));
   }
 });
 
@@ -86,4 +89,18 @@ test('los identificadores de los modulos de calculo no usan terminos prohibidos 
     const codigo = leer(path.join('js', archivo)).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     assert.doesNotMatch(codigo, prohibidos, archivo);
   }
+});
+
+test('el listado de proyectos y las columnas redimensionables viven en modulos propios', () => {
+  const porNombre = new Map(grafoModulos().map(m => [path.basename(m.ruta), m]));
+  const esperado = {
+    'listado-proyectos.js': ['renderizarTabla', 'ordenarTabla'],
+    'columnas-redimensionables.js': ['cargarAnchosDeStorage', 'asegurarResizers', 'setupMutationObserver'],
+    'campos-proyecto.js': ['CAMPOS_DINERO', 'identificador', 'claseVencimiento'],
+  };
+  for (const [archivo, nombres] of Object.entries(esperado)) {
+    assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
+    for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
+  }
+  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (renderizarTabla|ordenarTabla|asegurarResizers)\b/m);
 });
