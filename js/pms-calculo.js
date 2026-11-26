@@ -1,7 +1,8 @@
 // Cálculo de la tabla de PMs.
 
 import { mesesActivos } from './calendario.js';
-import { backlogDe, backlogHoy, revenuePeriodo, upsidePeriodo } from './dinero-proyecto.js';
+import { backlogHoy, revenuePeriodo, upsidePeriodo } from './dinero-proyecto.js';
+import { backlogDe } from './fila-backlog.js';
 import { estado } from './estado.js';
 import { SIN_DATO, pasaVisibilidadProyecto } from './filtros.js';
 

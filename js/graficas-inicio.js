@@ -2,7 +2,7 @@
 // proyectos filtrados del estado.
 
 import { identificador } from './campos-proyecto.js';
-import { backlogHoy, ejecutadoProyecto, proyectadaAnio, valorBooking } from './dinero-proyecto.js';
+import { backlogHoy, ejecutadoProyecto, proyectadoProyecto, valorBooking } from './dinero-proyecto.js';
 import { estado } from './estado.js';
 import { DIMENSIONES, SIN_DATO, valorDimension } from './filtros.js';
 import { aplicarFiltros } from './filtros-ui.js';
@@ -143,7 +143,7 @@ export function actualizarGraficas() {
     const acc = porCliente.get(cli);
     acc.booking += valorBooking(p) || 0;
     acc.acumulado += ejecutadoProyecto(p) || 0;
-    acc.proyectada += proyectadaAnio(p) || 0;
+    acc.proyectada += proyectadoProyecto(p) || 0;
     acc.backlog += backlogHoy(p) || 0;
   });
   const datosCliente = Array.from(porCliente, ([cli, vals]) => ({
@@ -153,7 +153,7 @@ export function actualizarGraficas() {
     series: [
       { nombre: 'Valor Booking', valor: vals.booking, color: COLORES_SERIES_COMPARACION.booking },
       { nombre: 'Revenue acumulado a hoy', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
-      { nombre: 'Ejecución proyectada', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
+      { nombre: 'Proyectado', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
       { nombre: 'Backlog', valor: vals.backlog, color: COLORES_SERIES_COMPARACION.backlog },
     ],
   })).sort((a, b) => b.booking - a.booking).slice(0, 10);
@@ -180,7 +180,7 @@ export function actualizarGraficas() {
       series: [
         { nombre: 'Valor Booking', valor: valorBooking(p), color: COLORES_SERIES_COMPARACION.booking },
         { nombre: 'Revenue acumulado a hoy', valor: ejecutadoProyecto(p), color: COLORES_SERIES_COMPARACION.acumulado },
-        { nombre: 'Ejecución proyectada', valor: proyectadaAnio(p), color: COLORES_SERIES_COMPARACION.proyectada },
+        { nombre: 'Proyectado', valor: proyectadoProyecto(p), color: COLORES_SERIES_COMPARACION.proyectada },
         { nombre: 'Backlog', valor: backlogHoy(p), color: COLORES_SERIES_COMPARACION.backlog },
       ],
     };
@@ -200,7 +200,7 @@ export function actualizarGraficas() {
     const acc = porVendedor.get(vend);
     acc.booking += valorBooking(p) || 0;
     acc.acumulado += ejecutadoProyecto(p) || 0;
-    acc.proyectada += proyectadaAnio(p) || 0;
+    acc.proyectada += proyectadoProyecto(p) || 0;
     acc.backlog += backlogHoy(p) || 0;
   });
   const datosVendedor = Array.from(porVendedor, ([vend, vals]) => ({
@@ -209,7 +209,7 @@ export function actualizarGraficas() {
     series: [
       { nombre: 'Valor Booking', valor: vals.booking, color: COLORES_SERIES_COMPARACION.booking },
       { nombre: 'Revenue acumulado a hoy', valor: vals.acumulado, color: COLORES_SERIES_COMPARACION.acumulado },
-      { nombre: 'Ejecución proyectada', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
+      { nombre: 'Proyectado', valor: vals.proyectada, color: COLORES_SERIES_COMPARACION.proyectada },
       { nombre: 'Backlog', valor: vals.backlog, color: COLORES_SERIES_COMPARACION.backlog },
     ],
   })).filter(d => d.etiqueta !== SIN_DATO)

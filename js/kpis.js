@@ -5,7 +5,7 @@ import { periodoActual, etiquetaPeriodoCalendario, mesReferenciaFinanciera } fro
 import { valorBooking, ejecutadoProyecto, backlogHoy, revenuePeriodo, upsidePeriodo, resumenFinanciero } from './dinero-proyecto.js';
 
 export function textoAyudaGlobal() {
-  return 'El rango selecciona proyectos cuya vida registrada se solapa con las fechas elegidas: desde el primer commit distinto de cero hasta su fecha fin, ambos inclusive. No exige tener commit en cada trimestre. Si falta un límite, se usa solo el conocido. México filtra país México; NSSA incluye el resto de NOLA. Commit y Upside suman los meses del rango. Booking, acumulado, proyectado y Backlog usan una sola fuente por proyecto, con preferencia por el año actual. El detalle muestra la vida completa, sin recortarla por este rango.';
+  return 'El rango selecciona proyectos cuya vida registrada se solapa con las fechas elegidas: desde el primer commit distinto de cero hasta su fecha fin, ambos inclusive. No exige tener commit en cada trimestre. Si falta un límite, se usa solo el conocido. México filtra país México; NSSA incluye el resto de NOLA. Commit y Upside suman los meses del rango. Booking, Ejecutado, Proyectado y Backlog usan una sola fuente por proyecto, con preferencia por el año actual, y cubren toda la vida del proyecto. El detalle muestra la vida completa, sin recortarla por este rango.';
 }
 
 export function actualizarAyudas() {
@@ -14,14 +14,14 @@ export function actualizarAyudas() {
   const info={
     'kpi-total-proyectos':'Proyectos que cumplen el rango de vigencia, territorio, estado y filtros seleccionados.',
     'kpi-valor-of-total':`Booking de BackLog NOLA, una vez por proyecto. Referencia financiera: ${ref}; no se suman Bookings de distintos años.`,
-    'kpi-acumulado-hoy':`Acumulado anterior más Commit hasta ${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}, inclusive, del año financiero de referencia (${ref}). No es solo el revenue del rango seleccionado.`,
+    'kpi-acumulado-hoy':`Ejecutado: acumulado anterior más el Commit de todos los meses hasta ${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}, inclusive, sobre toda la vida del proyecto. No es solo el revenue del rango seleccionado.`,
     'kpi-backlog-2026':`Backlog fuente de ${ref}. Ya descuenta el Commit planeado de todo ese año; no es Booking menos acumulado a hoy.`,
     'kpi-pct-ejecucion':'Revenue acumulado a hoy dividido por Booking; ponderado por monto.',
     'kpi-revenue-periodo':`Suma de Commit en ${periodoActual().etiqueta}; cambia con el rango global.`,
     'kpi-upside-periodo':`Suma de Upside en ${periodoActual().etiqueta}; no se considera revenue comprometido.`,
-    'kpi-commit-pendiente':`Commit fuente posterior al corte (${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}) dentro del año de referencia ${ref}; independiente del rango de revenue.`,
-    'kpi-proyectado':`Acumulado al corte + Commit pendiente (${formatearDineroExacto(r.pendiente)}). Referencia ${ref}.`,
-    'kpi-diferencia-booking':`Booking − proyectado − Backlog fuente. Cero significa conciliado. Positivo: valor sin explicar; negativo: excedente. ${r.faltantes?r.faltantes+' proyectos tienen cifras incompletas.':'Se usan importes fuente sin ajustar para forzar igualdad.'}`,
+    'kpi-commit-pendiente':`Commit de los meses posteriores a ${etiquetaPeriodoCalendario(mesReferenciaFinanciera())}, de cualquier año hasta el fin de la vida del proyecto (incluido 2027); independiente del rango de revenue. Nunca incluye Upside.`,
+    'kpi-proyectado':`Proyectado: Ejecutado más el Commit pendiente (${formatearDineroExacto(r.pendiente)}), sobre toda la vida del proyecto. Sin Upside.`,
+    'kpi-diferencia-booking':`Booking − Proyectado − Backlog sin planear (Backlog de la fuente menos el Commit registrado después de su Año fuente, que el Excel aún no descuenta). Cero significa conciliado. Positivo: valor sin explicar; negativo: excedente. ${r.faltantes?r.faltantes+' proyectos tienen cifras incompletas.':'Se usan importes fuente sin ajustar para forzar igualdad.'}`,
   };
   document.querySelectorAll('.fila-kpis-pms .kpi-etiqueta').forEach(label=>{
     if(label.querySelector('.ayuda-kpi'))return;

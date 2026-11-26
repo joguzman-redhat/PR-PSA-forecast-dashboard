@@ -2,7 +2,7 @@
 
 import { MESES_ES, compararMeses } from './calendario.js';
 import { claveProyecto } from './clave-proyecto.js';
-import { backlogDe } from './dinero-proyecto.js';
+import { backlogDe } from './fila-backlog.js';
 import { estado } from './estado.js';
 import { formatearDinero } from './formato.js';
 import { crearGraficaLinea } from './grafica-linea.js';

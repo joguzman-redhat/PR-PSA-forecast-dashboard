@@ -4,7 +4,8 @@
 import { estado } from './estado.js';
 import { formatearDinero, formatearNumero, formatearPorcentaje, normalizarValor, obtenerEtiquetaValor } from './formato.js';
 import { anioRevenue, periodoActual } from './calendario.js';
-import { backlogDe, valorBooking, acumuladoAnterior, revenuePeriodo, ejecutadoProyecto, backlogHoy } from './dinero-proyecto.js';
+import { valorBooking, acumuladoAnterior, revenuePeriodo, ejecutadoProyecto, backlogHoy } from './dinero-proyecto.js';
+import { backlogDe } from './fila-backlog.js';
 import { pasaVisibilidadProyecto } from './filtros.js';
 import { CAMPOS_DINERO, CAMPOS_PORCENTAJE, CAMPOS_ID, identificador, claseVencimiento } from './campos-proyecto.js';
 import { vistas } from './vistas.js';

@@ -156,6 +156,7 @@ test('barra contractual independiente del número de proyectos filtrados',async(
 });
 test('proyectado más Backlog explica Booking e informa diferencias sin rellenarlas',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();Object.assign(d.backlog[0],{anio_atributos:2026,valor_of:1000,acumulado_a_fecha:700,backlog:270,'2026-12_fijo':30});
+  delete d.backlog[0]['2027-01_fijo'];delete d.backlog[0]['2027-12_fijo']; // ADR 0001: el Proyectado cuenta 2027, y aqui quedaria con meses sin dato
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();let r=ui.resumenFinanciero(ui.estado.proyectos);
   assert.equal(r.proyectado,730);assert.equal(r.pendiente,30);assert.equal(r.diferencia,0);
   d.backlog[0]['2026-12_fijo']=10;r=ui.resumenFinanciero(ui.estado.proyectos);assert.equal(r.diferencia,20);

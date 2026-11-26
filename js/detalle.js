@@ -4,7 +4,7 @@
 import { MESES_ES, etiquetaPeriodoCalendario, mesesActivos, periodoActual } from './calendario.js';
 import { CAMPOS_DINERO, CAMPOS_PORCENTAJE } from './campos-proyecto.js';
 import { chip } from './chip.js';
-import { backlogDe } from './dinero-proyecto.js';
+import { backlogDe } from './fila-backlog.js';
 import { crearGraficaRevenueProyecto } from './detalle-grafica-revenue.js';
 import { renderizarEncabezadoProyecto } from './detalle-encabezado.js';
 import { renderizarHermanosDeCliente } from './detalle-hermanos-cliente.js';

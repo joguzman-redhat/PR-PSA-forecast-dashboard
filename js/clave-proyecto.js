@@ -1,6 +1,6 @@
 // Llave para cruzar un proyecto entre las fuentes.
 
-import { backlogDe } from './dinero-proyecto.js';
+import { backlogDe } from './fila-backlog.js';
 import { estado } from './estado.js';
 import { pasaVisibilidadProyecto } from './filtros.js';
 

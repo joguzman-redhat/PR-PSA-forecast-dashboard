@@ -2,28 +2,9 @@
 // Booking, Ejecutado, Backlog, Proyectado, Commit y Upside. Las filas llegan ya
 // con los nombres del glosario (ver api.js).
 import { estado } from './estado.js';
+import { backlogDe } from './fila-backlog.js';
+import { vidaProyecto } from './vida-proyecto.js';
 import { MESES_ES, mesesActivos, mesesEjecutadosForecast, mesReferenciaFinanciera } from './calendario.js';
-
-export function normalizarNombre(valor) {
-  if (valor === null || valor === undefined) return '';
-  return String(valor).normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^0-9a-z]+/g, '');
-}
-
-// Devuelve null si no hay match. Antes caia de vuelta al numero de fila, que
-// es justamente lo que mezclaba el revenue entre proyectos distintos.
-export function backlogDe(proyecto) {
-  if (proyecto.clave_timeline) return estado.backlogPorTimeline?.get(proyecto.clave_timeline) || null;
-  if (!proyecto) return null;
-  const pa = proyecto.num_pa;
-  if (pa !== null && pa !== undefined && pa !== '') {
-    const porPA = estado.backlogPorPA && estado.backlogPorPA.get(String(pa));
-    if (porPA) return porPA;
-  }
-  const n = normalizarNombre(proyecto.nombre_del_proyecto);
-  if (n && estado.backlogPorNombre) return estado.backlogPorNombre.get(n) || null;
-  return null;
-}
 
 /**
  * Valor Booking de un proyecto. TODA LA PLATA viene de BackLog NOLA, nunca de
@@ -73,14 +54,50 @@ export function upsidePeriodo(proyecto) {
 }
 
 /**
- * Revenue acumulado a hoy de un proyecto. acum_2025 es el saldo arrastrado del
- * año anterior; los meses de enero a hoy del año en curso suman el resto.
+ * Arrastre de un proyecto: lo ejecutado antes del primer mes con Commit de su
+ * vida. El acumulado anterior de la fila llega hasta el inicio de su Año fuente;
+ * si la vida empieza antes (un proyecto con Commit en 2026 cuya fuente es FY27),
+ * esos meses ya vienen dentro del acumulado anterior y se restan para no
+ * contarlos dos veces cuando se suman mes a mes. Sin dato si falta el acumulado
+ * anterior o algún mes de ese tramo.
+ */
+export function arrastreProyecto(proyecto) {
+  const b = backlogDe(proyecto);
+  if (!b) return null;
+  const inicio = vidaProyecto(proyecto).inicio;
+  const fuente = b.anio_atributos ?? estado.forecast.anio;
+  const previos = (estado.forecast.periodos || []).filter(m => m >= inicio && Number(m.slice(0, 4)) < fuente);
+  if (!Number.isFinite(b.acumulado_anterior) || previos.some(m => !Number.isFinite(b[m + '_fijo']))) return null;
+  return b.acumulado_anterior - previos.reduce((a, m) => a + b[m + '_fijo'], 0);
+}
+
+/**
+ * Ejecutado de un proyecto sobre toda su vida: el acumulado anterior más el
+ * Commit de todos los meses hasta el actual (de cualquier año), sin leer la
+ * columna de la API, que solo llega al fin del Año fuente. Si falta un mes
+ * pasado queda sin dato; solo mientras el mes actual siga dentro del Año fuente
+ * se usa la columna de la fila como respaldo, porque ahí coincide.
  * TODA LA PLATA viene de BackLog NOLA: si no hay fila de backlog, el proyecto
  * no tiene cifras de revenue (se muestra "—" en vez de cero).
  */
 export function ejecutadoProyecto(proyecto) {
   const fila = backlogDe(proyecto);
-  if(estado.forecast.timeline)return fila?.ejecutado ?? null;
+  if (estado.forecast.timeline) {
+    if (!fila) return null;
+    const hoy = mesReferenciaFinanciera();
+    const inicio = vidaProyecto(proyecto).inicio;
+    let acumulado = arrastreProyecto(proyecto);
+    if (Number.isFinite(acumulado)) {
+      for (const m of estado.forecast.periodos || []) {
+        if (!inicio || m < inicio || m > hoy) continue;
+        if (!Number.isFinite(fila[m + '_fijo'])) { acumulado = null; break; }
+        acumulado += fila[m + '_fijo'];
+      }
+      if (Number.isFinite(acumulado)) return acumulado;
+    }
+    const fuente = fila.anio_atributos ?? estado.forecast.anio;
+    return Number(hoy.slice(0, 4)) <= fuente && Number.isFinite(fila.ejecutado) ? fila.ejecutado : null;
+  }
   if (!fila) return null;
   const acum2025 = acumuladoAnterior(proyecto) ?? 0;
   // Enero hasta el mes en curso, inclusive.
@@ -104,11 +121,14 @@ export function backlogHoy(proyecto) {
 }
 
 /**
- * Ejecución proyectada al cierre del año = acum_2025 + suma de los 12 meses fijo.
+ * Proyectado de un proyecto: Ejecutado más el Commit de los meses futuros sobre
+ * toda su vida, incluido 2027. Nunca incluye Upside. Sin dato si falta el
+ * Ejecutado o algún mes futuro de su vida. En el modo anterior, sin timeline,
+ * sigue siendo el cierre del año: acum_2025 + los 12 meses fijo.
  */
-export function proyectadaAnio(proyecto) {
+export function proyectadoProyecto(proyecto) {
+  if (estado.forecast.timeline) return proyeccionReferencia(proyecto);
   const fila = backlogDe(proyecto);
-  if(estado.forecast.timeline)return fila?.proyectado ?? null;
   if (!fila) return null;
   const acum2025 = acumuladoAnterior(proyecto) ?? 0;
   const totalFijo = MESES_ES.reduce((acc, m) => {
@@ -123,12 +143,53 @@ export function porcentajeEjecucionProyecto(p) {
   return Number.isFinite(booking)&&booking>0&&Number.isFinite(acum)?100*acum/booking:null;
 }
 
+/** Meses YYYY-MM de `desde` a `hasta`, ambos inclusive. */
+function mesesEntre(desde, hasta) {
+  const lista = [];
+  let n = Number(desde.slice(0, 4)) * 12 + Number(desde.slice(5)) - 1;
+  const ultimo = Number(hasta.slice(0, 4)) * 12 + Number(hasta.slice(5)) - 1;
+  for (; n <= ultimo && lista.length < 1200; n++) lista.push(`${Math.floor(n / 12)}-${String(n % 12 + 1).padStart(2, '0')}`);
+  return lista;
+}
+
+/**
+ * Commit de los meses posteriores al actual, sobre toda la vida del proyecto
+ * (incluido 2027). Deben tener dato todos los meses futuros hasta el fin de su
+ * Año fuente y hasta el fin de su vida (Fecha fin, o el último mes con Commit);
+ * si falta uno, sin dato, nunca cero. Un Commit posterior a la Fecha fin se
+ * suma igual: se advierte, no se recorta.
+ */
 export function commitPendienteProyecto(p) {
   const b=backlogDe(p);if(!b)return null;
   const anio=b.anio_atributos??estado.forecast.anio;
-  const meses=Array.from({length:12},(_,i)=>`${anio}-${String(i+1).padStart(2,'0')}`).filter(m=>m>mesReferenciaFinanciera());
-  const valores=meses.map(m=>b[(estado.forecast.timeline?m:MESES_ES[Number(m.slice(5))-1])+'_fijo']);
-  return valores.every(Number.isFinite)?valores.reduce((a,b)=>a+b,0):null;
+  if(!estado.forecast.timeline){
+    const meses=Array.from({length:12},(_,i)=>`${anio}-${String(i+1).padStart(2,'0')}`).filter(m=>m>mesReferenciaFinanciera());
+    const valores=meses.map(m=>b[MESES_ES[Number(m.slice(5))-1]+'_fijo']);
+    return valores.every(Number.isFinite)?valores.reduce((a,b)=>a+b,0):null;
+  }
+  const hoy=mesReferenciaFinanciera(),periodos=estado.forecast.periodos||[];
+  const registrados=periodos.filter(m=>Number.isFinite(b[m+'_fijo'])&&b[m+'_fijo']!==0);
+  const finVida=vidaProyecto(p).fin||registrados.at(-1)||'';
+  const obligado=[`${anio}-12`,finVida].sort().at(-1);
+  // Cobertura exigida: desde el mes siguiente al actual, y no antes de enero del Año fuente.
+  const n=Number(hoy.slice(0,4))*12+Number(hoy.slice(5)),siguiente=`${Math.floor(n/12)}-${String(n%12+1).padStart(2,'0')}`;
+  const desde=[siguiente,`${anio}-01`].sort().at(-1);
+  const sinDato=desde<=obligado&&mesesEntre(desde,obligado).some(m=>!Number.isFinite(b[m+'_fijo']));
+  if(sinDato)return null;
+  return periodos.filter(m=>m>hoy&&Number.isFinite(b[m+'_fijo'])).reduce((a,m)=>a+b[m+'_fijo'],0);
+}
+
+/**
+ * Commit de los meses posteriores al Año fuente. El Backlog de la fuente ya
+ * descuenta el Commit de su propio año; lo que se registre después (2027 para
+ * una fuente FY26) todavía no está descontado, y por eso baja el Backlog sin
+ * planear: Booking = Ejecutado + Commit pendiente + Backlog sin planear.
+ */
+export function commitPosteriorAlAnioFuente(p) {
+  const b=backlogDe(p);if(!b)return null;
+  const fuente=b.anio_atributos??estado.forecast.anio;
+  return (estado.forecast.periodos||[]).filter(m=>Number(m.slice(0,4))>fuente)
+    .reduce((a,m)=>a+(Number.isFinite(b[m+'_fijo'])?b[m+'_fijo']:0),0);
 }
 
 export function proyeccionReferencia(p) {
@@ -140,7 +201,9 @@ export function resumenFinanciero(proyectos) {
   const suma=fn=>{const n=proyectos.map(fn).filter(Number.isFinite);return n.length||!proyectos.length?n.reduce((a,b)=>a+b,0):null;};
   const faltantes=proyectos.filter(p=>![valorBooking(p),ejecutadoProyecto(p),backlogHoy(p),commitPendienteProyecto(p)].every(Number.isFinite)).length;
   const booking=suma(valorBooking),backlog=suma(backlogHoy),proyectado=suma(proyeccionReferencia),pendiente=suma(commitPendienteProyecto);
-  const diferencia=faltantes||![booking,backlog,proyectado].every(Number.isFinite)?null:booking-backlog-proyectado;
-  return {booking,backlog,proyectado,pendiente,faltantes,diferencia:diferencia!==null&&Math.abs(diferencia)<.01?0:diferencia,
+  const posterior=suma(commitPosteriorAlAnioFuente);
+  const backlogSinPlanear=Number.isFinite(backlog)&&Number.isFinite(posterior)?backlog-posterior:null;
+  const diferencia=faltantes||![booking,backlogSinPlanear,proyectado].every(Number.isFinite)?null:booking-backlogSinPlanear-proyectado;
+  return {booking,backlog,backlogSinPlanear,proyectado,pendiente,faltantes,diferencia:diferencia!==null&&Math.abs(diferencia)<.01?0:diferencia,
     referencias:[...new Set(proyectos.map(p=>backlogDe(p)?.anio_atributos??estado.forecast.anio))].sort()};
 }

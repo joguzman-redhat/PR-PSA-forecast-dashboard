@@ -1,7 +1,7 @@
 // Vida del proyecto: Fecha fin, primer mes con Commit y los meses entre ambos.
 import { estado } from './estado.js';
 import { MESES_ES, mesesActivos } from './calendario.js';
-import { backlogDe } from './dinero-proyecto.js';
+import { backlogDe } from './fila-backlog.js';
 
 /** Fecha fin de Info Proyectos, sin desplazar días/meses por la zona horaria. */
 export function mesFinalizacion(proyecto) {

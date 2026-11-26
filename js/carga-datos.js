@@ -2,7 +2,7 @@
 import { estado } from './estado.js';
 import { obtenerTimeline } from './api.js';
 import { configurarCalendarioTimeline } from './calendario.js';
-import { normalizarNombre } from './dinero-proyecto.js';
+import { normalizarNombre } from './fila-backlog.js';
 
 export async function cargarDatos() {
   const principal = document.querySelector('.contenedor-principal');

@@ -3,7 +3,8 @@
 import { estado } from './estado.js';
 import { formatearDineroExacto } from './formato.js';
 import { MESES_ES, mesesActivos, anioRevenue, etiquetaMesRevenue, etiquetaPeriodoCalendario } from './calendario.js';
-import { backlogDe, valorBooking, acumuladoAnterior, backlogHoy } from './dinero-proyecto.js';
+import { valorBooking, acumuladoAnterior, backlogHoy, arrastreProyecto } from './dinero-proyecto.js';
+import { backlogDe } from './fila-backlog.js';
 import { mesFinalizacion, vidaProyecto, calendarioVidaProyecto } from './vida-proyecto.js';
 
 /** Calendario de 2026 y reparto uniforme del Backlog fuente hasta cada fecha fin futura. */
@@ -64,11 +65,7 @@ export function serieBacklogRevenuePorMes(proyectos) {
 export function serieSaldoProyecto(p) {
   const b=backlogDe(p),booking=valorBooking(p),vida=vidaProyecto(p),meses=calendarioVidaProyecto(p);
   if(!b||!Number.isFinite(booking)||!meses.length)return {datos:{},nota:'Sin Booking, primer commit o vigencia válida suficiente para construir la curva.'};
-  const referencia=b.anio_atributos??estado.forecast.anio;
-  const previos=(estado.forecast.periodos||[]).filter(m=>m>=vida.inicio&&Number(m.slice(0,4))<referencia);
-  let arrastre=b.acumulado_anterior;
-  if(!Number.isFinite(arrastre)||previos.some(m=>!Number.isFinite(b[m+'_fijo'])))arrastre=null;
-  else arrastre-=previos.reduce((a,m)=>a+b[m+'_fijo'],0);
+  const arrastre=arrastreProyecto(p);
   const datos={'Inicio del registro':{'Revenue acumulado':0,'Saldo contractual':booking}};
   let acumulado=arrastre,completo=Number.isFinite(arrastre);
   for(const m of meses){
@@ -77,7 +74,7 @@ export function serieSaldoProyecto(p) {
     datos[etiquetaPeriodoCalendario(m)]={'Revenue acumulado':completo?acumulado:null,'Saldo contractual':completo?booking-acumulado:null};
   }
   const saldo=completo?booking-acumulado:null;
-  let nota='Saldo contractual = Booking − revenue acumulado; es distinto del Backlog fuente, que ya descuenta los commits del año. Se usa un solo Booking por proyecto. ';
+  let nota='Saldo contractual = Booking − revenue acumulado; es distinto del Backlog fuente, que ya descuenta los commits del año. Se usa un solo Booking por proyecto. Hasta el mes actual el revenue acumulado es el Ejecutado; después es el Proyectado, que suma solo Commit (nunca Upside), incluidos los meses de 2027. ';
   if(Number.isFinite(arrastre)&&arrastre!==0)nota+=`El primer mes incorpora ${formatearDineroExacto(arrastre)} de acumulado anterior al calendario disponible. `;
   if(!vida.fin)nota+='Sin fecha fin: la curva termina en el último mes con commit registrado. ';
   nota+=saldo===null?'Hay meses sin cobertura: la curva queda sin dato; no se inventa revenue.':Math.abs(saldo)<.01?'Los commits cubren el Booking y el saldo llega a cero.':`Saldo al finalizar según los commits cargados: ${formatearDineroExacto(saldo)}${saldo<0?' de ejecución excedente':''}. No se fuerza a cero ni se reparte saldo sin commit.`;

@@ -63,14 +63,15 @@ test('Backlog es la columna del Excel tal cual, no Booking menos acumulado', asy
   assert.equal(ui.backlogHoy(p), 13547); // 920541 - 333086 daria 587455
 });
 
-test('Ejecutado y el Proyectado de cierre se leen de la fila, sin completarlos desde Info', async () => {
+test('Ejecutado se lee de la fila cuando no hay meses, y el Proyectado ya no se lee de la API, sin completarlos desde Info', async () => {
   const { ui } = await cargar(d => {
     d.proyectos = [entidad('123', { consumido_2025: 1 })];
     d.backlog = [entidad('123', { valor_of: 920541, acumulado_a_fecha: 880000, total_ejecutado_acumulado: 906994, backlog: 13547 })];
   });
   const p = ui.estado.proyectos[0];
   assert.equal(ui.acumuladoHoy(p), 880000);
-  assert.equal(ui.proyectadaAnio(p), 906994);
+  // ADR 0001: Proyectado se calcula sobre toda la vida; total_ejecutado_acumulado (906994) solo llega al fin del Año fuente.
+  assert.equal(ui.proyectadaAnio(p), null);
 });
 
 test('el porcentaje de ejecucion es Ejecutado sobre Booking y falta sin Booking positivo', async () => {

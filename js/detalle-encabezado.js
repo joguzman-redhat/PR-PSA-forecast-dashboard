@@ -3,7 +3,7 @@
 import { identificador } from './campos-proyecto.js';
 import { chip } from './chip.js';
 import { anioRevenue } from './calendario.js';
-import { acumuladoAnterior, backlogHoy, ejecutadoProyecto, valorBooking } from './dinero-proyecto.js';
+import { acumuladoAnterior, backlogHoy, ejecutadoProyecto, proyectadoProyecto, valorBooking } from './dinero-proyecto.js';
 import { formatearDinero } from './formato.js';
 
 const ESTADO_CONTRATO_NIVEL = {
@@ -25,6 +25,7 @@ export function renderizarEncabezadoProyecto(contenedor, proyecto) {
   const booking = valorBooking(proyecto);
   const acum = ejecutadoProyecto(proyecto);
   const backlog = backlogHoy(proyecto);
+  const proyectado = proyectadoProyecto(proyecto);
   const consumido = acumuladoAnterior(proyecto);
   const pct = (booking && acum !== null) ? (acum / booking) * 100 : null;
 
@@ -74,7 +75,8 @@ export function renderizarEncabezadoProyecto(contenedor, proyecto) {
   cifras.className = 'hero-cifras';
   [
     ['Valor Booking', booking, 'Por cuánto se vendió el proyecto'],
-    ['Revenue acumulado a hoy', acum, 'Revenue ya ejecutado'],
+    ['Ejecutado', acum, 'Acumulado anterior más el Commit hasta el mes actual, sobre toda la vida del proyecto'],
+    ['Proyectado', proyectado, 'Ejecutado más el Commit de los meses futuros, incluido 2027. No incluye Upside'],
     ['Backlog', backlog, 'Backlog de la fuente: ya descuenta el Commit planeado del año de referencia'],
     [`Acumulado anterior a ${anioRevenue()}`, consumido, `Revenue acumulado previo al año de referencia ${anioRevenue()}`],
   ].forEach(([et, v, tip]) => {
