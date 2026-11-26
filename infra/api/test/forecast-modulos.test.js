@@ -128,3 +128,20 @@ test('cada tipo de grafica vive en un modulo propio', () => {
   assert.match(fs.readFileSync(path.join(RAIZ, 'js/grafica-barras-agrupadas-vertical.js'), 'utf8'), /^export function crearGraficaBarrasAgrupadasVertical\b/m);
   assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (svgEl|crearGrafica(Barras\w+|Linea)|actualizarGraficas)\b/m);
 });
+
+test('el detalle del proyecto vive en modulos propios, sin ciclos con app.js', () => {
+  const porNombre = new Map(grafoModulos().map(m => [path.basename(m.ruta), m]));
+  const esperado = {
+    'detalle.js': ['abrirDetalle', 'renderizarDetalle'],
+    'detalle-encabezado.js': ['renderizarEncabezadoProyecto'],
+    'detalle-hermanos-cliente.js': ['renderizarHermanosDeCliente'],
+    'detalle-grafica-revenue.js': ['crearGraficaRevenueProyecto'],
+    'detalle-trazabilidad-proyecto.js': ['renderizarTrazabilidadProyecto'],
+    'clave-proyecto.js': ['claveProyecto'],
+  };
+  for (const [archivo, nombres] of Object.entries(esperado)) {
+    assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
+    for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
+  }
+  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (abrirDetalle|renderizarDetalle|crearGraficaRevenueProyecto|renderizarEncabezadoProyecto|renderizarHermanosDeCliente|renderizarTrazabilidadProyecto)\b/m);
+});
