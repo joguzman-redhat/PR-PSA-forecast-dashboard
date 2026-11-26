@@ -12,7 +12,7 @@ const leer = relativa => fs.readFileSync(path.join(RAIZ, relativa), 'utf8');
 
 test('el HTML carga la aplicacion como modulo ES y no como script clasico', () => {
   const html = leer('index.html');
-  assert.match(html, /<script\s+type="module"\s+src="app\.js(\?v=\d+)?"><\/script>/);
+  assert.match(html, /<script\s+type="module"\s+src="js\/main\.js(\?v=\d+)?"><\/script>/);
   assert.doesNotMatch(html, /<script\s+src="app\.js/);
 });
 
@@ -20,7 +20,7 @@ test('el estado y el formateo viven en modulos propios que importa la aplicacion
   const rutas = grafoModulos().map(m => path.relative(RAIZ, m.ruta));
   assert.ok(rutas.includes(path.join('js', 'estado.js')));
   assert.ok(rutas.includes(path.join('js', 'formato.js')));
-  assert.equal(rutas.at(-1), 'app.js'); // la entrada va al final: depende de todo lo demas
+  assert.equal(rutas.at(-1), path.join('js', 'main.js')); // la entrada va al final: depende de todo lo demas
 });
 
 test('cada nombre importado existe como export del modulo de origen', () => {
@@ -63,7 +63,7 @@ test('solo js/api.js conoce los nombres de dinero con que la API entrega el back
   for (const modulo of grafoModulos()) {
     const codigo = modulo.fuente.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     if (path.basename(modulo.ruta) === 'api.js') assert.match(codigo, antiguos);
-    else if (path.basename(modulo.ruta) !== 'app.js' && !idsDeColumna.includes(path.basename(modulo.ruta))) assert.doesNotMatch(codigo, antiguos, path.basename(modulo.ruta));
+    else if (path.basename(modulo.ruta) !== 'main.js' && !idsDeColumna.includes(path.basename(modulo.ruta))) assert.doesNotMatch(codigo, antiguos, path.basename(modulo.ruta));
   }
 });
 
@@ -80,7 +80,7 @@ test('los calculos de dinero, calendario y vida del proyecto viven en modulos pr
     assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
     for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
   }
-  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (valorBooking|ejecutadoProyecto|vidaProyecto|calcularKPIs)\b/m);
+  assert.doesNotMatch(porNombre.get('main.js').fuente, /^function (valorBooking|ejecutadoProyecto|vidaProyecto|calcularKPIs)\b/m);
 });
 
 test('los identificadores de los modulos de calculo no usan terminos prohibidos del glosario', () => {
@@ -102,7 +102,7 @@ test('el listado de proyectos y las columnas redimensionables viven en modulos p
     assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
     for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
   }
-  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (renderizarTabla|ordenarTabla|asegurarResizers)\b/m);
+  assert.doesNotMatch(porNombre.get('main.js').fuente, /^function (renderizarTabla|ordenarTabla|asegurarResizers)\b/m);
 });
 
 test('cada tipo de grafica vive en un modulo propio', () => {
@@ -126,10 +126,10 @@ test('cada tipo de grafica vive en un modulo propio', () => {
   }
   // La vertical no la llama nadie todavia, asi que no entra al grafo: se comprueba el archivo.
   assert.match(fs.readFileSync(path.join(RAIZ, 'js/grafica-barras-agrupadas-vertical.js'), 'utf8'), /^export function crearGraficaBarrasAgrupadasVertical\b/m);
-  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (svgEl|crearGrafica(Barras\w+|Linea)|actualizarGraficas)\b/m);
+  assert.doesNotMatch(porNombre.get('main.js').fuente, /^function (svgEl|crearGrafica(Barras\w+|Linea)|actualizarGraficas)\b/m);
 });
 
-test('el detalle del proyecto vive en modulos propios, sin ciclos con app.js', () => {
+test('el detalle del proyecto vive en modulos propios, sin ciclos con main.js', () => {
   const porNombre = new Map(grafoModulos().map(m => [path.basename(m.ruta), m]));
   const esperado = {
     'detalle.js': ['abrirDetalle', 'renderizarDetalle'],
@@ -143,7 +143,7 @@ test('el detalle del proyecto vive en modulos propios, sin ciclos con app.js', (
     assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
     for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
   }
-  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (abrirDetalle|renderizarDetalle|crearGraficaRevenueProyecto|renderizarEncabezadoProyecto|renderizarHermanosDeCliente|renderizarTrazabilidadProyecto)\b/m);
+  assert.doesNotMatch(porNombre.get('main.js').fuente, /^function (abrirDetalle|renderizarDetalle|crearGraficaRevenueProyecto|renderizarEncabezadoProyecto|renderizarHermanosDeCliente|renderizarTrazabilidadProyecto)\b/m);
 });
 
 test('la trazabilidad global, la comparacion de Snapshots y la vista de PMs viven en modulos propios', () => {
@@ -167,5 +167,24 @@ test('la trazabilidad global, la comparacion de Snapshots y la vista de PMs vive
     for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
     assert.doesNotMatch(porNombre.get(archivo).fuente, /corte/i, `${archivo} usa "corte" en vez de Snapshot`);
   }
-  assert.doesNotMatch(porNombre.get('app.js').fuente, /^function (renderizarTrazabilidad|calcularCambios|calcularPMs|renderizarPMs|actualizarTablaEventos)\b/m);
+  assert.doesNotMatch(porNombre.get('main.js').fuente, /^function (renderizarTrazabilidad|calcularCambios|calcularPMs|renderizarPMs|actualizarTablaEventos)\b/m);
+});
+
+test('la navegacion, la actualizacion de la UI, el informe PDF y el arranque viven en modulos propios; app.js ya no existe', () => {
+  const porNombre = new Map(grafoModulos().map(m => [path.basename(m.ruta), m]));
+  const esperado = {
+    'navegacion.js': ['cambiarPestana'],
+    'actualizacion-ui.js': ['actualizarUI'],
+    'carga-datos.js': ['cargarDatos'],
+    'reporte-resumen.js': ['crearPaginaReporte', 'construirResumenReporte'],
+    'reporte-grafica.js': ['paginarGraficaReporte'],
+    'reporte-pdf.js': ['inicializarReporteGraficas'],
+    'inicializacion.js': ['inicializar'],
+  };
+  for (const [archivo, nombres] of Object.entries(esperado)) {
+    assert.ok(porNombre.has(archivo), `falta js/${archivo}`);
+    for (const n of nombres) assert.ok(porNombre.get(archivo).exports.includes(n), `${archivo} no exporta ${n}`);
+  }
+  assert.doesNotMatch(porNombre.get('main.js').fuente, /^(async )?function /m, 'main.js solo orquesta');
+  assert.equal(fs.existsSync(path.join(RAIZ, 'app.js')), false);
 });

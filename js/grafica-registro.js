@@ -17,7 +17,7 @@ export function fijarGraficaQueCambio(controlador) {
   graficaQueCambio = controlador;
 }
 
-const graficasRegistradas = new WeakMap();
+export const graficasRegistradas = new WeakMap();
 const graficasPendientes = new Set();
 let ajusteGraficasPendiente = 0;
 const observadorGraficas = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entradas => {

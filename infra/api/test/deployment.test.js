@@ -11,7 +11,7 @@ const { pool } = require('../src/db');
 async function iniciar(t, rutaBase, demo = false) {
   const publicDir = await fs.mkdtemp(path.join(os.tmpdir(), 'forecast-public-'));
   const root = path.resolve(__dirname, '../../..');
-  for (const file of ['index.html', 'app.js', 'js', 'styles.css', 'vendor']) {
+  for (const file of ['index.html', 'js', 'styles.css', 'vendor']) {
     await fs.cp(path.join(root, file), path.join(publicDir, file), { recursive: true });
   }
   const server = crearApp({ rutaBase, publicDir, demo }).listen(0, '127.0.0.1');
@@ -34,7 +34,7 @@ test('dashboard y assets conservan sus rutas con y sin prefijo del proxy', async
     assert.match(texto, /Dashboard de Proyectos/);
     assert.match(texto, /<base href="\/cloud-forecast\/">/);
     const base = new URL('/cloud-forecast/', portada);
-    for (const asset of ['app.js', 'js/estado.js', 'js/formato.js', 'styles.css', 'vendor/patternfly.css',
+    for (const asset of ['js/main.js', 'js/estado.js', 'js/formato.js', 'styles.css', 'vendor/patternfly.css',
       'vendor/assets/fonts/RedHatText/RedHatTextVF.woff2']) {
       const res = await fetch(new URL(asset, base));
       assert.equal(res.status, 200, `${prefijo}/${asset}`);

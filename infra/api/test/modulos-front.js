@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const RAIZ = path.resolve(__dirname, '../../..');
-const ENTRADA = path.join(RAIZ, 'app.js');
+const ENTRADA = path.join(RAIZ, 'js', 'main.js');
 const IMPORT = /^import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"];?[ \t]*$/gm;
 const EXPORT = /^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Za-z_$][\w$]*)/gm;
 
