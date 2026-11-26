@@ -12,7 +12,7 @@ test('el corte mensual distingue años pasados, actuales y futuros en hora Colom
 test('el calendario y la proyeccion usan el año seleccionado y no duplican el acumulado anterior',()=>{
   const {ui}=pagina();ui.estado.forecast.anio=2027;
   const p={num_pa:'123',fecha_fin:'03/31/2028'};
-  const fila={num_pa:'123',acumulado_anterior:160,valor_of:1000,total_ejecutado_acumulado:210,backlog:790,enero_fijo:50};
+  const fila={num_pa:'123',acumulado_anterior:160,booking:1000,proyectado:210,backlog:790,enero_fijo:50};
   ui.estado.backlogPorPA=new Map([['123',fila]]);
   const serie=ui.serieBacklogRevenuePorMes([p]);
   assert.ok(Object.keys(serie)[0].endsWith('2027'));

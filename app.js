@@ -4,6 +4,7 @@
  */
 
 import { estado } from './js/estado.js';
+import { obtenerTimeline } from './js/api.js';
 import {
   formatearDinero,
   formatearNumero,
@@ -18,20 +19,11 @@ import {
 // FUNCIONES DE CARGA DE DATOS
 // ============================================================================
 
-// El backend sirve el dashboard y la API desde el mismo origen, asi que la
-// ruta es relativa: no hay CORS ni host que configurar.
-const API = './api';
-
 async function cargarDatos() {
   const principal = document.querySelector('.contenedor-principal');
   const aviso = document.getElementById('forecast-estado');
   try {
-    const url = new URLSearchParams(location.search);
-    const params = new URLSearchParams();
-    for (const k of ['desde','hasta']) if (url.has(k)) params.set(k,url.get(k));
-    const resp = await fetch(`${API}/timeline?${params}`, {cache:'no-store'});
-    const datos = await resp.json();
-    if (!resp.ok) throw new Error(datos.error || 'No se pudo cargar el timeline');
+    const datos = await obtenerTimeline();
     const {meta,proyectos,backlog,historia}=datos;
     estado.forecast={timeline:true,anio:meta.anio_actual,periodos:meta.periodos};
     estado.metadataProyectos=meta;estado.metadataBacklog=meta;
@@ -180,25 +172,25 @@ function backlogDe(proyecto) {
  * Valor Booking de un proyecto. TODA LA PLATA viene de BackLog NOLA, nunca de
  * Info Proyectos: los campos p.valor_of / p.acumulado_a_hoy / p.consumido_2025
  * / p.backlog_2026 NO están convertidos (carecen del factor de conversión).
- * Se reconstruye como lo calcula el propio Excel: Valor OF = Backlog + Total
- * Ejecutado Acumulado, las dos ya convertidas. Va primero porque las cargas
- * anteriores al arreglo del ETL guardaron en fila.valor_of el OF de Info (sin
- * convertir); fila.valor_of queda solo de respaldo.
+ * Se reconstruye como lo calcula el propio Excel: Booking = Backlog + Proyectado,
+ * las dos ya convertidas. Va primero porque las cargas
+ * anteriores al arreglo del ETL guardaron en fila.booking el valor de Info (sin
+ * convertir); fila.booking queda solo de respaldo.
  */
 function valorBooking(proyecto) {
   const fila = backlogDe(proyecto);
-  if(estado.forecast.timeline)return typeof fila?.valor_of==='number'?fila.valor_of:null;
+  if(estado.forecast.timeline)return typeof fila?.booking==='number'?fila.booking:null;
   if (!fila) return null;
-  if (typeof fila.backlog === 'number' && typeof fila.total_ejecutado_acumulado === 'number') {
-    return fila.backlog + fila.total_ejecutado_acumulado;
+  if (typeof fila.backlog === 'number' && typeof fila.proyectado === 'number') {
+    return fila.backlog + fila.proyectado;
   }
-  return typeof fila.valor_of === 'number' ? fila.valor_of : null;
+  return typeof fila.booking === 'number' ? fila.booking : null;
 }
 
 /** Acumulado del año pasado (2025), desde BackLog NOLA. */
 function acumuladoAnterior(proyecto) {
   const fila = backlogDe(proyecto);
-  return fila && typeof (fila.acumulado_anterior ?? fila.acum_2025) === 'number' ? (fila.acumulado_anterior ?? fila.acum_2025) : null;
+  return fila && typeof fila.acumulado_anterior === 'number' ? fila.acumulado_anterior : null;
 }
 
 function revenuePeriodo(proyecto) {
@@ -230,7 +222,7 @@ function upsidePeriodo(proyecto) {
  */
 function acumuladoHoy(proyecto) {
   const fila = backlogDe(proyecto);
-  if(estado.forecast.timeline)return fila?.acumulado_a_fecha ?? null;
+  if(estado.forecast.timeline)return fila?.ejecutado ?? null;
   if (!fila) return null;
   const acum2025 = acumuladoAnterior(proyecto) ?? 0;
   // Enero hasta el mes en curso, inclusive.
@@ -258,7 +250,7 @@ function backlogHoy(proyecto) {
  */
 function proyectadaAnio(proyecto) {
   const fila = backlogDe(proyecto);
-  if(estado.forecast.timeline)return fila?.total_ejecutado_acumulado ?? null;
+  if(estado.forecast.timeline)return fila?.proyectado ?? null;
   if (!fila) return null;
   const acum2025 = acumuladoAnterior(proyecto) ?? 0;
   const totalFijo = MESES_ES.reduce((acc, m) => {
@@ -4843,8 +4835,8 @@ function calcularPMs() {
     acc.upside += upsidePeriodo(p) || 0;
 
     const fila = backlogDe(p);
-    acc.totalEjecutado += (fila && typeof fila.total_ejecutado_acumulado === 'number')
-      ? fila.total_ejecutado_acumulado : 0;
+    acc.totalEjecutado += (fila && typeof fila.proyectado === 'number')
+      ? fila.proyectado : 0;
 
     const estadoBacklog = (fila && fila.estado) || p.estado;
     const clave = CLAVE_ESTADO_PM[estadoBacklog];

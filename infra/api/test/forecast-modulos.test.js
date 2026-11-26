@@ -54,3 +54,12 @@ test('la imagen de la API y su lista blanca de construccion incluyen los modulos
   assert.ok(ignorados.includes('!js/'), 'falta !js/ en .dockerignore');
   assert.ok(ignorados.includes('!js/**'), 'falta !js/** en .dockerignore');
 });
+
+test('solo js/api.js conoce los nombres de dinero con que la API entrega el backlog', () => {
+  const antiguos = /\b(valor_of|acumulado_a_fecha|total_ejecutado_acumulado|acum_2025)\b/;
+  for (const modulo of grafoModulos()) {
+    const codigo = modulo.fuente.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    if (path.basename(modulo.ruta) === 'api.js') assert.match(codigo, antiguos);
+    else if (path.basename(modulo.ruta) !== 'app.js') assert.doesNotMatch(codigo, antiguos, path.basename(modulo.ruta));
+  }
+});
