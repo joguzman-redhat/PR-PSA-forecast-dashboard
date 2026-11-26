@@ -53,6 +53,29 @@ test('la imagen de la API y su lista blanca de construccion incluyen los modulos
   const ignorados = leer('.dockerignore').split('\n').map(l => l.trim());
   assert.ok(ignorados.includes('!js/'), 'falta !js/ en .dockerignore');
   assert.ok(ignorados.includes('!js/**'), 'falta !js/** en .dockerignore');
+  assert.match(leer('infra/api/Dockerfile'), /^COPY\s+css\s+\.\/public\/css\s*$/m);
+  assert.ok(ignorados.includes('!css/'), 'falta !css/ en .dockerignore');
+  assert.ok(ignorados.includes('!css/**'), 'falta !css/** en .dockerignore');
+});
+
+test('la hoja de estilos esta dividida por area en css/, enlazada tras PatternFly y sin styles.css', () => {
+  const html = leer('index.html');
+  const enlaces = [...html.matchAll(/<link\s+rel="stylesheet"\s+href="([^"?]+)/g)].map(m => m[1]);
+  const archivos = fs.readdirSync(path.join(RAIZ, 'css')).filter(f => f.endsWith('.css')).sort();
+  assert.ok(archivos.length > 1, 'css/ debe tener varios archivos');
+  assert.deepEqual(enlaces, ['vendor/patternfly.css', ...archivos.map(f => `css/${f}`)],
+    'index.html debe cargar PatternFly primero y cada archivo de css/ en orden');
+  assert.ok(!fs.existsSync(path.join(RAIZ, 'styles.css')), 'styles.css ya no debe existir');
+  assert.doesNotMatch(html, /styles\.css/);
+});
+
+test('cada archivo de css/ es autocontenido: sin comentarios ni llaves partidos entre archivos', () => {
+  for (const archivo of fs.readdirSync(path.join(RAIZ, 'css')).filter(f => f.endsWith('.css'))) {
+    const css = leer(`css/${archivo}`);
+    assert.equal(css.split('/*').length, css.split('*/').length, `${archivo}: comentario sin cerrar o sin abrir`);
+    const sinComentarios = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.equal(sinComentarios.split('{').length, sinComentarios.split('}').length, `${archivo}: llaves desbalanceadas`);
+  }
 });
 
 test('solo js/api.js conoce los nombres de dinero con que la API entrega el backlog', () => {

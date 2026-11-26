@@ -9,7 +9,8 @@ COPY infra/api/package*.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 COPY infra/api/src ./src
-COPY index.html styles.css ./public/
+COPY index.html ./public/
+COPY css ./public/css
 COPY js ./public/js
 COPY vendor ./public/vendor
 

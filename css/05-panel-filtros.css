@@ -1,0 +1,96 @@
+/* ============================================================================
+   PANEL DE FILTROS
+   ============================================================================ */
+/* Fondo, borde, radio y relleno vienen del componente real .pf-v6-c-card
+   (+ .pf-v6-c-card__body). */
+.panel-filtros {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.fila-filtros-1,
+.fila-filtros-2,
+.fila-filtros-3 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.fila-filtros-3 {
+  grid-template-columns: 1fr 1fr auto;
+  align-items: flex-end;
+}
+
+.grupo-filtro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.grupo-filtro label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filtro-select,
+.filtro-input {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-page);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-family: var(--font-stack);
+  min-height: 32px;
+}
+
+.filtro-select {
+  cursor: pointer;
+}
+
+.filtro-select:multiple {
+  padding: var(--spacing-sm) var(--spacing-md);
+  height: auto;
+}
+
+.filtro-select option {
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.filtro-input {
+  width: 100%;
+}
+
+.filtro-input::placeholder {
+  color: var(--text-dim);
+}
+
+.contador-filtro {
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+  min-height: 16px;
+}
+
+.grupo-filtro-buscar {
+  grid-column: 1 / -1;
+}
+
+.grupo-filtro-buscar .filtro-input {
+  max-width: none;
+}
+
+/* Fondo, borde y espaciado vienen del componente real .pf-v6-c-button
+   (pf-m-secondary); aquí solo se agrega el acento de marca en :hover,
+   ver regla de abajo. */
+
+.indicador-filtros {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  text-align: right;
+  padding: 0 var(--spacing-md);
+}
+

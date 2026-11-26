@@ -1,0 +1,352 @@
+/* ============================================================================
+   VISTA "¿QUÉ CAMBIÓ ENTRE DOS FECHAS?"
+   ============================================================================ */
+
+.selector-snapshot { flex-wrap: wrap; }
+
+.atajos-rango {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* Fondo, borde y espaciado vienen del componente real .pf-v6-c-button
+   (pf-m-secondary pf-m-small); "activo" es estado propio de la app. */
+.atajo-rango:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.atajo-rango.activo {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  font-weight: 600;
+}
+
+.kpis-rango {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.resumen-rango-titulo {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.resumen-rango-titulo strong { color: var(--text-primary); font-weight: 600; }
+
+.resumen-rango-periodo {
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+  border-left: 1px solid var(--border-color);
+  padding-left: var(--spacing-md);
+}
+
+/* Se lee como una ecuacion: confirmado − desconfirmado = neto. Los
+   operadores entre tarjetas son lo que hace que se entienda de un vistazo. */
+.resumen-rango-fila {
+  display: flex;
+  align-items: stretch;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.resumen-rango-operador {
+  display: flex;
+  align-items: center;
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--text-dim);
+  padding: 0 2px;
+}
+
+.tarjeta-rango {
+  flex: 1 1 180px;
+  min-width: 170px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  background-color: var(--surface-1);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-lg);
+}
+
+.tarjeta-rango.destacada {
+  flex: 1 1 220px;
+  background-color: var(--surface-page);
+  border-width: 2px;
+}
+
+.tarjeta-rango.tono-bueno { border-color: color-mix(in srgb, var(--color-bueno) 45%, var(--border-color)); }
+.tarjeta-rango.tono-malo { border-color: color-mix(in srgb, var(--color-critico) 45%, var(--border-color)); }
+
+.tarjeta-rango-icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tono-bueno > .tarjeta-rango-icono {
+  color: var(--color-bueno);
+  background: color-mix(in srgb, var(--color-bueno) 13%, transparent);
+}
+
+.tono-malo > .tarjeta-rango-icono {
+  color: var(--color-critico);
+  background: color-mix(in srgb, var(--color-critico) 13%, transparent);
+}
+
+.tarjeta-rango-cuerpo { min-width: 0; flex: 1; }
+
+.tarjeta-rango-valor {
+  font-size: 1.5625rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.destacada .tarjeta-rango-valor { font-size: 1.9375rem; }
+.tono-bueno .tarjeta-rango-valor { color: var(--color-bueno); }
+.tono-malo .tarjeta-rango-valor { color: var(--color-critico); }
+
+.tarjeta-rango-etq {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  line-height: 1.3;
+}
+
+.tarjeta-rango-detalle {
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+.tarjeta-rango-barra {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--grid-color);
+  margin-top: var(--spacing-sm);
+  overflow: hidden;
+}
+
+.tarjeta-rango-barra > span {
+  display: block;
+  height: 100%;
+  background: var(--series-1); /* dato: cuántos proyectos se movieron */
+  border-radius: 2px;
+}
+
+@media (max-width: 900px) {
+  .resumen-rango-operador { display: none; }
+}
+
+.nota-grafica {
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+  margin-top: var(--spacing-sm);
+  line-height: 1.4;
+}
+
+.barra-tabla-cambios {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-sm);
+}
+
+.interruptor-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Chips de dirección del movimiento. El icono hace que no dependan del color
+   para leerse: en impresión o con daltonismo el texto sigue siendo claro. */
+.chip-movimiento {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.chip-movimiento.mov-confirma {
+  color: var(--color-bueno);
+  border-color: color-mix(in srgb, var(--color-bueno) 40%, transparent);
+  background: color-mix(in srgb, var(--color-bueno) 10%, transparent);
+}
+
+.chip-movimiento.mov-desconfirma {
+  color: var(--color-critico);
+  border-color: color-mix(in srgb, var(--color-critico) 40%, transparent);
+  background: color-mix(in srgb, var(--color-critico) 10%, transparent);
+}
+
+.chip-movimiento.mov-mixto {
+  color: var(--color-advertencia);
+  border-color: color-mix(in srgb, var(--color-advertencia) 45%, transparent);
+  background: color-mix(in srgb, var(--color-advertencia) 12%, transparent);
+}
+
+.chip-movimiento.mov-nuevo {
+  /* Dato, no marca: se queda en azul para no confundirse con el rojo de
+     "Commit -> Upside" (mov-desconfirma), que sí usa el rojo de estado. */
+  color: var(--series-1);
+  border-color: color-mix(in srgb, var(--series-1) 40%, transparent);
+  background: color-mix(in srgb, var(--series-1) 10%, transparent);
+}
+
+.chip-movimiento.mov-nada { color: var(--text-dim); }
+
+/* Qué campo de dinero cambió (no si "mejoró" o "empeoró": eso ya lo dice el
+   signo del delta al lado). Mismos colores que la leyenda Commit/Upside de
+   las gráficas, para que sea el mismo código visual en todo el dashboard. */
+.chip-movimiento.mov-campo-commit {
+  color: var(--series-1);
+  border-color: color-mix(in srgb, var(--series-1) 40%, transparent);
+  background: color-mix(in srgb, var(--series-1) 10%, transparent);
+}
+
+.chip-movimiento.mov-campo-upside {
+  color: var(--series-2);
+  border-color: color-mix(in srgb, var(--series-2) 40%, transparent);
+  background: color-mix(in srgb, var(--series-2) 10%, transparent);
+}
+
+.celda-movimiento { white-space: nowrap; }
+
+/* Los proyectos dibujados en la gráfica se marcan para que se note que
+   pasar el mouse por encima hace algo. */
+tr.fila-en-grafica td:first-child {
+  border-left: 2px solid color-mix(in srgb, var(--brand) 55%, transparent);
+}
+
+tr.fila-en-grafica:hover { background-color: color-mix(in srgb, var(--brand) 7%, transparent); }
+
+/* Detalle de movimientos desplegable dentro de la tabla de cambios */
+.celda-submeses {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+
+.boton-detalle-mov {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-family: var(--font-stack);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.boton-detalle-mov:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.boton-detalle-mov .chevron {
+  font-size: 0.8125rem;
+  transition: transform 0.12s ease;
+}
+
+.boton-detalle-mov.abierto {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 9%, transparent);
+}
+
+.boton-detalle-mov.abierto .chevron { transform: rotate(180deg); }
+
+.fila-detalle-mov > td {
+  padding: 0 !important;
+  background: var(--surface-page);
+}
+
+.detalle-mov-caja {
+  padding: var(--spacing-lg);
+  border-left: 3px solid var(--brand);
+}
+
+.detalle-mov-titulo {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: var(--spacing-md);
+}
+
+.detalle-mov-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.detalle-mov-tabla th {
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  padding: 4px 10px 4px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.detalle-mov-tabla td {
+  padding: 5px 10px 5px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.detalle-mov-tabla tr:last-child td { border-bottom: none; }
+
+.detalle-mov-tabla tfoot td {
+  padding: 7px 10px 2px 0;
+  border-top: 1px solid var(--border-color);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.detalle-mov-tabla tfoot .detalle-mov-nota {
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
