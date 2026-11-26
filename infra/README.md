@@ -67,7 +67,7 @@ credencial Postgres (host `postgres`, puerto `5432`, mismas credenciales de
 
 ## Credenciales de la BD
 
-En `.env` (no se sube a git), de **desarrollo**: usuario/contraseña/base son
+Copia `.env.example` a `.env`; no pegues `.env` en conversaciones. `.env` (no se sube a git) lleva credenciales de **desarrollo**: usuario/contraseña/base son
 todos `forecast`, Postgres solo en `127.0.0.1:5432`. Cámbialas antes de sacar
 esto de la máquina local.
 

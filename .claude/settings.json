@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./infra/.env)",
+      "Read(/infra/.env)",
+      "Read(./infra/.env.*)",
+      "Read(/infra/.env.*)",
+      "Bash(cat *infra/.env*)",
+      "Bash(cat *infra/.env.**)",
+      "Bash(cat *.env*)",
+      "Bash(head *infra/.env*)",
+      "Bash(head *infra/.env.**)",
+      "Bash(head *.env*)",
+      "Bash(tail *infra/.env*)",
+      "Bash(tail *infra/.env.**)",
+      "Bash(tail *.env*)",
+      "Bash(grep *infra/.env*)",
+      "Bash(grep *infra/.env.**)",
+      "Bash(grep *.env*)",
+      "Bash(sed *infra/.env*)",
+      "Bash(sed *infra/.env.**)",
+      "Bash(sed *.env*)",
+      "Bash(less *infra/.env*)",
+      "Bash(less *infra/.env.**)",
+      "Bash(less *.env*)",
+      "Bash(more *infra/.env*)",
+      "Bash(more *infra/.env.**)",
+      "Bash(more *.env*)",
+      "Bash(cp *infra/.env*)",
+      "Bash(cp *infra/.env.**)",
+      "Bash(cp *.env*)"
+    ]
+  }
+}
