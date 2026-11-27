@@ -42,7 +42,7 @@ export function crearGraficaBarrasApiladas(svgId, datos, opciones) {
   const alto = Math.max(160, datos.length * (alturaPorBarra + margenBarra) + margenTop + 36);
   const margen = { top: margenTop, right: 50, bottom: 20, left: Math.round(140 * escalaTexto()) };  // right margin for total label
   svg.dataset.reporteCabecera = String(margen.top);
-  svg.dataset.reporteCortes = JSON.stringify(datos.map((_, i) => ({
+  svg.dataset.reporteTramos = JSON.stringify(datos.map((_, i) => ({
     inicio: margen.top + i * (alturaPorBarra + margenBarra),
     fin: margen.top + (i + 1) * (alturaPorBarra + margenBarra),
   })));

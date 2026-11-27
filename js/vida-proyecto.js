@@ -35,7 +35,7 @@ const conImporte = v => Number.isFinite(v) && v !== 0;
  * Vida del proyecto: primer mes con Commit y Fecha fin (null si no tiene; nunca
  * se deriva del Commit). `mesesPosterioresAFin` lista los meses con Commit o
  * Upside después de la Fecha fin, con su importe: se advierten, no se recortan.
- * `fueraDeVigencia` conserva su nombre por contrato de pruebas.
+ * `posteriorAFechaFin` indica si hay algún mes con importe después de la Fecha fin.
  */
 export function vidaProyecto(proyecto) {
   const fila = backlogDe(proyecto);
@@ -45,7 +45,7 @@ export function vidaProyecto(proyecto) {
   const mesesPosterioresAFin = !fin ? [] : periodos.filter(p => p > fin &&
     (conImporte(fila?.[p+'_fijo']) || conImporte(fila?.[p+'_upside'])));
   const suma = sufijo => mesesPosterioresAFin.reduce((a, p) => a + (Number.isFinite(fila[p+sufijo]) ? fila[p+sufijo] : 0), 0);
-  return {inicio, fin, fueraDeVigencia: mesesPosterioresAFin.length > 0, mesesPosterioresAFin,
+  return {inicio, fin, posteriorAFechaFin: mesesPosterioresAFin.length > 0, mesesPosterioresAFin,
     commitPosteriorAFin: suma('_fijo'), upsidePosteriorAFin: suma('_upside')};
 }
 
@@ -83,7 +83,7 @@ export function mesesTimelineProyecto(proyecto) {
 
 /**
  * Meses de la vida del proyecto, de su primer Commit a la Fecha fin (aunque el
- * último Commit sea anterior: se ve el saldo que queda). Sin Fecha fin, hasta
+ * último Commit sea anterior: se ve el Backlog que queda). Sin Fecha fin, hasta
  * el último mes con Commit. Si hay Commit o Upside posterior a la Fecha fin, el
  * calendario llega hasta ese mes: el importe no se recorta.
  */

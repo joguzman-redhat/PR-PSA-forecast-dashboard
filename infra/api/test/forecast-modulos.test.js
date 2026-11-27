@@ -96,7 +96,7 @@ test('los calculos de dinero, calendario y vida del proyecto viven en modulos pr
     'calendario.js': ['MESES_ES', 'PERIODOS', 'configurarCalendarioTimeline', 'periodoActual', 'mesesActivos'],
     'dinero-proyecto.js': ['valorBooking', 'ejecutadoProyecto', 'backlogHoy', 'revenuePeriodo', 'upsidePeriodo', 'resumenFinanciero'],
     'vida-proyecto.js': ['mesFinalizacion', 'vidaProyecto', 'calendarioVidaProyecto'],
-    'series-revenue.js': ['serieBacklogRevenuePorMes', 'serieSaldoProyecto'],
+    'series-revenue.js': ['serieBacklogRevenuePorMes', 'serieBacklogProyecto'],
     'kpis.js': ['calcularKPIs'],
   };
   for (const [archivo, nombres] of Object.entries(esperado)) {

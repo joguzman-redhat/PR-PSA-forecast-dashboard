@@ -21,7 +21,7 @@ export const DIMENSIONES = [
   { campo: 'estado_contrato', etiqueta: 'Estado contrato' },
   { campo: 'riesgo', etiqueta: 'Riesgo' },
   { campo: 'executive_watchlist', etiqueta: 'Handover' },
-  { campo: 'project_status', etiqueta: 'Project Status' },
+  { campo: 'project_status', etiqueta: 'Semáforo' },
 ];
 
 // Muchos campos vienen nulos por los errores del Excel. En vez de esconder

@@ -26,7 +26,7 @@ function actualizarAyudas() {
   document.querySelectorAll('.fila-kpis-pms .kpi-etiqueta').forEach(label=>{
     if(label.querySelector('.ayuda-kpi'))return;
     const ayuda=document.createElement('button');ayuda.type='button';ayuda.className='ayuda-kpi';ayuda.textContent='?';
-    ayuda.title='Portafolio por PM: respeta el rango global y el territorio. Commit y Upside suman los meses seleccionados; Booking y Backlog se toman una vez por proyecto del Año fuente, con su estado actual.';
+    ayuda.title='Portafolio por PM: respeta el rango global y el territorio. Commit y Upside suman los meses seleccionados; el Booking se toma una vez por proyecto y el Backlog es el continuo entre años (descuenta el Commit posterior al Año fuente), con su estado actual.';
     ayuda.setAttribute('aria-label',ayuda.title);label.appendChild(ayuda);
   });
   for(const [id,title]of Object.entries(info)){

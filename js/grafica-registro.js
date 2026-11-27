@@ -46,7 +46,7 @@ const observadorGraficas = typeof ResizeObserver === 'undefined' ? null : new Re
 export function registrarGrafica(svg, pintar) {
   if (!svg) return;
   delete svg.dataset.reporteCabecera;
-  delete svg.dataset.reporteCortes;
+  delete svg.dataset.reporteTramos;
   svg.style.minHeight = '0';
   const nuevo = !graficasRegistradas.has(svg);
   graficasRegistradas.set(svg, {

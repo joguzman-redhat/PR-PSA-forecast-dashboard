@@ -46,7 +46,7 @@ export function crearGraficaBarrasSimple(svgId, datos, opciones) {
     const alto = Math.max(120, datos.length * fila + 24);
     const margen = { top: 12, right: 18, bottom: 12, left: Math.min(190, Math.max(105, Math.round(ancho * 0.34))) };
     svg.dataset.reporteCabecera = String(margen.top);
-    svg.dataset.reporteCortes = JSON.stringify(datos.map((_, i) => ({ inicio: margen.top + i * fila, fin: margen.top + (i + 1) * fila })));
+    svg.dataset.reporteTramos = JSON.stringify(datos.map((_, i) => ({ inicio: margen.top + i * fila, fin: margen.top + (i + 1) * fila })));
     const areaAncho = Math.max(90, ancho - margen.left - margen.right);
     const maxValor = Math.max(...datos.map(d => d.valor), 0) || 1;
     const maxCaracteres = Math.max(8, Math.floor((margen.left - 12) / 6.3));

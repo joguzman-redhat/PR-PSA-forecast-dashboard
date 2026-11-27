@@ -212,7 +212,7 @@ test('la vida empieza en el primer Commit distinto de cero, cuenta creditos y nu
   let vida = ui.vidaProyecto(p);
   assert.equal(vida.inicio, '2026-03');
   assert.equal(vida.fin, null); // sin Fecha fin no se deriva del Commit
-  assert.equal(vida.fueraDeVigencia, false);
+  assert.equal(vida.posteriorAFechaFin, false);
   ui.estado.backlog[0]['2026-01_fijo'] = -20; // una nota de credito es actividad registrada
   assert.equal(ui.vidaProyecto(p).inicio, '2026-01');
 });
@@ -223,7 +223,7 @@ test('un Commit o Upside posterior a la Fecha fin se marca fuera de la Vida del 
     d.backlog = [entidad('123', { '2026-03_fijo': 100, '2027-02_upside': 50 })];
   });
   const p = ui.estado.proyectos[0];
-  assert.equal(ui.vidaProyecto(p).fueraDeVigencia, true);
+  assert.equal(ui.vidaProyecto(p).posteriorAFechaFin, true);
   assert.equal(ui.vidaProyecto(p).inicio, '2026-03'); // el Upside no define el inicio
   ui.estado.periodo = 'rango';
   ui.estado.rangoTimeline = { desde: '2027-02', hasta: '2027-02' };

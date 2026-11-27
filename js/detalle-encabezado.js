@@ -59,7 +59,7 @@ export function renderizarEncabezadoProyecto(contenedor, proyecto) {
   }
   const ec = proyecto.estado_contrato;
   if (ec) chips.appendChild(chip(ec, 'chip-' + (ESTADO_CONTRATO_NIVEL[ec] || '')));
-  // Handover y Project Status
+  // Handover y Semáforo
   if (proyecto.executive_watchlist) chips.appendChild(chip('Handover', 'chip-bueno'));
   if (proyecto.project_status) {
     const statusMap = { 'Red': 'Rojo', 'Yellow': 'Amarillo', 'Green': 'Verde' };

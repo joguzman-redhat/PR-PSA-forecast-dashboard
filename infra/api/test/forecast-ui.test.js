@@ -112,7 +112,7 @@ test('el rango filtra desde el primer commit hasta el mes fin sin inventar fecha
   const p=ui.estado.proyectos[0];p.fecha_fin='12/31/2026';
   ui.estado.rangoTimeline={desde:'2027-01',hasta:'2027-12'};ui.estado.periodo='rango';
   assert.equal(ui.pasaPeriodoProyecto(p),false); // Even with future commit in the source.
-  assert.equal(ui.vidaProyecto(p).fueraDeVigencia,true);
+  assert.equal(ui.vidaProyecto(p).posteriorAFechaFin,true);
   ui.estado.rangoTimeline={desde:'2026-12',hasta:'2026-12'};
   assert.equal(ui.pasaPeriodoProyecto(p),true);
   ui.estado.periodo='todos';assert.equal(ui.mesesTimelineProyecto(p).length,12);
@@ -169,16 +169,16 @@ test('detalle conserva toda la vida, no duplica Bookings y no fuerza el saldo a 
   d.backlog[0]['2026-03_fijo']=200;d.backlog[0]['2027-01_fijo']=300;
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();ui.estado.rangoTimeline={desde:'2027-04',hasta:'2027-06'};
   const p=ui.estado.proyectos[0],meses=ui.calendarioVidaProyecto(p);assert.equal(meses[0],'2026-03');assert.equal(meses.at(-1),'2027-06');assert.equal(meses.length,16);
-  const serie=ui.serieSaldoProyecto(p);assert.equal(Object.values(serie.datos)[0]['Backlog'],1000);assert.equal(serie.saldo,400);
+  const serie=ui.serieBacklogProyecto(p);assert.equal(Object.values(serie.datos)[0]['Backlog'],1000);assert.equal(serie.backlogFinal,400);
   assert.match(serie.nota,/No se fuerza a cero/);
   // Ticket 14: un Commit posterior a la Fecha fin ya no se recorta de la curva (se advierte).
-  d.backlog[0]['2027-07_fijo']=999999;assert.equal(ui.serieSaldoProyecto(p).saldo,-999599);
+  d.backlog[0]['2027-07_fijo']=999999;assert.equal(ui.serieBacklogProyecto(p).backlogFinal,-999599);
 });
 test('meses sin cobertura no se convierten en ceros en la curva contractual',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();d.proyectos[0].fecha_fin='01/31/2028';
   Object.assign(d.backlog[0],{anio_atributos:2026,valor_of:1000,acumulado_anterior:0});
   for(const m of d.meta.periodos)d.backlog[0][m+'_fijo']=0;d.backlog[0]['2026-01_fijo']=10;
-  context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();const r=ui.serieSaldoProyecto(ui.estado.proyectos[0]);assert.equal(r.saldo,null);assert.match(r.nota,/sin cobertura/);
+  context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();const r=ui.serieBacklogProyecto(ui.estado.proyectos[0]);assert.equal(r.backlogFinal,null);assert.match(r.nota,/sin cobertura/);
 });
 test('orden de filtros y ausencia de tipo de ejecución',()=>{
   const {ui}=pagina();assert.equal(ui.DIMENSIONES.slice(0,8).map(d=>d.campo).join(','),'estado,cliente,pm_lider,vendedor,tsm,zona,pais,periodo_fin');
@@ -197,7 +197,7 @@ test('la curva no duplica el arrastre cuando cambia el año financiero de refere
   for(const m of d.meta.periodos)d.backlog[0][m+'_fijo']=0;
   d.backlog[0]['2026-01_fijo']=200;d.backlog[0]['2027-01_fijo']=300;
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();
-  assert.equal(ui.serieSaldoProyecto(ui.estado.proyectos[0]).saldo,400);
+  assert.equal(ui.serieBacklogProyecto(ui.estado.proyectos[0]).backlogFinal,400);
 });
 test('un proyecto que aparece solo en FY27 conserva el arrastre conocido sin inventar FY26',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();d.proyectos[0].fecha_fin='01/31/2027';
@@ -205,7 +205,7 @@ test('un proyecto que aparece solo en FY27 conserva el arrastre conocido sin inv
   for(const m of d.meta.periodos){if(m.startsWith('2026'))delete d.backlog[0][m+'_fijo'];else d.backlog[0][m+'_fijo']=0;}
   d.backlog[0]['2027-01_fijo']=100;
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();
-  assert.equal(ui.calendarioVidaProyecto(ui.estado.proyectos[0])[0],'2027-01');assert.equal(ui.serieSaldoProyecto(ui.estado.proyectos[0]).saldo,600);
+  assert.equal(ui.calendarioVidaProyecto(ui.estado.proyectos[0])[0],'2027-01');assert.equal(ui.serieBacklogProyecto(ui.estado.proyectos[0]).backlogFinal,600);
 });
 test('el rango inicial avanza al cambiar el año y termina en el ultimo mes que trae la API',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();d.meta.fecha_referencia='2027-02-01';d.meta.anio_actual=2027;

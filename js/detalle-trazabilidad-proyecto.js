@@ -6,7 +6,7 @@ import { backlogDe } from './fila-backlog.js';
 import { estado } from './estado.js';
 import { formatearDinero } from './formato.js';
 import { crearGraficaLinea } from './grafica-linea.js';
-import { serieSaldoProyecto } from './series-revenue.js';
+import { serieBacklogProyecto } from './series-revenue.js';
 import { MINIMO_CAMBIO } from './umbral-cambio.js';
 import { indicesVidaProyecto } from './vida-proyecto.js';
 
@@ -46,9 +46,9 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
     svgBVR.id = 'grafica-backlog-proyecto';
     svgBVR.setAttribute('class', 'grafica-svg');
     divBVR.appendChild(svgBVR);
-    const saldo=serieSaldoProyecto(proyecto);
-    crearGraficaLinea(svgBVR,saldo.datos,{ejeX:'categoria',unidad:'Backlog y revenue acumulado',etiquetasValores:true});
-    notaBVR.textContent=saldo.nota;
+    const curva=serieBacklogProyecto(proyecto);
+    crearGraficaLinea(svgBVR,curva.datos,{ejeX:'categoria',unidad:'Backlog y revenue acumulado',etiquetasValores:true});
+    notaBVR.textContent=curva.nota;
     div.appendChild(divBVR);
   }
 

@@ -129,7 +129,7 @@ export function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
 
   // Dibujar grupos por zona
   let offsetY = 0;
-  const cortesReporte = [];
+  const tramosReporte = [];
   zonas.forEach(zona => {
     const gruposZona = datos.filter(d => zona === null ? d.zona == null : d.zona === zona);
     if (gruposZona.length === 0) return;
@@ -149,7 +149,7 @@ export function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
     }
 
     gruposZona.forEach((grupo, indiceGrupo) => {
-      cortesReporte.push({
+      tramosReporte.push({
         inicio: margen.top + offsetY - (indiceGrupo === 0 && zona !== null && zona !== '' ? alturaZona : 0),
         fin: margen.top + offsetY + alturaPorGrupo + margenGrupo,
         zona,
@@ -231,5 +231,5 @@ export function crearGraficaBarrasAgrupadasHorizontal(svgId, datos, opciones) {
 
   svg.appendChild(g);
   svg.dataset.reporteCabecera = String(margen.top);
-  svg.dataset.reporteCortes = JSON.stringify(cortesReporte);
+  svg.dataset.reporteTramos = JSON.stringify(tramosReporte);
 }

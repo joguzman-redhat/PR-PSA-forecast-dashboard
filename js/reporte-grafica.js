@@ -19,14 +19,14 @@ export function paginarGraficaReporte(svg) {
   const alto = ALTO_GRAFICA_REPORTE * ancho / ANCHO_GRAFICA_REPORTE;
   const cabecera = Number(svg.dataset.reporteCabecera) || 0;
   const espacioCuerpo = alto - cabecera;
-  const cortes = JSON.parse(svg.dataset.reporteCortes || '[]');
+  const tramos = JSON.parse(svg.dataset.reporteTramos || '[]');
   const segmentos = [];
   if (caja.height <= alto) segmentos.push({ inicio: cabecera, fin: caja.height });
-  else if (cortes.length) {
-    cortes.forEach(corte => {
+  else if (tramos.length) {
+    tramos.forEach(tramo => {
       const anterior = segmentos[segmentos.length - 1];
-      if (anterior && corte.fin - anterior.inicio <= espacioCuerpo) anterior.fin = corte.fin;
-      else segmentos.push({ inicio: corte.inicio, fin: corte.fin });
+      if (anterior && tramo.fin - anterior.inicio <= espacioCuerpo) anterior.fin = tramo.fin;
+      else segmentos.push({ inicio: tramo.inicio, fin: tramo.fin });
     });
   } else {
     for (let inicio = cabecera; inicio < caja.height; inicio += espacioCuerpo) {

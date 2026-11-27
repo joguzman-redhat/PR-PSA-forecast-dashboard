@@ -51,8 +51,8 @@ test('un Commit de febrero de 2027 descuenta el Backlog en la curva y en el Proy
   assert.equal(r.proyectado, 420);
   assert.equal(r.backlog, 580); // el Backlog mostrado es continuo: 620 - 40
   assert.equal(r.diferencia, 0); // 1000 - 420 - 580
-  let serie = ui.serieSaldoProyecto(proyecto);
-  assert.equal(serie.saldo, 580);
+  let serie = ui.serieBacklogProyecto(proyecto);
+  assert.equal(serie.backlogFinal, 580);
   assert.equal(serie.datos['feb 2027']['Backlog'], 580);
   // Con 90 en lugar de 40 el efecto se ve en los tres sitios.
   const otra = await cargar({ ...base, commits: { ...base.commits, '2027-02': 90 } });
@@ -60,8 +60,8 @@ test('un Commit de febrero de 2027 descuenta el Backlog en la curva y en el Proy
   assert.equal(r.proyectado, 470);
   assert.equal(r.backlog, 530);
   assert.equal(r.diferencia, 0);
-  serie = otra.ui.serieSaldoProyecto(otra.proyecto);
-  assert.equal(serie.saldo, 530);
+  serie = otra.ui.serieBacklogProyecto(otra.proyecto);
+  assert.equal(serie.backlogFinal, 530);
   assert.equal(serie.datos['feb 2027']['Revenue acumulado'], 470);
 });
 
@@ -81,7 +81,7 @@ test('cuando el mes actual ya es de 2027 el Ejecutado incluye 2027 sin contar do
   });
   assert.equal(ui.acumuladoHoy(proyecto), 445); // 100 + 280 + 25 + 40
   assert.equal(ui.proyeccionReferencia(proyecto), 505); // 445 + 60
-  assert.equal(ui.serieSaldoProyecto(proyecto).saldo, 495); // 1000 - 505
+  assert.equal(ui.serieBacklogProyecto(proyecto).backlogFinal, 495); // 1000 - 505
 });
 
 test('un mes sin cobertura dentro de la vida deja el Proyectado parcial, sin contar el mes como cero', async () => {

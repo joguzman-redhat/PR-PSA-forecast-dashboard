@@ -128,7 +128,7 @@ test('el KPI Proyectado avisa cuantos proyectos son parciales', async () => {
 
 test('un mes sin cobertura sigue sin dato en la curva mensual', async () => {
   const { ui, proyecto } = await cargar({ ...base, fin: '06/30/2028' });
-  const serie = ui.serieSaldoProyecto(proyecto);
+  const serie = ui.serieBacklogProyecto(proyecto);
   assert.equal(serie.datos['dic 2027']['Backlog'], 580);
   assert.equal(serie.datos['mar 2028']['Backlog'], null);
 });

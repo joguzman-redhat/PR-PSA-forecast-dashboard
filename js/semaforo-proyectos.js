@@ -6,7 +6,7 @@ import { aplicarFiltros } from './filtros-ui.js';
 
 /**
  * Semáforo de proyectos: resumen de Red/Yellow/Green/Sin dato como pills
- * clickables. Clic en uno aplica (o quita) el filtro de Project Status.
+ * clickables. Clic en uno aplica (o quita) el filtro de Semáforo.
  */
 export function renderizarSemaforoProyectos(proyectos) {
   let contenedor = document.getElementById('card-semaforo-proyectos');
@@ -62,7 +62,7 @@ export function renderizarSemaforoProyectos(proyectos) {
     count.textContent = conteos[key];
 
     pill.append(dot, label, count);
-    pill.title = `${activo ? 'Quitar' : 'Aplicar'} filtro: Project Status = ${key}`;
+    pill.title = `${activo ? 'Quitar' : 'Aplicar'} filtro: Semáforo = ${key}`;
 
     pill.addEventListener('click', () => {
       const filtro = estado.filtros.project_status;

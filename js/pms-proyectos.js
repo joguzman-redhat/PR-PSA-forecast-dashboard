@@ -97,7 +97,7 @@ export function crearFilaProyectosPM(filaPM) {
     }
     trp.appendChild(tdHandover);
 
-    // Project Status
+    // Semáforo
     const tdStatus = document.createElement('td');
     if (p.project_status) {
       const statusMap = { 'Red': 'Rojo', 'Yellow': 'Amarillo', 'Green': 'Verde' };

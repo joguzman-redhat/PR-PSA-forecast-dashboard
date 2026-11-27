@@ -8,7 +8,7 @@ const controls=new Map();
 const context=vm.createContext({Intl,URL,URLSearchParams,console,Map,Set,location:{search:''},
  document:{addEventListener(){},querySelector(){return {classList:{toggle(){},add(){}}};},getElementById(id){if(!controls.has(id))controls.set(id,{textContent:''});return controls.get(id);}},
  fetch:async()=>({ok:true,json:async()=>structuredClone(data)})});
-vm.runInContext(require('./modulos-front').codigoUnido()+'\nglobalThis.ui={estado,cargarDatos,revenuePeriodo,upsidePeriodo,valorBooking,acumuladoHoy:ejecutadoProyecto,backlogHoy,calcularPMs,serieBacklogRevenuePorMes,commitPendienteProyecto,proyeccionReferencia,commitPosteriorAlAnioFuente,calendarioVidaProyecto,serieSaldoProyecto,advertenciaFueraDeFechaFin,vidaProyecto};',context);
+vm.runInContext(require('./modulos-front').codigoUnido()+'\nglobalThis.ui={estado,cargarDatos,revenuePeriodo,upsidePeriodo,valorBooking,acumuladoHoy:ejecutadoProyecto,backlogHoy,calcularPMs,serieBacklogRevenuePorMes,commitPendienteProyecto,proyeccionReferencia,commitPosteriorAlAnioFuente,calendarioVidaProyecto,serieBacklogProyecto,advertenciaFueraDeFechaFin,vidaProyecto};',context);
 let count=0;const issues=[];
 function check(name,e,a){count++;const ok=typeof e==='number'?typeof a==='number'&&Math.abs(e-a)<.01:e===a;if(!ok)issues.push({name,expected:e,actual:a});}
 function money(n){const sign=n<0?'-':'';n=Math.abs(n);return sign+'$'+(n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e4?(n/1e3).toFixed(0)+'K':n>=1e3?(n/1e3).toFixed(1)+'K':n.toFixed(0));}
@@ -118,7 +118,7 @@ for(const p of data.proyectos){
  if(importes.length)casos.commitPosteriorAFin++;
  // Curva de saldo: Booking - (acumulado anterior + Commit de los meses del Año fuente en adelante, hasta ese mes); sin dato si falta un mes.
  if(cal.length&&typeof e.booking==='number'){
-  const serie=Object.values(ui.serieSaldoProyecto(p).datos).slice(1);check('curva meses '+k,cal.length,serie.length);
+  const serie=Object.values(ui.serieBacklogProyecto(p).datos).slice(1);check('curva meses '+k,cal.length,serie.length);
   let completo=typeof b.acumulado_anterior==='number',acum=b.acumulado_anterior;
   const previos=months.filter(m=>m>=e.inicio&&Number(m.slice(0,4))<e.fuente);
   if(previos.some(m=>typeof b[m+'_fijo']!=='number'))completo=false;else if(completo)acum-=previos.reduce((a,m)=>a+b[m+'_fijo'],0);

@@ -33,10 +33,10 @@ test('con Fecha fin posterior al ultimo Commit, la curva y el calendario llegan 
   assert.equal(meses[0], '2026-03');
   assert.equal(meses.at(-1), '2027-06');
   assert.equal(meses.length, 16);
-  const serie = ui.serieSaldoProyecto(proyecto);
+  const serie = ui.serieBacklogProyecto(proyecto);
   assert.equal(serie.datos['jun 2027']['Backlog'], 620); // 1000 - (100 + 200 + 50 + 30)
   assert.equal(serie.datos['jun 2027']['Revenue acumulado'], 380);
-  assert.equal(serie.saldo, 620);
+  assert.equal(serie.backlogFinal, 620);
   assert.equal(ui.proyeccionReferencia(proyecto), 380); // Proyectado: nada nuevo despues del ultimo Commit
 });
 
@@ -53,7 +53,7 @@ test('un Commit posterior a la Fecha fin se conserva en la curva, el calendario 
   assert.equal(ui.vidaProyecto(proyecto).fin, '2026-12');
   const meses = ui.calendarioVidaProyecto(proyecto);
   assert.equal(meses.at(-1), '2027-02'); // no se recorta en la Fecha fin
-  const serie = ui.serieSaldoProyecto(proyecto);
+  const serie = ui.serieBacklogProyecto(proyecto);
   assert.equal(serie.datos['feb 2027']['Backlog'], 580);
   assert.equal(ui.proyeccionReferencia(proyecto), 420);
 });
@@ -62,7 +62,7 @@ test('con la Fecha fin anterior al primer Commit, el Commit registrado tampoco s
   const { ui, proyecto } = await cargar({ fila: base.fila, commits: { '2026-03': 200 }, fin: '12/31/2025' });
   const meses = ui.calendarioVidaProyecto(proyecto);
   assert.deepEqual([meses[0], meses.at(-1)], ['2026-03', '2026-03']);
-  assert.equal(ui.serieSaldoProyecto(proyecto).datos['mar 2026']['Revenue acumulado'], 300);
+  assert.equal(ui.serieBacklogProyecto(proyecto).datos['mar 2026']['Revenue acumulado'], 300);
 });
 
 test('la advertencia nombra el Commit posterior a la Fecha fin con su importe y sin tocarlo', async () => {
@@ -89,9 +89,9 @@ test('un mes sin cobertura hasta la Fecha fin queda sin dato, no cero', async ()
   const { ui, proyecto } = await cargar({ ...base, fin: '03/31/2028' });
   const meses = ui.calendarioVidaProyecto(proyecto);
   assert.equal(meses.at(-1), '2028-03'); // la curva llega hasta la Fecha fin
-  const serie = ui.serieSaldoProyecto(proyecto);
+  const serie = ui.serieBacklogProyecto(proyecto);
   assert.equal(serie.datos['dic 2027']['Backlog'], 620);
   assert.equal(serie.datos['mar 2028']['Backlog'], null);
   assert.equal(ui.proyeccionReferencia(proyecto), 380); // parcial: 350 + 30; 2028 no cuenta como cero
-  assert.equal(ui.serieSaldoProyecto(proyecto).saldo, null);
+  assert.equal(ui.serieBacklogProyecto(proyecto).backlogFinal, null);
 });

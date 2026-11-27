@@ -8,8 +8,8 @@ import { MESES_ES, mesesActivos, mesesEjecutadosForecast, mesReferenciaFinancier
 
 /**
  * Valor Booking de un proyecto. TODA LA PLATA viene de BackLog NOLA, nunca de
- * Info Proyectos: los campos p.valor_of / p.acumulado_a_hoy / p.consumido_2025
- * / p.backlog_2026 NO están convertidos (carecen del factor de conversión).
+ * Info Proyectos: sus columnas de dinero (las del Excel de Info Proyectos) NO
+ * están convertidas (carecen del factor de conversión).
  * Se reconstruye como lo calcula el propio Excel: Booking = Backlog + Proyectado,
  * las dos ya convertidas. Va primero porque las cargas
  * anteriores al arreglo del ETL guardaron en fila.booking el valor de Info (sin
