@@ -61,6 +61,23 @@ const CASOS = [
   assert.ok(dos.logs.some(l => /PR-9/.test(l)), 'el aviso tambien queda en el log');
   assert.equal(correrRecalcular([fila(111, 'PR-9'), fila(500, 'PR-5')]).json.avisos_identidad.length, 0);
 
+  // 2b) Cruce entre hojas: BackLog NOLA no trae Project ID, solo PA. Se une con Info Proyectos por PA
+  // (sin PA, por nombre) y hereda la clave del proyecto de Info. Un PA que Info reemplazo por el de la
+  // fila mas reciente del mismo Project ID tambien cruza. Un PA que Info no tiene queda sin cruce.
+  const filaBacklog = (pa, nombre) => ({ '# PA': pa, 'Nombre del Proyecto': nombre });
+  const infoHoja = [fila(69412, 'PR-061990', 'Telcel'), fila(111, 'PR-9', 'Uno'), fila(222, 'PR-9', 'Uno'),
+    fila(333, null, 'Sin PR'), fila('#N/A', 'PR-038290', 'Solo PR sin PA')];
+  const backlogHoja = [filaBacklog(69412, 'Telcel'), filaBacklog(111, 'Uno'), filaBacklog(333, 'Sin PR'),
+    filaBacklog('#N/A', 'Solo PR sin PA'), filaBacklog(999, 'No esta en Info')];
+  const cruce = correrRecalcular(backlogHoja, infoHoja).json;
+  assert.deepEqual(cruce.InfoProyectos.map(r => r._clave),
+    ['PR:PR-061990', 'PR:PR-9', 'PR:PR-9', 'PA:333', 'PR:PR-038290'], 'claves de Info Proyectos');
+  assert.deepEqual(cruce.Backlog.map(r => r._clave),
+    ['PR:PR-061990', 'PR:PR-9', 'PA:333', 'PR:PR-038290', 'PA:999'], 'el Backlog hereda la clave del proyecto de Info');
+  const clavesInfo = new Set(cruce.InfoProyectos.map(r => r._clave));
+  assert.deepEqual(cruce.Backlog.filter(r => !clavesInfo.has(r._clave)).map(r => r._clave), ['PA:999'],
+    'solo el PA que Info no tiene queda sin cruce');
+
   // 3) Misma clave que la funcion SQL con las mismas entradas.
   let started = false;
   const run = (args, input) => { const r = spawnSync('podman', args, { input, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }); if (r.status !== 0) throw Error((r.stdout || '') + (r.stderr || '')); return r.stdout; };
