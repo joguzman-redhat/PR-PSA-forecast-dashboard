@@ -120,7 +120,7 @@ test('la demo entrega datos ficticios sin consultar PG y marca la interfaz', asy
   assert.equal((await salud.json()).modo, 'demo');
   const spec = await (await fetch(`${origen}/cloud-forecast/api/openapi.yaml`)).json();
   assert.equal(spec.info.title, 'Cloud Forecast DEMO');
-  assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/backlog', '/api/historia', '/api/proyectos']);
+  assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/backlog', '/api/historia', '/api/proyectos', '/api/timeline']);
   const recarga = await fetch(`${origen}/cloud-forecast/api/reload`, { method: 'POST' });
   assert.equal(recarga.status, 409);
   assert.equal(consultas, 0);

@@ -17,6 +17,7 @@ function crearApp({
 } = {}) {
   const prefijo = normalizarRutaBase(rutaBase);
   const datosDemo = demo ? require('./preview').crearDatosDemo() : null;
+  const { crearTimelineDemo } = demo ? require('./preview-timeline') : {};
   // La prueba sintetica funciona sin credenciales y sin abrir conexiones a PG.
   const pool = demo ? null : require('./db').pool;
   const app = express();
@@ -49,7 +50,7 @@ function crearApp({
         openapi: '3.0.3',
         info: { title: 'Cloud Forecast DEMO', version: '1.0.0', description: 'Datos ficticios para pruebas.' },
         servers: [{ url: prefijo || '/' }],
-        paths: Object.fromEntries(['proyectos', 'backlog', 'historia'].map((nombre) => [
+        paths: Object.fromEntries(['proyectos', 'backlog', 'historia', 'timeline'].map((nombre) => [
           `/api/${nombre}`, { get: { responses: { 200: { description: 'Datos ficticios de demostracion' } } } },
         ])),
       });
@@ -80,18 +81,7 @@ function crearApp({
       res.set('Cache-Control', 'no-store');
       next();
     });
-    rutas.get('/api/timeline', (_req,res) => {
-      const nombres=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-      const periodos=nombres.map((_,i)=>'2026-'+String(i+1).padStart(2,'0'));
-      const backlog=datosDemo.backlog.backlog.map(b=>{
-        const row={...b,clave_timeline:String(b.num_pa),acumulado_anterior:b.acumulado_anterior??b.acum_2025,acumulado_a_fecha:null};
-        nombres.forEach((m,i)=>{row[periodos[i]+'_fijo']=b[m+'_fijo'];row[periodos[i]+'_upside']=b[m+'_upside'];});return row;
-      });
-      const historia=structuredClone(datosDemo.historia);
-      for(const snap of historia.snapshots||[])if(snap.por_mes)snap.por_mes=Object.fromEntries(nombres.map((m,i)=>[periodos[i],snap.por_mes[m]]));
-      res.json({meta:{...datosDemo.proyectos.meta,timeline:true,origen:'demo',anio_actual:2026,estado:'disponible',periodos,
-        desde:periodos[0],hasta:periodos.at(-1)},proyectos:datosDemo.proyectos.proyectos.map(p=>({...p,clave_timeline:String(p.num_pa)})),backlog,historia});
-    });
+    rutas.get('/api/timeline', (req, res) => res.json(crearTimelineDemo(req.query)));
     rutas.get('/api/forecasts', (_req, res) => res.json({
       anios: [2026, 2027], fuentes: [{ anio_forecast: 2026, archivo_id: 'demo',
         archivo_nombre: 'Datos ficticios', carga_id: null, snapshots: datosDemo.historia.snapshots.length }],
