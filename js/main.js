@@ -7,15 +7,17 @@ import { actualizarUI } from './actualizacion-ui.js';
 import { cambiarPestana } from './navegacion.js';
 import { inicializar } from './inicializacion.js';
 
-// Las vistas que los filtros repintan se registran con llamadas que se resuelven
-// al ejecutar, así los módulos que las usan no importan de aquí (sería un ciclo).
+// Las vistas que los filtros repintan se registran aquí, así los módulos que las
+// usan no importan de este (sería un ciclo). actualizarUI, renderizarTrazabilidad y
+// renderizarPMs van envueltas en una llamada porque las pruebas las reemplazan en el
+// ámbito unido y la referencia directa no vería el reemplazo.
 registrarVistas({
   actualizarUI: () => actualizarUI(),
   renderizarDetalle,
   renderizarTrazabilidad: () => renderizarTrazabilidad(),
   renderizarPMs: () => renderizarPMs(),
   abrirDetalle,
-  cambiarPestana: (nombre, omitirHash) => cambiarPestana(nombre, omitirHash),
+  cambiarPestana,
 });
 
 // Iniciar cuando el DOM esté listo

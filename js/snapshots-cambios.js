@@ -1,6 +1,6 @@
 // Qué cambió entre dos Snapshots: filas por proyecto y su dirección.
 
-import { MESES_ES, compararMeses, mesesActivos, sumarMeses } from './calendario.js';
+import { MESES_ES, compararMeses, mesesActivos } from './calendario.js';
 import { identificador } from './campos-proyecto.js';
 import { claveProyecto, clavesProyectosOcultos } from './clave-proyecto.js';
 import { estado } from './estado.js';
@@ -41,9 +41,9 @@ export function calcularCambios() {
     const b = serie.find(s => s.snapshot_id === idB);
     if (!b) return;
     const proy = porProyecto.get(pa);
-    const comparables=estado.forecast.timeline?compararMeses(a,b):null;
-    const sa = comparables?{fijo:comparables.fijoA,upside:comparables.upsideA}:a?sumarMeses(a.meses):{fijo:0,upside:0};
-    const sb = comparables?{fijo:comparables.fijoB,upside:comparables.upsideB}:sumarMeses(b.meses);
+    const comparables=compararMeses(a,b);
+    const sa = {fijo:comparables.fijoA,upside:comparables.upsideA};
+    const sb = {fijo:comparables.fijoB,upside:comparables.upsideB};
     const ev = porPA.get(pa) || { n: 0, nuevo: false, lista: [] };
     const dFijo = sb.fijo - sa.fijo;
     filas.push({

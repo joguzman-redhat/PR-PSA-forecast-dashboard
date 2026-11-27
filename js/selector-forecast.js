@@ -14,7 +14,6 @@ function limitePeriodoForecast(valor, extremo) {
 }
 
 export function configurarSelectorForecast() {
-  if (!estado.forecast.timeline) return;
   const unidad = document.getElementById('forecast-unidad');
   const desde = document.getElementById('forecast-desde');
   const hasta = document.getElementById('forecast-hasta');

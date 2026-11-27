@@ -4,7 +4,6 @@
 import { estado } from './estado.js';
 import { vidaProyecto } from './vida-proyecto.js';
 import { DIMENSIONES, etiquetaDimension, pasaDimension, pasaTexto, pasaVisibilidadProyecto, conteosDe, opcionesDe } from './filtros.js';
-import { construirSelectorPeriodo } from './selector-periodo.js';
 import { vistas } from './vistas.js';
 
 export function aplicarFiltros() {
@@ -20,7 +19,6 @@ export function aplicarFiltros() {
 }
 
 function actualizarResumenRango() {
-  if (!estado.forecast.timeline) return;
   const visibles = estado.proyectos.filter(pasaVisibilidadProyecto);
   const sinInicio = visibles.filter(p => !vidaProyecto(p).inicio).length;
   const sinFin = visibles.filter(p => !vidaProyecto(p).fin).length;
@@ -88,11 +86,6 @@ export function inicializarFiltros() {
       estado.incluirCancelados = chk.checked;
       aplicarFiltros();
     });
-  }
-
-  const anfitrion = document.getElementById('periodo-listado');
-  if (!estado.forecast.timeline && anfitrion && !anfitrion.children.length) {
-    anfitrion.appendChild(construirSelectorPeriodo(() => vistas.actualizarUI()));
   }
 
   // Un clic fuera cierra cualquier dropdown abierto.

@@ -1,7 +1,6 @@
 // Gráfica de Commit y Upside apilados mes a mes de un proyecto, en el detalle.
 
 import { etiquetaPeriodoCalendario } from './calendario.js';
-import { estado } from './estado.js';
 import { formatearDinero } from './formato.js';
 import { svgEl, escalaTexto } from './grafica-base.js';
 import { registrarGrafica } from './grafica-registro.js';
@@ -115,8 +114,8 @@ export function crearGraficaRevenueProyecto(svg, datos, meses) {
       x: i * paso + paso / 2, y: areaAlto + 16,
       'font-size': 10, 'text-anchor': 'middle', fill: 'var(--text-dim)',
     });
-    lbl.textContent = estado.forecast.timeline ? ((i%Math.ceil(meses.length/10)===0||i===meses.length-1)?etiquetaPeriodoCalendario(m):'') : m.slice(0,3);
-    if(estado.forecast.timeline&&!SERIES.some(s=>Number.isFinite((datos[m]||{})[s]))) {
+    lbl.textContent = (i%Math.ceil(meses.length/10)===0||i===meses.length-1)?etiquetaPeriodoCalendario(m):'';
+    if(!SERIES.some(s=>Number.isFinite((datos[m]||{})[s]))) {
       const vacio=svgEl('text',{x:i*paso+paso/2,y:yCero-6,'font-size':9,'text-anchor':'middle',fill:'var(--text-dim)'});vacio.textContent='s/d';g.appendChild(vacio);
     }
     g.appendChild(lbl);

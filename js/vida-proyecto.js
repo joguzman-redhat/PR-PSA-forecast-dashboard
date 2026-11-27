@@ -67,7 +67,6 @@ export function advertenciaFueraDeFechaFin(proyecto) {
 }
 
 export function pasaPeriodoProyecto(proyecto) {
-  if (!estado.forecast.timeline) return true;
   const indices = mesesActivos();
   if (!indices.length) return false;
   const desde = MESES_ES[indices[0]], hasta = MESES_ES[indices.at(-1)];
@@ -76,7 +75,6 @@ export function pasaPeriodoProyecto(proyecto) {
 }
 
 export function mesesTimelineProyecto(proyecto) {
-  if (!estado.forecast.timeline) return mesesActivos();
   const {inicio, fin} = vidaProyecto(proyecto);
   return mesesActivos().filter(i => (!inicio || MESES_ES[i] >= inicio) && (!fin || MESES_ES[i] <= fin));
 }

@@ -4,25 +4,17 @@
 import { estado } from './estado.js';
 import { backlogDe } from './fila-backlog.js';
 import { vidaProyecto } from './vida-proyecto.js';
-import { MESES_ES, mesesActivos, mesesEjecutadosForecast, mesReferenciaFinanciera, etiquetaPeriodoCalendario } from './calendario.js';
+import { MESES_ES, mesesActivos, mesReferenciaFinanciera, etiquetaPeriodoCalendario } from './calendario.js';
 
 /**
  * Valor Booking de un proyecto. TODA LA PLATA viene de BackLog NOLA, nunca de
  * Info Proyectos: sus columnas de dinero (las del Excel de Info Proyectos) NO
  * están convertidas (carecen del factor de conversión).
- * Se reconstruye como lo calcula el propio Excel: Booking = Backlog + Proyectado,
- * las dos ya convertidas. Va primero porque las cargas
- * anteriores al arreglo del ETL guardaron en fila.booking el valor de Info (sin
- * convertir); fila.booking queda solo de respaldo.
+ * Es el `booking` de la fila de BackLog NOLA, ya convertido a USD.
  */
 export function valorBooking(proyecto) {
   const fila = backlogDe(proyecto);
-  if(estado.forecast.timeline)return typeof fila?.booking==='number'?fila.booking:null;
-  if (!fila) return null;
-  if (typeof fila.backlog === 'number' && typeof fila.proyectado === 'number') {
-    return fila.backlog + fila.proyectado;
-  }
-  return typeof fila.booking === 'number' ? fila.booking : null;
+  return typeof fila?.booking==='number'?fila.booking:null;
 }
 
 /** Acumulado previo al Año fuente, desde BackLog NOLA. */
@@ -35,7 +27,7 @@ export function acumuladoAnterior(proyecto) {
 export function revenuePeriodo(proyecto) {
   const fila = backlogDe(proyecto);
   if (!fila) return null;
-  if(estado.forecast.timeline&&!mesesActivos().some(i=>typeof fila[MESES_ES[i]+'_fijo']==='number'))return null;
+  if(!mesesActivos().some(i=>typeof fila[MESES_ES[i]+'_fijo']==='number'))return null;
   return mesesActivos().reduce((acc, i) => {
     const v = fila[MESES_ES[i] + '_fijo'];
     return acc + (typeof v === 'number' ? v : 0);
@@ -46,7 +38,7 @@ export function revenuePeriodo(proyecto) {
 export function upsidePeriodo(proyecto) {
   const fila = backlogDe(proyecto);
   if (!fila) return null;
-  if(estado.forecast.timeline&&!mesesActivos().some(i=>typeof fila[MESES_ES[i]+'_upside']==='number'))return null;
+  if(!mesesActivos().some(i=>typeof fila[MESES_ES[i]+'_upside']==='number'))return null;
   return mesesActivos().reduce((acc, i) => {
     const v = fila[MESES_ES[i] + '_upside'];
     return acc + (typeof v === 'number' ? v : 0);
@@ -82,30 +74,20 @@ export function arrastreProyecto(proyecto) {
  */
 export function ejecutadoProyecto(proyecto) {
   const fila = backlogDe(proyecto);
-  if (estado.forecast.timeline) {
-    if (!fila) return null;
-    const hoy = mesReferenciaFinanciera();
-    const inicio = vidaProyecto(proyecto).inicio;
-    let acumulado = arrastreProyecto(proyecto);
-    if (Number.isFinite(acumulado)) {
-      for (const m of estado.forecast.periodos || []) {
-        if (!inicio || m < inicio || m > hoy) continue;
-        if (!Number.isFinite(fila[m + '_fijo'])) { acumulado = null; break; }
-        acumulado += fila[m + '_fijo'];
-      }
-      if (Number.isFinite(acumulado)) return acumulado;
-    }
-    const fuente = fila.anio_atributos ?? estado.forecast.anio;
-    return Number(hoy.slice(0, 4)) <= fuente && Number.isFinite(fila.ejecutado) ? fila.ejecutado : null;
-  }
   if (!fila) return null;
-  const acum2025 = acumuladoAnterior(proyecto) ?? 0;
-  // Enero hasta el mes en curso, inclusive.
-  const commitHastaHoy = MESES_ES.slice(0, mesesEjecutadosForecast()).reduce((acc, m) => {
-    const v = fila[m + '_fijo'];
-    return acc + (typeof v === 'number' ? v : 0);
-  }, 0);
-  return acum2025 + commitHastaHoy;
+  const hoy = mesReferenciaFinanciera();
+  const inicio = vidaProyecto(proyecto).inicio;
+  let acumulado = arrastreProyecto(proyecto);
+  if (Number.isFinite(acumulado)) {
+    for (const m of estado.forecast.periodos || []) {
+      if (!inicio || m < inicio || m > hoy) continue;
+      if (!Number.isFinite(fila[m + '_fijo'])) { acumulado = null; break; }
+      acumulado += fila[m + '_fijo'];
+    }
+    if (Number.isFinite(acumulado)) return acumulado;
+  }
+  const fuente = fila.anio_atributos ?? estado.forecast.anio;
+  return Number(hoy.slice(0, 4)) <= fuente && Number.isFinite(fila.ejecutado) ? fila.ejecutado : null;
 }
 
 /**
@@ -133,20 +115,12 @@ export function backlogHoy(proyecto) {
 
 /**
  * Proyectado de un proyecto: Ejecutado más el Commit de los meses futuros sobre
- * toda su vida. Nunca incluye Upside. Sin dato si falta el
- * Ejecutado o algún mes futuro de su vida. En el modo anterior, sin timeline,
- * sigue siendo el cierre del año: acum_2025 + los 12 meses fijo.
+ * toda su vida. Nunca incluye Upside. Si faltan meses de Commit es parcial: se
+ * calcula con el que existe (ver coberturaProyectado); sin dato solo si no se
+ * puede calcular el Ejecutado.
  */
 export function proyectadoProyecto(proyecto) {
-  if (estado.forecast.timeline) return proyeccionReferencia(proyecto);
-  const fila = backlogDe(proyecto);
-  if (!fila) return null;
-  const acum2025 = acumuladoAnterior(proyecto) ?? 0;
-  const totalFijo = MESES_ES.reduce((acc, m) => {
-    const v = fila[m + '_fijo'];
-    return acc + (typeof v === 'number' ? v : 0);
-  }, 0);
-  return acum2025 + totalFijo;
+  return proyeccionReferencia(proyecto);
 }
 
 export function porcentajeEjecucionProyecto(p) {
@@ -189,16 +163,10 @@ function coberturaCommitFuturo(p) {
  * Commit de los meses posteriores al actual, sobre toda la vida del proyecto
  * Con meses sin cobertura es parcial: suma solo el Commit que
  * existe (ver coberturaProyectado), nunca cero inventado. Sin fila de backlog,
- * sin dato. En el modo anterior, sin timeline, exige los meses del año.
+ * sin dato.
  */
 export function commitPendienteProyecto(p) {
   const b=backlogDe(p);if(!b)return null;
-  if(!estado.forecast.timeline){
-    const anio=b.anio_atributos??estado.forecast.anio;
-    const meses=Array.from({length:12},(_,i)=>`${anio}-${String(i+1).padStart(2,'0')}`).filter(m=>m>mesReferenciaFinanciera());
-    const valores=meses.map(m=>b[MESES_ES[Number(m.slice(5))-1]+'_fijo']);
-    return valores.every(Number.isFinite)?valores.reduce((a,b)=>a+b,0):null;
-  }
   return coberturaCommitFuturo(p).valor;
 }
 
@@ -208,7 +176,6 @@ export function commitPendienteProyecto(p) {
  * cobertura contigua, los meses sin ella y sus años.
  */
 export function coberturaProyectado(p) {
-  if(!estado.forecast.timeline)return null;
   const c=coberturaCommitFuturo(p);
   if(!c||!c.faltantes.length)return null;
   const n=Number(c.faltantes[0].slice(0,4))*12+Number(c.faltantes[0].slice(5))-2;

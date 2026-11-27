@@ -1,7 +1,7 @@
 // Vista de detalle del proyecto: orquesta encabezado, información, revenue,
 // hermanos de cliente y trazabilidad del proyecto.
 
-import { MESES_ES, etiquetaPeriodoCalendario, mesesActivos, periodoActual } from './calendario.js';
+import { etiquetaPeriodoCalendario, periodoActual } from './calendario.js';
 import { CAMPOS_DINERO, CAMPOS_PORCENTAJE } from './campos-proyecto.js';
 import { chip } from './chip.js';
 import { backlogDe } from './fila-backlog.js';
@@ -14,7 +14,6 @@ import { SIN_DATO, pasaTerritorio, valorDimension } from './filtros.js';
 import { formatearDinero, formatearFecha, formatearNumero, formatearPorcentaje, normalizarValor, obtenerEtiquetaValor } from './formato.js';
 import { svgEl } from './grafica-base.js';
 import { crearGraficaLinea } from './grafica-linea.js';
-import { construirSelectorPeriodo } from './selector-periodo.js';
 import { vidaProyecto, calendarioVidaProyecto, advertenciaFueraDeFechaFin } from './vida-proyecto.js';
 import { vistas } from './vistas.js';
 
@@ -166,20 +165,17 @@ export function renderizarDetalle() {
     const h4 = document.createElement('h4');
     h4.textContent = 'Revenue detallado · vida completa del proyecto';
     divRevenue.appendChild(h4);
-    if (estado.forecast.timeline) {
-      const vida = vidaProyecto(proyecto);
-      const nota = document.createElement('p'); nota.className = 'nota-periodo';
-      nota.textContent = `Primer commit registrado: ${vida.inicio ? etiquetaPeriodoCalendario(vida.inicio) : 'sin commit registrado'}. Fecha fin: ${vida.fin ? etiquetaPeriodoCalendario(vida.fin) : 'sin fecha fin'}.`;
-      divRevenue.appendChild(nota);
-      const advertencia = advertenciaFueraDeFechaFin(proyecto);
-      if (advertencia) {
-        const aviso = document.createElement('p'); aviso.className = 'nota-periodo aviso-fecha-fin';
-        aviso.setAttribute('role', 'alert');
-        aviso.textContent = advertencia;
-        divRevenue.appendChild(aviso);
-      }
+    const vida = vidaProyecto(proyecto);
+    const nota = document.createElement('p'); nota.className = 'nota-periodo';
+    nota.textContent = `Primer commit registrado: ${vida.inicio ? etiquetaPeriodoCalendario(vida.inicio) : 'sin commit registrado'}. Fecha fin: ${vida.fin ? etiquetaPeriodoCalendario(vida.fin) : 'sin fecha fin'}.`;
+    divRevenue.appendChild(nota);
+    const advertencia = advertenciaFueraDeFechaFin(proyecto);
+    if (advertencia) {
+      const aviso = document.createElement('p'); aviso.className = 'nota-periodo aviso-fecha-fin';
+      aviso.setAttribute('role', 'alert');
+      aviso.textContent = advertencia;
+      divRevenue.appendChild(aviso);
     }
-    if (!estado.forecast.timeline) divRevenue.appendChild(construirSelectorPeriodo(renderizarDetalle));
 
     // Gráfica de barras apiladas (fijo vs upside), solo los meses del periodo
     const meses = calendarioVidaProyecto(proyecto);
@@ -228,37 +224,11 @@ export function renderizarDetalle() {
     divStats.style.gridTemplateColumns = 'repeat(4, 1fr)';
     divStats.style.gap = 'var(--spacing-lg)';
 
-    // Los tiles siguen al periodo: el año abre en quarters, un quarter abre
-    // en sus meses, un mes muestra fijo vs upside de ese mes.
-    const num = v => (typeof v === 'number' ? v : 0);
-    const fijoDe = m => num(datosBacklog[m + '_fijo']);
-    let stats;
-    if(estado.forecast.timeline) {
-      const quarters=new Map();
-      meses.forEach(m=>{const key='Q'+Math.ceil(Number(m.slice(5))/3)+' '+m.slice(0,4);
-        const old=quarters.get(key)||{valor:0,n:0};if(typeof datosBacklog[m+'_fijo']==='number'){old.valor+=datosBacklog[m+'_fijo'];old.n++;}quarters.set(key,old);});
-      stats=[...quarters].map(([label,v])=>({label,valor:v.n?v.valor:null}));
-    } else if (estado.periodo === 'anio') {
-      stats = [
-        { label: 'Q1', valor: num(datosBacklog.q1) },
-        { label: 'Q2', valor: num(datosBacklog.q2) },
-        { label: 'Q3', valor: num(datosBacklog.q3) },
-        { label: 'Q4', valor: num(datosBacklog.q4) },
-      ];
-    } else if (mesesActivos().length === 1) {
-      const m = MESES_ES[mesesActivos()[0]];
-      stats = [
-        { label: m + ' · fijo', valor: fijoDe(m) },
-        { label: m + ' · upside', valor: num(datosBacklog[m + '_upside']) },
-        { label: 'Total del mes', valor: fijoDe(m) + num(datosBacklog[m + '_upside']) },
-      ];
-    } else {
-      stats = mesesActivos().map(i => ({ label: MESES_ES[i], valor: fijoDe(MESES_ES[i]) }));
-      stats.push({
-        label: periodoActual().etiqueta.split(' ')[0] + ' · total',
-        valor: stats.reduce((a, x) => a + x.valor, 0),
-      });
-    }
+    // Los tiles muestran el Commit de cada quarter de la vida del proyecto.
+    const quarters=new Map();
+    meses.forEach(m=>{const key='Q'+Math.ceil(Number(m.slice(5))/3)+' '+m.slice(0,4);
+      const old=quarters.get(key)||{valor:0,n:0};if(typeof datosBacklog[m+'_fijo']==='number'){old.valor+=datosBacklog[m+'_fijo'];old.n++;}quarters.set(key,old);});
+    const stats=[...quarters].map(([label,v])=>({label,valor:v.n?v.valor:null}));
     divStats.style.gridTemplateColumns = `repeat(${Math.min(Math.max(stats.length,1),4)}, minmax(0, 1fr))`;
 
     stats.forEach(stat => {

@@ -7,7 +7,6 @@ import { formatearDinero, formatearDineroExacto, formatearNumero } from './forma
 import { crearGraficaBarrasSimple } from './grafica-barras-simple.js';
 import { calcularPMs } from './pms-calculo.js';
 import { crearFilaProyectosPM, irAProyectosDePM } from './pms-proyectos.js';
-import { construirSelectorPeriodo } from './selector-periodo.js';
 
 const COLUMNAS_PM_DINERO = new Set([
   // completedN is NOT money, it's a count
@@ -52,11 +51,6 @@ function renderizarGraficasPMs(filas) {
 }
 
 export function renderizarPMs() {
-  const anfitrion = document.getElementById('periodo-pms');
-  if (!estado.forecast.timeline && anfitrion && !anfitrion.children.length) {
-    anfitrion.appendChild(construirSelectorPeriodo(renderizarPMs));
-  }
-
   const thead = document.querySelector('#tabla-pms > thead tr');
   if (thead && !thead.dataset.wireado) {
     thead.dataset.wireado = '1';

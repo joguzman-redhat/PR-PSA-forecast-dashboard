@@ -90,7 +90,7 @@ test('incorporar enero FY27 no es un movimiento y cambios posteriores si se dete
 
 
 test('capturas sin FY27 no dibujan cero para los meses FY27',()=>{
-  const {ui}=pagina();ui.estado.forecast.timeline=true;ui.configurarCalendarioTimeline(datosTimeline().meta);
+  const {ui}=pagina();ui.configurarCalendarioTimeline(datosTimeline().meta);
   assert.equal(ui.coberturaCalendario({anios_disponibles:[2026]},[0,12]),false);
   assert.equal(ui.coberturaCalendario({anios_disponibles:[2026]},[0,1]),true);
   assert.equal(ui.coberturaCalendario({anios_disponibles:[2026,2027]},[0,12]),true);

@@ -11,8 +11,8 @@ export function normalizarNombre(valor) {
 // Devuelve null si no hay match. Antes caia de vuelta al numero de fila, que
 // es justamente lo que mezclaba el revenue entre proyectos distintos.
 export function backlogDe(proyecto) {
-  if (proyecto.clave_timeline) return estado.backlogPorTimeline?.get(proyecto.clave_timeline) || null;
   if (!proyecto) return null;
+  if (proyecto.clave_timeline) return estado.backlogPorTimeline?.get(proyecto.clave_timeline) || null;
   const pa = proyecto.num_pa;
   if (pa !== null && pa !== undefined && pa !== '') {
     const porPA = estado.backlogPorPA && estado.backlogPorPA.get(String(pa));

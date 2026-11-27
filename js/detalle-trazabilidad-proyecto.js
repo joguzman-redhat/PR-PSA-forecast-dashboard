@@ -75,11 +75,10 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
   // ¿Hubo algún movimiento en el periodo elegido? Una línea plana no comunica
   // nada: si el dato nunca se movió, es más honesto decirlo con palabras.
   const etiquetas = Object.keys(evolucion);
-  const valores = Object.values(evolucion);
   const fechasCambio = etiquetas.filter((_, i) => {
     if(!i)return false;
-    if(estado.forecast.timeline){const c=compararMeses(serie[i-1],serie[i],indices);return Math.abs(c.fijoB-c.fijoA)>.5||Math.abs(c.upsideB-c.upsideA)>.5;}
-    return Math.abs(valores[i].Commit-valores[i-1].Commit)>.5||Math.abs(valores[i].Upside-valores[i-1].Upside)>.5;
+    const c=compararMeses(serie[i-1],serie[i],indices);
+    return Math.abs(c.fijoB-c.fijoA)>.5||Math.abs(c.upsideB-c.upsideA)>.5;
   });
 
   const resumen = document.createElement('p');
@@ -88,7 +87,7 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
 
   if (!fechasCambio.length) {
     const t = sumarVida(serie[serie.length - 1].meses);
-    resumen.innerHTML = estado.forecast.timeline && serie.some((x,i)=>i&&compararMeses(serie[i-1],x,indices).nuevos>0)
+    resumen.innerHTML = serie.some((x,i)=>i&&compararMeses(serie[i-1],x,indices).nuevos>0)
       ? 'Se incorporaron meses de otro año. No se detectaron variaciones en los meses comparables.'
       : (Math.abs(t.fijo) < 1 && Math.abs(t.upside) < 1)
       ? `Este proyecto no tiene revenue en <strong>vida completa del proyecto</strong>.`
@@ -158,7 +157,7 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
       const m = MESES_ES[i];
       const [fa, ua] = a.meses[i] || [0, 0];
       const [fb, ub] = b.meses[i] || [0, 0];
-      const comparable=!estado.forecast.timeline||(Number.isFinite(fa)&&Number.isFinite(fb)&&Number.isFinite(ua)&&Number.isFinite(ub));
+      const comparable=Number.isFinite(fa)&&Number.isFinite(fb)&&Number.isFinite(ua)&&Number.isFinite(ub);
       if(comparable){tfa+=fa;tfb+=fb;tua+=ua;tub+=ub;}
       // Los meses que nunca tuvieron plata solo alargan la tabla.
       if (!fa && !fb && !ua && !ub) return;
@@ -182,7 +181,7 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
 
     const trt = document.createElement('tr');
     trt.className = 'fila-total';
-    [[estado.forecast.timeline?'Total comparable':'Total', ''], [formatearDinero(tfa), 'celda-numero'], [formatearDinero(tfb), 'celda-numero'],
+    [['Total comparable', ''], [formatearDinero(tfa), 'celda-numero'], [formatearDinero(tfb), 'celda-numero'],
       [delta(tfb - tfa), 'celda-numero ' + claseDelta(tfb - tfa)],
       [formatearDinero(tua), 'celda-numero'], [formatearDinero(tub), 'celda-numero'],
       [delta(tub - tua), 'celda-numero ' + claseDelta(tub - tua, true)]]

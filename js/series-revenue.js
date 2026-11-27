@@ -8,6 +8,8 @@ import { backlogDe } from './fila-backlog.js';
 import { mesFinalizacion, vidaProyecto, calendarioVidaProyecto } from './vida-proyecto.js';
 
 /** Calendario del Año fuente y reparto uniforme del Backlog fuente hasta cada fecha fin futura. */
+// La rama sin timeline (acumulado de un solo año) ya no se usa en producción; se conserva
+// porque la prueba «el calendario y la proyeccion usan el año seleccionado» la ejercita.
 export function serieBacklogRevenuePorMes(proyectos) {
   if(estado.forecast.timeline) {
     return Object.fromEntries(mesesActivos().map(i=>{

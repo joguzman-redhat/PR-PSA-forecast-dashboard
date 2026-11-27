@@ -6,7 +6,6 @@ import { estado } from './estado.js';
 import { pasaVisibilidadProyecto } from './filtros.js';
 import { crearGraficaLinea } from './grafica-linea.js';
 import { actualizarOpcionesFiltro } from './opciones-filtro.js';
-import { construirSelectorPeriodo } from './selector-periodo.js';
 import { TIPO_MOVIMIENTO, actualizarTablaEventos, ordenarTablaEventos } from './snapshots-movimientos.js';
 import { rangoPredefinido } from './snapshots-rango.js';
 import { renderizarResumenProyectos } from './snapshots-resumen-proyectos.js';
@@ -40,12 +39,6 @@ export function renderizarTrazabilidad() {
       'Historial de revenue no disponible (aún no generado).</div>';
     if (control) notificacion.prepend(control);
     return;
-  }
-
-  // El selector de periodo se monta una sola vez, arriba de las gráficas.
-  const anfitrion = document.getElementById('periodo-trazabilidad');
-  if (!estado.forecast.timeline && anfitrion && !anfitrion.children.length) {
-    anfitrion.appendChild(construirSelectorPeriodo(renderizarTrazabilidad));
   }
 
   const snaps = estado.historia.snapshots;

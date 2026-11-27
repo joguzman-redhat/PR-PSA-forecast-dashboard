@@ -1,7 +1,7 @@
 // Páginas del informe PDF: la hoja con marca y el resumen de la portada.
 import { estado } from './estado.js';
 import { formatearNumero, formatearDineroExacto } from './formato.js';
-import { anioRevenue, periodoActual } from './calendario.js';
+import { periodoActual } from './calendario.js';
 import { valorBooking, revenuePeriodo, ejecutadoProyecto, backlogHoy, ejecucionPonderada } from './dinero-proyecto.js';
 import { SIN_DATO, valorDimension, pasaVisibilidadProyecto } from './filtros.js';
 import { identificador } from './campos-proyecto.js';
@@ -56,7 +56,7 @@ export function construirResumenReporte(contenido, vista, nombreVista, partes) {
     return valores.length || !proyectos.length ? valores.reduce((s, v) => s + v, 0) : null;
   };
   const booking = sumar(valorBooking), acumulado = sumar(ejecutadoProyecto);
-  const perfiles = [estado.forecast.timeline?'Timeline · '+periodoActual().etiqueta:`Forecast ${anioRevenue()}`];
+  const perfiles = ['Timeline · '+periodoActual().etiqueta];
   if (vista.id === 'pestana-listado') {
     if (estado.filtros.pm_lider.length === 1) perfiles.push(`PM: ${estado.filtros.pm_lider[0]}`);
     if (estado.filtros.vendedor.length === 1) perfiles.push(`Vendedor: ${estado.filtros.vendedor[0]}`);
