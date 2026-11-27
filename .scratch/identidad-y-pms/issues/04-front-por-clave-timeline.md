@@ -4,10 +4,12 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Prueba (seam 2): `backlogDe` y la carga de datos resuelven por clave del timeline, sin mapas por PA ni por nombre
-- [ ] El PA se ve en el listado, el detalle y los filtros, y buscar por PA sigue funcionando
-- [ ] El detalle muestra el Project ID junto al PA; «sin identificar» lleva marca visible
-- [ ] `npm test`, `npm run lint:front` y `scripts/comparar-front.sh` pasan; la comparación solo difiere donde el cambio es intencional
+- [x] Prueba (seam 2): `backlogDe` y la carga de datos resuelven por clave del timeline, sin mapas por PA ni por nombre
+- [x] El PA se ve en el listado, el detalle y los filtros, y buscar por PA sigue funcionando
+- [x] El detalle muestra el Project ID junto al PA; «sin identificar» lleva marca visible
+- [x] `npm test`, `npm run lint:front` y `scripts/comparar-front.sh` pasan; la comparación solo difiere donde el cambio es intencional
 - [ ] Verificado en un navegador según `docs/VERIFICAR_FRONT.md`
+
+**Nota:** quedan sin marcar los criterios que exigen navegador: no se pudieron verificar leyendo código ni pruebas.

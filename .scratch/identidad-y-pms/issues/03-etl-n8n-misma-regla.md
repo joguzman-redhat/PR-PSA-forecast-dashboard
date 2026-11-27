@@ -4,10 +4,10 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Prueba nueva (seam 3): el código del nodo de n8n que calcula la clave, evaluado en `vm`, da la misma clave que la función SQL con las mismas entradas
-- [ ] El export de n8n trae la regla nueva en el nodo y en la actualización de `proyecto`
-- [ ] La herramienta del agente devuelve el mismo proyecto buscando por PA o por Project ID
-- [ ] Documentado cómo importar el export al n8n local; la importación la confirma el usuario
-- [ ] `npm test` pasa
+- [x] Prueba nueva (seam 3): el código del nodo de n8n que calcula la clave, evaluado en `vm`, da la misma clave que la función SQL con las mismas entradas
+- [x] El export de n8n trae la regla nueva en el nodo y en la actualización de `proyecto`
+- [x] La herramienta del agente devuelve el mismo proyecto buscando por PA o por Project ID
+- [x] Documentado cómo importar el export al n8n local; la importación la confirma el usuario
+- [x] `npm test` pasa

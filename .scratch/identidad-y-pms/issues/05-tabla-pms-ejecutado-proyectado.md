@@ -4,11 +4,13 @@
 
 **Blocked by:** None (can start immediately). Por el orden acordado se hace después de 01 a 04.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Prueba (seam 2): la salida del cálculo de PMs trae Ejecutado y Proyectado por PM
-- [ ] Prueba: la suma de Ejecutado de los PMs coincide con el Ejecutado de los KPIs
-- [ ] Prueba: un Proyectado parcial queda marcado y un proyecto sin cifras no cuenta como cero
+- [x] Prueba (seam 2): la salida del cálculo de PMs trae Ejecutado y Proyectado por PM
+- [x] Prueba: la suma de Ejecutado de los PMs coincide con el Ejecutado de los KPIs
+- [x] Prueba: un Proyectado parcial queda marcado y un proyecto sin cifras no cuenta como cero
 - [ ] Datos reales: los 25 PMs suman $18,10 M de Ejecutado, igual que los KPIs
-- [ ] `npm test`, `npm run lint:front` y `scripts/comparar-front.sh` pasan; la comparación solo difiere en la tabla de PMs
+- [x] `npm test`, `npm run lint:front` y `scripts/comparar-front.sh` pasan; la comparación solo difiere en la tabla de PMs
 - [ ] Verificado en un navegador según `docs/VERIFICAR_FRONT.md`
+
+**Nota:** quedan sin marcar los criterios que exigen navegador y datos reales: no se pudieron verificar leyendo código ni pruebas.

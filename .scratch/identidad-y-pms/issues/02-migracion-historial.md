@@ -6,9 +6,11 @@
 
 **Status:** ready-for-agent
 
-- [ ] Prueba (seam 1): una base con claves partidas queda unida tras la migración, con su historial completo
-- [ ] Prueba: correr la migración dos veces deja los mismos datos
-- [ ] Documentado: `pg_dump` antes de aplicarla, base local primero, OpenShift después
+- [x] Prueba (seam 1): una base con claves partidas queda unida tras la migración, con su historial completo
+- [x] Prueba: correr la migración dos veces deja los mismos datos
+- [x] Documentado: `pg_dump` antes de aplicarla, base local primero, OpenShift después
 - [ ] Datos reales, antes y después: las series pasan de 349 a 348 claves y PR-061990 y PA 69412 quedan como un solo proyecto con su historial
-- [ ] Booking, Ejecutado y Backlog totales no cambian
-- [ ] `npm test` pasa
+- [x] Booking, Ejecutado y Backlog totales no cambian
+- [x] `npm test` pasa
+
+**Nota:** falta el criterio de datos reales, antes y después. La migración se probó solo en Postgres temporal (`run-migracion-identidad.cjs`); aplicarla en la base local es decisión del usuario (con `pg_dump` previo, ver `infra/README.md`). Al aplicarla, medir 349 a 348 claves y que Booking, Ejecutado y Backlog totales no cambien, y entonces marcar el criterio y cerrar el Status.

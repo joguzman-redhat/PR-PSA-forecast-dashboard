@@ -63,6 +63,12 @@ credencial Postgres (host `postgres`, puerto `5432`, mismas credenciales de
 > (2) aplicarla primero en la base local y revisar series y totales; (3) OpenShift después,
 > con su propio `pg_dump`. Prueba con Postgres temporal: `node infra/api/test/run-migracion-identidad.cjs`.
 
+> Reglas de la identidad (ADR 0003) que conviene saber al leer los datos: (a) el «PA de la fila
+> más reciente» de un Project ID con dos PA es la mayor posición de fila en n8n y el mayor
+> `proyecto_id` en SQL/API; equivalen porque el ETL inserta en orden de fila. (b) La clave de un
+> proyecto sin identificar es `SIN_ID:<año>:<posición de fila>` en n8n y `SIN_ID:<año>:<proyecto_id>`
+> en SQL; hoy hay 0 casos. (c) Un `proyecto.clave` duplicado tras la migración conserva la clave vieja.
+
 > Tras el refactor modular del front, la imagen de la API debe reconstruirse
 > (`./forecast.sh rebuild`) para que el contenedor sirva `js/` y `css/` nuevos.
 

@@ -24,3 +24,6 @@ La misma regla rige en todos los lugares donde vivía: el flujo de n8n (ETL y he
 - La migración reescribe claves guardadas y no tiene vuelta atrás automática: se hace `pg_dump` antes, se aplica primero en la base local y es idempotente. OpenShift se actualiza después de verificar que las cifras cuadran.
 - Booking, Ejecutado y Backlog totales no cambian; solo cambia cómo se agrupan las filas de un mismo proyecto.
 - `GLOSSARY.md` invierte las definiciones de **Project ID** y **PA**.
+- «PA de la fila más reciente» es la mayor posición de fila en n8n y el mayor `proyecto_id` en SQL y API. Son equivalentes porque el ETL inserta los proyectos en el orden de las filas.
+- La clave de un proyecto sin identificar es `SIN_ID:<año>:<posición de fila>` en n8n y `SIN_ID:<año>:<proyecto_id>` en SQL. Coinciden por la misma razón. Hoy hay 0 casos.
+- Si tras la migración dos filas de `proyecto` caen en la misma clave nueva, la más reciente la toma y la otra conserva su clave vieja: no se borra ni se une su historial.

@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Prueba: el mismo Project ID con distinto PA entre FY26 y FY27 da un solo proyecto en `/api/timeline`
-- [ ] Prueba: sin Project ID cae al PA; sin ambos queda «sin identificar» y marcado
-- [ ] Prueba: un mismo Project ID con dos PA en una Carga es un solo proyecto, con el PA de la fila más reciente
-- [ ] La función SQL de la clave, la clave de la API y `01_schema.sql` aplican la misma regla
-- [ ] `docs/REGLAS_DE_DATOS.md` describe la nueva regla de identidad
-- [ ] `npm test` pasa
+- [x] Prueba: el mismo Project ID con distinto PA entre FY26 y FY27 da un solo proyecto en `/api/timeline`
+- [x] Prueba: sin Project ID cae al PA; sin ambos queda «sin identificar» y marcado
+- [x] Prueba: un mismo Project ID con dos PA en una Carga es un solo proyecto, con el PA de la fila más reciente
+- [x] La función SQL de la clave, la clave de la API y `01_schema.sql` aplican la misma regla
+- [x] `docs/REGLAS_DE_DATOS.md` describe la nueva regla de identidad
+- [x] `npm test` pasa
