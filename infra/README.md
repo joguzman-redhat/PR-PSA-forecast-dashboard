@@ -88,3 +88,7 @@ node --test n8n/test/carga-sql.test.js
 Las pruebas levantan y eliminan un Postgres temporal sin red, puertos ni
 volumenes del stack real. Verifican los encabezados actuales y anteriores de
 BackLog NOLA, montos exactos y columnas completamente vacias.
+
+## Modo demo
+
+`FORECAST_DEMO=true` sirve el front con datos ficticios, incluido `/api/timeline`, sin Postgres; `scripts/comparar-front.sh` lo usa para comparar el front entre dos versiones (ver `docs/VERIFICAR_FRONT.md`).
