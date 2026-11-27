@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const { pagina, datosTimeline } = require('./pagina-simulada');
+const { pagina, datosTimeline, simularElementos } = require('./pagina-simulada');
 test('el corte mensual distingue años pasados, actuales y futuros en hora Colombia',()=>{
   const {ui}=pagina();const hoy=new Date('2026-11-14T12:00:00Z');
   ui.estado.forecast.anio=2025;assert.equal(ui.mesesEjecutadosForecast(hoy),12);
@@ -11,9 +11,9 @@ test('el corte mensual distingue años pasados, actuales y futuros en hora Colom
 });
 test('el calendario y la proyeccion usan el año seleccionado y no duplican el acumulado anterior',()=>{
   const {ui}=pagina();ui.estado.forecast.anio=2027;
-  const p={num_pa:'123',fecha_fin:'03/31/2028'};
+  const p={num_pa:'123',clave_timeline:'PR:PR-1',fecha_fin:'03/31/2028'};
   const fila={num_pa:'123',acumulado_anterior:160,booking:1000,proyectado:210,backlog:790,enero_fijo:50};
-  ui.estado.backlogPorPA=new Map([['123',fila]]);
+  ui.estado.backlogPorTimeline=new Map([['PR:PR-1',fila]]);
   const serie=ui.serieBacklogRevenuePorMes([p]);
   assert.ok(Object.keys(serie)[0].endsWith('2027'));
   assert.equal(serie['Dic 2027'].Backlog,790);
@@ -211,4 +211,42 @@ test('el rango inicial avanza al cambiar el año y termina en el ultimo mes que 
   const {ui,context}=pagina();const d=datosTimeline();d.meta.fecha_referencia='2027-02-01';d.meta.anio_actual=2027;
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();assert.equal(ui.estado.rangoTimeline.desde,'2027-01');assert.equal(ui.estado.rangoTimeline.hasta,'2027-12');
   assert.equal(ui.estado.forecast.periodos.at(-1),'2027-12');assert.equal(ui.estado.forecast.periodos.length,24);
+});
+test('la tabla de PMs trae Ejecutado y Proyectado por PM con las reglas de los KPIs, parcial marcado y sin cifras no es cero',async()=>{
+  const {ui,context}=pagina();const datos=datosTimeline();
+  const base={_tipo_fila:'proyecto',pm_lider:'PM A',estado:'In Progress'};
+  datos.proyectos=[
+    {...base,num_pa:'1',clave_timeline:'PA:1'},
+    {...base,num_pa:'2',clave_timeline:'PA:2'},
+    {...base,num_pa:'3',clave_timeline:'PA:3',pm_lider:'PM B'},
+    {...base,num_pa:'4',clave_timeline:'PA:4',pm_lider:'PM C',estado:'Canceled'}];
+  // Proyecto 1 (Ejecutado de la fila 160, mismo respaldo que los KPIs): Commit futuro 200+20 = 220 con meses de 2027 sin cargar, parcial.
+  // Proyecto 3: Ejecutado 40 (acumulado anterior), Commit futuro 30 completo, Proyectado 70.
+  // La columna del Excel (999999) no cuenta.
+  // Proyecto 2: sin fila de backlog, sin cifras.
+  datos.backlog=[{...datos.backlog[0],num_pa:'1',clave_timeline:'PA:1',total_ejecutado_acumulado:999999,ejecutado:160},
+    {_tipo_fila:'proyecto',num_pa:'3',clave_timeline:'PA:3',valor_of:500,acumulado_anterior:40,'2026-12_fijo':30}];
+  context.fetch=async()=>({ok:true,json:async()=>datos});await ui.cargarDatos();
+  ui.estado.periodo='todos';
+  const filas=Object.fromEntries(ui.calcularPMs().map(f=>[f.pm,f]));
+  assert.deepEqual(Object.keys(filas).sort(),['PM A','PM B']); // Canceled excluido
+  assert.equal(filas['PM A'].ejecutado,160);
+  assert.equal(filas['PM A'].proyectado,380);
+  assert.equal(filas['PM A'].proyectadoParciales,1);
+  // El proyecto 2 no cuenta como cero: PM A suma solo el proyecto 1 y sigue siendo 160.
+  assert.equal(filas['PM A'].proyectos.length,2);
+  assert.equal(filas['PM B'].ejecutado,40);
+  assert.equal(filas['PM B'].proyectado,70);
+  assert.equal(filas['PM B'].proyectadoParciales,0);
+  // La suma de Ejecutado de los PMs es la del KPI de Ejecutado (160 + 40 = 200).
+  const leer=simularElementos(context);
+  ui.estado.proyectosFiltrados=ui.calcularPMs().flatMap(f=>f.proyectos);ui.calcularKPIs();
+  assert.equal(ui.calcularPMs().reduce((a,f)=>a+f.ejecutado,0),200);
+  assert.equal(leer('kpi-acumulado-hoy'),ui.formatearDinero(200));
+});
+test('un PM sin ninguna cifra tiene Ejecutado y Proyectado sin dato, no cero',async()=>{
+  const {ui,context}=pagina();const datos=datosTimeline();
+  datos.proyectos=[{_tipo_fila:'proyecto',num_pa:'9',clave_timeline:'PA:9',pm_lider:'PM Z',estado:'Planned'}];datos.backlog=[];
+  context.fetch=async()=>({ok:true,json:async()=>datos});await ui.cargarDatos();ui.estado.periodo='todos';
+  const [f]=ui.calcularPMs();assert.equal(f.ejecutado,null);assert.equal(f.proyectado,null);
 });

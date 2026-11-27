@@ -25,7 +25,8 @@ CREATE TABLE carga (
   meta_proyectos   jsonb,                    -- bloque meta de Info Proyectos
   meta_backlog     jsonb,
   anio_forecast    smallint NOT NULL DEFAULT 2026 CONSTRAINT carga_anio_forecast_check CHECK (anio_forecast BETWEEN 2000 AND 2100),
-  archivo_id       text
+  archivo_id       text,
+  ejecucion_id     text                     -- corrida n8n compartida por todas las fuentes
 );
 CREATE INDEX idx_carga_ejecutada_en ON carga (ejecutada_en DESC);
 CREATE INDEX idx_carga_forecast_fuente ON carga (anio_forecast, archivo_id, id DESC);
@@ -102,7 +103,7 @@ $$ LANGUAGE plpgsql;
 -- cliente, PM y zona son atributos, no series de tiempo.
 CREATE TABLE proyecto (
   id                    bigserial PRIMARY KEY,
-  clave                 text NOT NULL UNIQUE,   -- num_pa, o nombre normalizado
+  clave                 text NOT NULL UNIQUE,   -- PR:<Project ID>, PA:<PA> o SIN_ID:<año>:<fila> (ADR 0003)
   -- Clave con la que el dashboard indexa las series: String(num_pa), o
   -- 'fila-<n>' con el numero de fila de BackLog NOLA cuando no hay PA.
   clave_historia        text,
@@ -344,15 +345,17 @@ CREATE OR REPLACE VIEW v_revenue_mes_por_forecast AS
 -- Timeline consolidado
 BEGIN;
 -- Calendario de revenue y fecha de captura son ejes distintos. No se pierden snapshots.
+-- Identidad por Project ID (ADR 0003): Project ID; si falta, PA; si faltan ambos, SIN_ID.
 CREATE OR REPLACE FUNCTION forecast_clave_timeline(a jsonb, proyecto bigint, anio int) RETURNS text
 LANGUAGE sql IMMUTABLE AS $$
  SELECT CASE
+   WHEN nullif(btrim(a->>'project_id'),'') IS NOT NULL
+        AND upper(btrim(a->>'project_id')) NOT IN ('#N/A','N/A','NA')
+     THEN 'PR:' || upper(btrim(a->>'project_id'))
    WHEN nullif(btrim(a->>'num_pa'),'') IS NOT NULL
         AND upper(btrim(a->>'num_pa')) NOT IN ('#N/A','N/A','NA')
      THEN 'PA:' || upper(btrim(a->>'num_pa'))
-   WHEN nullif(btrim(a->>'project_id'),'') IS NOT NULL
-     THEN 'PR:' || upper(btrim(a->>'project_id'))
-   ELSE 'SIN_PA:' || anio::text || ':' || proyecto::text END
+   ELSE 'SIN_ID:' || anio::text || ':' || proyecto::text END
 $$;
 CREATE TABLE IF NOT EXISTS forecast_revenue_mensual (
  clave_proyecto text NOT NULL,
@@ -380,7 +383,8 @@ BEGIN
    proyecto_id=EXCLUDED.proyecto_id,carga_id=EXCLUDED.carga_id,archivo_id=EXCLUDED.archivo_id,
    commit_usd=EXCLUDED.commit_usd,upside_usd=EXCLUDED.upside_usd
  WHERE (EXCLUDED.archivo_id IS NOT NULL AND destino.archivo_id IS NULL)
-    OR ((EXCLUDED.archivo_id IS NOT NULL)=(destino.archivo_id IS NOT NULL) AND EXCLUDED.carga_id>=destino.carga_id);
+    OR ((EXCLUDED.archivo_id IS NOT NULL)=(destino.archivo_id IS NOT NULL)
+     AND (EXCLUDED.carga_id>destino.carga_id OR (EXCLUDED.carga_id=destino.carga_id AND EXCLUDED.proyecto_id>=destino.proyecto_id)));
  RETURN NEW;
 END $$;
 DROP TRIGGER IF EXISTS trg_revenue_timeline ON revenue_mes;
@@ -396,12 +400,13 @@ SELECT DISTINCT ON (forecast_clave_timeline(s.atributos,r.proyecto_id,c.anio_for
  FROM revenue_mes r JOIN carga c ON c.id=r.carga_id
  JOIN proyecto_snapshot s ON s.carga_id=r.carga_id AND s.proyecto_id=r.proyecto_id
  ORDER BY forecast_clave_timeline(s.atributos,r.proyecto_id,c.anio_forecast),c.anio_forecast,r.mes,
-   (c.archivo_id IS NOT NULL) DESC,c.id DESC
+   (c.archivo_id IS NOT NULL) DESC,c.id DESC,r.proyecto_id DESC
 ON CONFLICT (clave_proyecto,periodo) DO UPDATE SET
  proyecto_id=EXCLUDED.proyecto_id,carga_id=EXCLUDED.carga_id,archivo_id=EXCLUDED.archivo_id,
  commit_usd=EXCLUDED.commit_usd,upside_usd=EXCLUDED.upside_usd
 WHERE (EXCLUDED.archivo_id IS NOT NULL AND destino.archivo_id IS NULL)
- OR ((EXCLUDED.archivo_id IS NOT NULL)=(destino.archivo_id IS NOT NULL) AND EXCLUDED.carga_id>=destino.carga_id);
+ OR ((EXCLUDED.archivo_id IS NOT NULL)=(destino.archivo_id IS NOT NULL)
+     AND (EXCLUDED.carga_id>destino.carga_id OR (EXCLUDED.carga_id=destino.carga_id AND EXCLUDED.proyecto_id>=destino.proyecto_id)));
 
 CREATE OR REPLACE VIEW v_carga_timeline AS
  SELECT DISTINCT ON (anio_forecast) * FROM v_carga_actual_por_forecast

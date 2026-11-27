@@ -11,7 +11,7 @@ import { crearFilaProyectosPM, irAProyectosDePM } from './pms-proyectos.js';
 const COLUMNAS_PM_DINERO = new Set([
   // completedN is NOT money, it's a count
   'inProgresoBacklog', 'onHoldBacklog', 'plannedBacklog', 'totalBacklog',
-  'commit', 'upside', 'totalEjecutado', 'promedioMensual', 'promedioProyecto',
+  'commit', 'upside', 'ejecutado', 'proyectado', 'promedioMensual', 'promedioProyecto',
 ]);
 
 function ordenarTablaPMs(columna) {
@@ -107,7 +107,7 @@ export function renderizarPMs() {
   tbody.innerHTML = '';
   const columnas = ['inProgresoN', 'inProgresoBacklog', 'onHoldN', 'onHoldBacklog',
     'plannedN', 'plannedBacklog', 'completedN', 'totalN', 'totalBacklog',
-    'commit', 'upside', 'totalEjecutado', 'promedioMensual', 'promedioProyecto'];
+    'commit', 'upside', 'ejecutado', 'proyectado', 'promedioMensual', 'promedioProyecto'];
 
   filas.forEach(f => {
     const tr = document.createElement('tr');
@@ -144,6 +144,7 @@ export function renderizarPMs() {
       const v = f[col];
       td.textContent = fmt(col, v);
       if (COLUMNAS_PM_DINERO.has(col)) td.title = formatearDineroExacto(v);
+      if (col === 'proyectado' && f.proyectadoParciales) marcarParcial(td, f.proyectadoParciales, f.nProyectos);
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
@@ -178,10 +179,21 @@ export function renderizarPMs() {
       else if (col === 'promedioProyecto') v = totalProyectos ? totalCommit / totalProyectos : 0;
       else v = filas.reduce((a, f) => a + (f[col] || 0), 0);
       td.textContent = fmt(col, v);
+      if (col === 'proyectado') {
+        const parciales = filas.reduce((a, f) => a + f.proyectadoParciales, 0);
+        if (parciales) marcarParcial(td, parciales, totalProyectos);
+      }
       trTotal.appendChild(td);
     });
     tfoot.appendChild(trTotal);
   }
+}
+
+/** Marca un Proyectado parcial (ADR 0002): los meses sin cobertura no se cuentan como cero. */
+function marcarParcial(td, parciales, total) {
+  td.textContent += ' *';
+  td.classList.add('celda-parcial');
+  td.title = `Proyectado parcial en ${parciales} de ${total} proyectos: los meses sin Commit cargado no se cuentan como cero.`;
 }
 
 function toggleProyectosPM(pm) {

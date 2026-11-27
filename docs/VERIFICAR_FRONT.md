@@ -33,6 +33,20 @@ con el código de servidor del árbol actual. Con Chrome sin interfaz, para
 Solo el estado inicial de esas 4 vistas: no hace clic, no cambia filtros ni
 exporta el PDF.
 
+## Cifras con datos reales
+
+Antes de dar por buena una tarea que toca dinero, comprueba que las vistas
+cuadran con las reglas sobre los datos de la API real:
+
+```bash
+node scripts/cifras-reales.cjs [URL_DEL_TIMELINE]   # por defecto http://localhost:3000/api/timeline
+```
+
+Es de solo lectura (un GET). Imprime Booking, Backlog, Ejecutado y Proyectado
+sumando las reglas por proyecto, y comprueba que las columnas de la tabla de PMs
+sean esa misma suma. Sale con 0 si cuadra y con 1 si no. Con la demo
+(`FORECAST_DEMO=true`) funciona igual; ver la sección siguiente.
+
 ## Abrir el front en demo a mano
 
 ```bash

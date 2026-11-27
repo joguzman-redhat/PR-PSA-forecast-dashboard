@@ -129,3 +129,46 @@ test('el timeline no rellena importes ausentes con cifras crudas de Info Proyect
   assert.equal(d.proyectos[0].valor_of,null);assert.equal(d.backlog[0].valor_of,null);
   assert.equal(Object.hasOwn(d.proyectos[0],'ejecucion_deseada'),false);assert.equal(d.backlog[0]['2026-01_fijo'],null);
 });
+
+// Identidad por Project ID (ADR 0003). Cada prueba usa Años fuente propios para no tocar los demas.
+async function cargarProyecto(anio, {clave, pa, pr, nombre, commit}) {
+  let c = (await pool.query('SELECT id FROM carga WHERE anio_forecast=$1 AND archivo_id=$2', [anio, 'source' + anio])).rows[0]?.id;
+  c ??= (await pool.query("INSERT INTO carga(anio_forecast,archivo_id,datos_hash) VALUES($1,$2,$3) RETURNING id", [anio, 'source' + anio, 'id' + anio])).rows[0].id;
+  const p = (await pool.query(`INSERT INTO proyecto(clave,num_pa,project_id,nombre,ultima_carga_id) VALUES($1,$2,$3,$4,$5)
+    ON CONFLICT(clave) DO UPDATE SET ultima_carga_id=EXCLUDED.ultima_carga_id RETURNING id`, [clave, pa, pr, nombre, c])).rows[0].id;
+  await pool.query('INSERT INTO revenue_mes SELECT $1,$2,n,CASE WHEN n=1 THEN $3::numeric ELSE 0 END,0 FROM generate_series(1,12)n', [c, p, commit]);
+  await pool.query('INSERT INTO revenue_anual VALUES($1,$2,1000,0,0,0)', [c, p]);
+  return c;
+}
+const porNombre = (d, nombre) => d.proyectos.filter(p => p.nombre_del_proyecto === nombre);
+test('el mismo Project ID con distinto PA entre FY29 y FY30 es un solo proyecto', async () => {
+  await cargarProyecto(2029, {clave: 'pa:4001', pa: '4001', pr: 'PR-CAMBIA', nombre: 'Cambia de PA', commit: 11});
+  await cargarProyecto(2030, {clave: 'pa:4002', pa: '4002', pr: 'pr-cambia ', nombre: 'Cambia de PA', commit: 22});
+  const d = await get('/api/timeline');
+  const ps = porNombre(d, 'Cambia de PA');
+  assert.equal(ps.length, 1);
+  assert.equal(ps[0].clave_timeline, 'PR:PR-CAMBIA');
+  assert.equal(ps[0].sin_identificar, false);
+  const b = d.backlog.find(x => x.clave_timeline === 'PR:PR-CAMBIA');
+  assert.equal(b['2029-01_fijo'], 11);assert.equal(b['2030-01_fijo'], 22);
+  assert.ok(d.historia.series_por_proyecto['PR:PR-CAMBIA']);
+  assert.ok(!d.historia.series_por_proyecto['PA:4001'] && !d.historia.series_por_proyecto['PA:4002']);
+});
+test('sin Project ID cae al PA; sin ambos queda sin identificar y marcado', async () => {
+  await cargarProyecto(2031, {clave: 'pa:4003', pa: '4003', pr: null, nombre: 'Solo PA', commit: 1});
+  await cargarProyecto(2031, {clave: 'nombre:huerfano', pa: null, pr: null, nombre: 'Huerfano', commit: 2});
+  await pool.query("UPDATE proyecto SET num_pa='#N/A', project_id='  ' WHERE clave='nombre:huerfano'");
+  const d = await get('/api/timeline');
+  const soloPa = porNombre(d, 'Solo PA')[0], h = porNombre(d, 'Huerfano');
+  assert.equal(soloPa.clave_timeline, 'PA:4003');assert.equal(soloPa.sin_identificar, false);
+  assert.equal(h.length, 1);assert.match(h[0].clave_timeline, /^SIN_ID:2031:\d+$/);assert.equal(h[0].sin_identificar, true);
+  assert.equal(d.backlog.find(b => b.clave_timeline === h[0].clave_timeline).sin_identificar, true);
+});
+test('un Project ID con dos PA en una Carga es un solo proyecto con el PA de la fila mas reciente', async () => {
+  await cargarProyecto(2032, {clave: 'pa:4004', pa: '4004', pr: 'PR-DOBLE', nombre: 'Doble PA', commit: 5});
+  await cargarProyecto(2032, {clave: 'pa:4005', pa: '4005', pr: 'PR-DOBLE', nombre: 'Doble PA', commit: 7});
+  const d = await get('/api/timeline');
+  const ps = porNombre(d, 'Doble PA');
+  assert.equal(ps.length, 1);assert.equal(ps[0].clave_timeline, 'PR:PR-DOBLE');assert.equal(ps[0].num_pa, '4005');
+  assert.equal(d.backlog.find(b => b.clave_timeline === 'PR:PR-DOBLE')['2032-01_fijo'], 7);
+});

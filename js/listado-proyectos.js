@@ -7,7 +7,7 @@ import { anioRevenue, periodoActual } from './calendario.js';
 import { valorBooking, acumuladoAnterior, revenuePeriodo, ejecutadoProyecto, backlogHoy } from './dinero-proyecto.js';
 import { backlogDe } from './fila-backlog.js';
 import { pasaVisibilidadProyecto } from './filtros.js';
-import { CAMPOS_DINERO, CAMPOS_PORCENTAJE, CAMPOS_ID, identificador, claseVencimiento } from './campos-proyecto.js';
+import { CAMPOS_DINERO, CAMPOS_PORCENTAJE, CAMPOS_ID, identificador, chipsIdentidad, claseVencimiento } from './campos-proyecto.js';
 import { vistas } from './vistas.js';
 
 function abrirLecturaEstatus(proyecto) {
@@ -156,6 +156,14 @@ export function renderizarTabla() {
           td.appendChild(document.createTextNode(' '));
           td.appendChild(b);
         }
+        chipsIdentidad(proyecto).filter(c => c.clase === 'chip-sin-identificar').forEach(c => {
+          const marca = document.createElement('span');
+          marca.className = c.clase;
+          marca.textContent = c.texto;
+          marca.title = c.titulo;
+          td.appendChild(document.createTextNode(' '));
+          td.appendChild(marca);
+        });
         // "sin backlog" chip si no hay fila de backlog
         if (!backlogDe(proyecto)) {
           const chip = document.createElement('span');

@@ -34,8 +34,6 @@ export const estado = {
   expandedPMs: new Set(),
   metadataProyectos: null,
   metadataBacklog: null,
-  backlogPorPA: null,
-  backlogPorNombre: null,
 
   // Periodo del calendario de revenue que se está mirando. Es un eje distinto
   // al de los snapshots: aquí se elige "qué meses del año", allá "en qué

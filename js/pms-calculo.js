@@ -1,7 +1,7 @@
 // Cálculo de la tabla de PMs.
 
 import { mesesActivos } from './calendario.js';
-import { backlogHoy, revenuePeriodo, upsidePeriodo } from './dinero-proyecto.js';
+import { backlogHoy, coberturaProyectado, ejecutadoProyecto, proyectadoProyecto, revenuePeriodo, sumaConDato, upsidePeriodo } from './dinero-proyecto.js';
 import { backlogDe } from './fila-backlog.js';
 import { estado } from './estado.js';
 import { SIN_DATO, pasaVisibilidadProyecto } from './filtros.js';
@@ -11,7 +11,7 @@ import { SIN_DATO, pasaVisibilidadProyecto } from './filtros.js';
  * Progress / On Hold / Planned) porque esos 3 son los que de verdad tienen
  * backlog pendiente. Completed y Canceled no suman aquí (si suman $0, no
  * aportan nada a la vista y solo le agregan columnas vacías).
- * Commit, Upside y Total Ejecutado sí cuentan TODOS los proyectos activos
+ * Commit, Upside, Ejecutado y Proyectado sí cuentan TODOS los proyectos activos
  * del PM: ahí no se trata de backlog pendiente sino de cuánto ha movido.
  */
 const CLAVE_ESTADO_PM = { 'In Progress': 'inProgreso', 'On Hold': 'onHold', 'Planned': 'planned', 'Completed': 'completed' };
@@ -30,7 +30,7 @@ export function calcularPMs() {
         plannedN: 0, plannedBacklog: 0,
         completedN: 0,
         totalN: 0, totalBacklog: 0,
-        commit: 0, upside: 0, totalEjecutado: 0,
+        commit: 0, upside: 0,
         proyectos: [],
       });
     }
@@ -40,8 +40,6 @@ export function calcularPMs() {
     acc.upside += upsidePeriodo(p) || 0;
 
     const fila = backlogDe(p);
-    acc.totalEjecutado += (fila && typeof fila.proyectado === 'number')
-      ? fila.proyectado : 0;
 
     const estadoBacklog = (fila && fila.estado) || p.estado;
     const clave = CLAVE_ESTADO_PM[estadoBacklog];
@@ -63,6 +61,10 @@ export function calcularPMs() {
   return [...porPM.values()].map(f => ({
     ...f,
     nProyectos: f.proyectos.length,
+    // Mismas reglas de dinero que los KPIs; un proyecto sin cifras no cuenta como cero.
+    ejecutado: sumaConDato(f.proyectos, ejecutadoProyecto),
+    proyectado: sumaConDato(f.proyectos, proyectadoProyecto),
+    proyectadoParciales: f.proyectos.filter(p => coberturaProyectado(p) !== null).length,
     promedioMensual: f.commit / nMeses,
     promedioProyecto: f.proyectos.length ? f.commit / f.proyectos.length : 0,
   }));

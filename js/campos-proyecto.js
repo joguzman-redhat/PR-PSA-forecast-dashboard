@@ -19,6 +19,24 @@ export function identificador(p) {
   return pr ? { valor: String(pr), tipo: 'PR' } : { valor: '—', tipo: null };
 }
 
+/** Chips de identidad de un proyecto: el PA (o el PR), el Project ID junto al
+    PA y la marca «sin identificar» cuando no tiene Project ID ni PA. */
+export function chipsIdentidad(p) {
+  const id = identificador(p);
+  const chips = [{
+    texto: id.valor, clase: 'chip-id',
+    titulo: id.tipo === 'PR' ? 'Todavía sin PA asignado: se identifica por el PR' : 'Número de PA',
+  }];
+  if (id.tipo === 'PA' && p.project_id) {
+    chips.push({ texto: 'Project ID ' + p.project_id, clase: 'chip-id', titulo: 'Project ID: identidad del proyecto entre años' });
+  }
+  if (p.sin_identificar) {
+    chips.push({ texto: 'sin identificar', clase: 'chip-sin-identificar',
+      titulo: 'No trae Project ID ni PA: no se puede seguir entre cargas ni entre años' });
+  }
+  return chips;
+}
+
 /** Semáforo de vencimiento. El color nunca va solo: la celda muestra los días
     y el title explica el estado, para quien no distingue los colores. */
 export function claseVencimiento(dias) {

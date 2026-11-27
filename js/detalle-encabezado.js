@@ -1,6 +1,6 @@
 // Encabezado del detalle: de quién es el proyecto y cómo va.
 
-import { identificador } from './campos-proyecto.js';
+import { identificador, chipsIdentidad } from './campos-proyecto.js';
 import { chip } from './chip.js';
 import { anioRevenue } from './calendario.js';
 import { acumuladoAnterior, backlogHoy, ejecutadoProyecto, proyectadoProyecto, textoProyectadoParcial, valorBooking } from './dinero-proyecto.js';
@@ -46,9 +46,7 @@ export function renderizarEncabezadoProyecto(contenedor, proyecto) {
 
   const chips = document.createElement('div');
   chips.className = 'hero-chips';
-  const id = identificador(proyecto);
-  chips.appendChild(chip(id.valor, 'chip-id',
-    id.tipo === 'PR' ? 'Todavía sin PA asignado: se identifica por el PR' : 'Número de PA'));
+  chipsIdentidad(proyecto).forEach(c => chips.appendChild(chip(c.texto, c.clase, c.titulo)));
   if (proyecto.estado) chips.appendChild(chip(proyecto.estado, 'chip-estado'));
   if (proyecto.billing_type) chips.appendChild(chip(proyecto.billing_type));
   if (proyecto.zona) chips.appendChild(chip(proyecto.zona));

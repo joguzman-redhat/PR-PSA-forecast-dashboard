@@ -14,7 +14,7 @@ export function crearFilaProyectosPM(filaPM) {
   const tr = document.createElement('tr');
   tr.className = 'fila-proyectos-pm-expandida';
   const td = document.createElement('td');
-  td.colSpan = 16; // all columns
+  td.colSpan = 17; // all columns
 
   const cont = document.createElement('div');
   cont.className = 'contenedor-proyectos-pm';

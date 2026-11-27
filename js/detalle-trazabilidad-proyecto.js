@@ -208,7 +208,7 @@ export function renderizarTrazabilidadProyecto(contenedor, proyecto) {
   pintarTablaMeses();
 
   // --- 3. movimientos registrados ---
-  // Ojo: num_pa es número en proyectos.json y texto en la historia.
+  // En los eventos, num_pa trae la clave del timeline (nombre heredado de la API).
   const mesesOk = new Set(idxMeses.map(i => MESES_ES[i]));
   const eventos = hist.eventos.filter(
     e => String(e.num_pa) === pa && (!e.campo || mesesOk.has(e.campo)));
