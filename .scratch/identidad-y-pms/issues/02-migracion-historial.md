@@ -4,13 +4,20 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Prueba (seam 1): una base con claves partidas queda unida tras la migración, con su historial completo
 - [x] Prueba: correr la migración dos veces deja los mismos datos
 - [x] Documentado: `pg_dump` antes de aplicarla, base local primero, OpenShift después
-- [ ] Datos reales, antes y después: las series pasan de 349 a 348 claves y PR-061990 y PA 69412 quedan como un solo proyecto con su historial
+- [x] Datos reales, antes y después: las series pasan de 349 a 348 claves y PR-061990 y PA 69412 quedan como un solo proyecto con su historial
 - [x] Booking, Ejecutado y Backlog totales no cambian
 - [x] `npm test` pasa
 
-**Nota:** falta el criterio de datos reales, antes y después. La migración se probó solo en Postgres temporal (`run-migracion-identidad.cjs`); aplicarla en la base local es decisión del usuario (con `pg_dump` previo, ver `infra/README.md`). Al aplicarla, medir 349 a 348 claves y que Booking, Ejecutado y Backlog totales no cambien, y entonces marcar el criterio y cerrar el Status.
+**Nota:** aplicada el 2026-11-26 en la base local (`forecast-postgres`) con `pg_dump` previo en `~/forecast_antes_identidad.dump`. Antes y después, con datos reales:
+
+- Series del timeline: 349 a 348. Proyectos en la API: 348 a 348.
+- PR-061990 y PA 69412 son un solo proyecto, `PR:PR-061990`, con 24 meses de historial.
+- Booking $37.728.928, Backlog $9.690.708, acumulado anterior $6.511.663 y suma de Commit $22.741.182: sin cambio.
+- La migración borró 8.376 filas de `forecast_revenue_mensual` y reinsertó 8.352: las 24 de diferencia eran meses duplicados del proyecto partido.
+- Claves `PA:PR-…` que quedan: 0. `proyecto.clave` se reescribió en 348 de 349 filas; la restante conserva su clave vieja (clave duplicada, ver ADR 0003).
+- Falta reconstruir la imagen de la API y reiniciarla: el contenedor `forecast-api` corre una versión anterior al cambio de identidad.
