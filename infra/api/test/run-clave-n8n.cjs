@@ -78,6 +78,14 @@ const CASOS = [
   assert.deepEqual(cruce.Backlog.filter(r => !clavesInfo.has(r._clave)).map(r => r._clave), ['PA:999'],
     'solo el PA que Info no tiene queda sin cruce');
 
+  // 2c) Una fila con solo Project ID (sin PA ni nombre) es una fila vacia: no entra como proyecto, en ninguna hoja.
+  const vacias = correrRecalcular(
+    [filaBacklog(69412, 'Telcel'), filaBacklog(null, '')],
+    [fila(69412, 'PR-061990', 'Telcel'), fila(null, 'PR-SOLO-ID', ''), fila('#N/A', 'PR-OTRO', ' '), fila(null, 'PR-CON-NOMBRE', 'Con nombre')]).json;
+  assert.deepEqual(vacias.InfoProyectos.map(r => r._clave), ['PR:PR-061990', 'PR:PR-CON-NOMBRE'], 'las filas con solo Project ID se descartan');
+  assert.equal(vacias.Backlog.length, 1);
+  assert.equal(vacias.filasVaciasDescartadas, 3, 'dos de Info y una de Backlog');
+
   // 3) Misma clave que la funcion SQL con las mismas entradas.
   let started = false;
   const run = (args, input) => { const r = spawnSync('podman', args, { input, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }); if (r.status !== 0) throw Error((r.stdout || '') + (r.stderr || '')); return r.stdout; };

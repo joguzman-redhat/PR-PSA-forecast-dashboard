@@ -214,7 +214,7 @@ test('el rango inicial avanza al cambiar el año y termina en el ultimo mes que 
 });
 test('la tabla de PMs trae Ejecutado y Proyectado por PM con las reglas de los KPIs, parcial marcado y sin cifras no es cero',async()=>{
   const {ui,context}=pagina();const datos=datosTimeline();
-  const base={_tipo_fila:'proyecto',pm_lider:'PM A',estado:'In Progress'};
+  const base={_tipo_fila:'proyecto',pm_lider:'PM A',estado:'In Progress',nombre_del_proyecto:'Proyecto'};
   datos.proyectos=[
     {...base,num_pa:'1',clave_timeline:'PA:1'},
     {...base,num_pa:'2',clave_timeline:'PA:2'},
@@ -246,7 +246,24 @@ test('la tabla de PMs trae Ejecutado y Proyectado por PM con las reglas de los K
 });
 test('un PM sin ninguna cifra tiene Ejecutado y Proyectado sin dato, no cero',async()=>{
   const {ui,context}=pagina();const datos=datosTimeline();
-  datos.proyectos=[{_tipo_fila:'proyecto',num_pa:'9',clave_timeline:'PA:9',pm_lider:'PM Z',estado:'Planned'}];datos.backlog=[];
+  datos.proyectos=[{_tipo_fila:'proyecto',num_pa:'9',clave_timeline:'PA:9',pm_lider:'PM Z',estado:'Planned',nombre_del_proyecto:'Sin cifras'}];datos.backlog=[];
   context.fetch=async()=>({ok:true,json:async()=>datos});await ui.cargarDatos();ui.estado.periodo='todos';
   const [f]=ui.calcularPMs();assert.equal(f.ejecutado,null);assert.equal(f.proyectado,null);
+});
+test('un proyecto sin nombre ni Booking no aparece en ninguna vista, ni pidiendo los cancelados; con nombre o con Booking sí',async()=>{
+  const {ui,context}=pagina();const datos=datosTimeline();
+  const base={_tipo_fila:'proyecto',pm_lider:'PM A',estado:'In Progress'};
+  datos.proyectos=[
+    {...base,num_pa:'1',clave_timeline:'PR:PR-1',project_id:'PR-1',nombre_del_proyecto:'Con todo'},
+    {...base,num_pa:'2',clave_timeline:'PR:PR-2',project_id:'PR-2',nombre_del_proyecto:'Solo nombre'},
+    {...base,num_pa:'3',clave_timeline:'PR:PR-3',project_id:'PR-3'},
+    {...base,clave_timeline:'PR:PR-4',project_id:'PR-4',estado:null},
+    {...base,clave_timeline:'PR:PR-5',project_id:'PR-5',estado:'Canceled'}];
+  datos.backlog=[{_tipo_fila:'proyecto',clave_timeline:'PR:PR-1',valor_of:100},
+    {_tipo_fila:'proyecto',clave_timeline:'PR:PR-3',valor_of:50}];
+  context.fetch=async()=>({ok:true,json:async()=>datos});await ui.cargarDatos();
+  ui.estado.periodo='todos';ui.estado.incluirCancelados=true;ui.estado.incluirCompletados=true;
+  const visibles=ui.estado.proyectos.filter(ui.pasaVisibilidadProyecto).map(p=>p.project_id);
+  assert.deepEqual(visibles,['PR-1','PR-2','PR-3']); // PR-3 no tiene nombre pero sí Booking
+  assert.equal(ui.calcularPMs().flatMap(f=>f.proyectos).length,3);
 });

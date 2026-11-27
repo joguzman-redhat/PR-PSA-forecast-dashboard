@@ -145,6 +145,11 @@ se reimporta en n8n.
   por año y marcado para conciliación manual. El PA se muestra pero no
   identifica. Un mismo Project ID con dos PA en una Carga es un solo proyecto,
   con el PA de la fila más reciente. No se unen proyectos por nombre.
+  BackLog NOLA no trae Project ID: se une con Info Proyectos por PA (sin PA, por
+  nombre solo para ese cruce) y hereda la clave del proyecto de Info.
+- Una fila sin PA ni nombre no entra al cargar (el Project ID solo no hace un
+  proyecto), y un proyecto sin nombre ni Booking no se muestra en ninguna vista,
+  tampoco al pedir cancelados o completados.
 - El filtro rápido ofrece Todo NOLA, México y NSSA. México se identifica por
   País; NSSA es el complemento (los proyectos sin país quedan ahí, marcados sin
   dato). Cambiar el filtro limpia la selección de país.

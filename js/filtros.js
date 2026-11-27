@@ -3,6 +3,7 @@
 import { estado } from './estado.js';
 import { etiquetaPeriodoCalendario } from './calendario.js';
 import { periodoFinProyecto, pasaPeriodoProyecto } from './vida-proyecto.js';
+import { valorBooking } from './dinero-proyecto.js';
 
 export const SIN_DATO = '(sin dato)';
 
@@ -72,8 +73,15 @@ export function pasaTerritorio(proyecto) {
   return estado.territorio==='mexico'?mexico:estado.territorio==='nssa'?!mexico:true;
 }
 
+// Una fila con solo Project ID (sin nombre ni Booking) no es un proyecto que mostrar:
+// no tiene nada que leer ni cifras que sumar, tampoco al pedir cancelados o completados.
+function tieneDatos(proyecto) {
+  return String(proyecto?.nombre_del_proyecto ?? '').trim() !== '' || Number.isFinite(valorBooking(proyecto));
+}
+
 export function pasaVisibilidadProyecto(proyecto) {
-  return (estado.incluirCompletados || proyecto?.estado !== 'Completed')
+  return tieneDatos(proyecto)
+    && (estado.incluirCompletados || proyecto?.estado !== 'Completed')
     && (estado.incluirCancelados || proyecto?.estado !== 'Canceled')
     && pasaTerritorio(proyecto) && pasaPeriodoProyecto(proyecto);
 }
