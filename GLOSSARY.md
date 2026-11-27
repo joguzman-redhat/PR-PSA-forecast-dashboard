@@ -34,13 +34,13 @@ _Avoid_: Acumulado proyectado
 
 ## Proyectos
 
-**PA**:
-Identidad canónica de un proyecto en todos los años. Es la clave que une el mismo proyecto entre fuentes.
-_Avoid_: Número de proyecto, código
-
 **Project ID**:
-Identificador alternativo de un proyecto (también escrito PR), usado solo cuando no hay PA. No es sinónimo de PA.
+Identidad canónica de un proyecto en todos los años (también escrito PR). Es la clave que une el mismo proyecto entre fuentes y evita duplicados. Si falta, se usa el PA; si faltan ambos, el proyecto queda sin identificar y se marca.
 _Avoid_: ID de proyecto
+
+**PA**:
+Número con el que el negocio nombra un proyecto y el que más consulta. Se muestra siempre, pero no identifica al proyecto: puede cambiar entre años. No es sinónimo de Project ID.
+_Avoid_: Número de proyecto, código
 
 **Fecha fin**:
 Fecha de terminación del proyecto, tomada de Info Proyectos. Si existe, gráficas y proyección llegan hasta ella. Si no existe, se deja vacía y nunca se deriva del Commit.
