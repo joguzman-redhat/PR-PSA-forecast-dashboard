@@ -33,6 +33,7 @@ function construirEstado(cargas,atributos,mensuales,periodos,actual,fecha) {
   const proyectos=[],backlog=[];
   for(const [key,a] of preferred){
     const campos=proyectoBase(a.atributos);
+    const sinIdentificar=key.startsWith('SIN_ID:');
     // No se permiten importes crudos de Info Proyectos en la salida consolidada.
     for(const k of ['valor_of','valor_of_anterior','consumido_2025','backlog_2026','acumulado_a_hoy','ejecucion_deseada','diferencias_acumulado_of','consumido_2025_ref','dif_consumido_2025'])delete campos[k];
     const months=porProyecto.get(key)||new Map();
@@ -40,10 +41,10 @@ function construirEstado(cargas,atributos,mensuales,periodos,actual,fecha) {
     const mesesActuales=[...months.values()].filter(r=>Number(r.periodo.slice(0,4))===a.anio_forecast&&r.periodo<=fecha.slice(0,7));
     const acumulado=a.acumulado_anterior==null?null:a.acumulado_anterior+mesesActuales.reduce((s,r)=>s+(r.commit_usd||0),0);
     const b={num_pa:campos.num_pa,nombre_del_proyecto:campos.nombre_del_proyecto,_tipo_fila:campos._tipo_fila||'proyecto',
-      clave_timeline:key,anio_atributos:a.anio_forecast,valor_of:a.valor_of,acumulado_anterior:a.acumulado_anterior,
+      clave_timeline:key,sin_identificar:sinIdentificar,anio_atributos:a.anio_forecast,valor_of:a.valor_of,acumulado_anterior:a.acumulado_anterior,
       backlog:a.backlog,total_ejecutado_acumulado:a.total_ejecutado_acumulado,acumulado_a_fecha:acumulado,meses:serie};
     for(const r of serie){b[r.periodo+'_fijo']=r.commit;b[r.periodo+'_upside']=r.upside;}
-    proyectos.push({...campos,clave_timeline:key,anio_atributos:a.anio_forecast,valor_of:a.valor_of,
+    proyectos.push({...campos,clave_timeline:key,sin_identificar:sinIdentificar,anio_atributos:a.anio_forecast,valor_of:a.valor_of,
       acumulado_anterior:a.acumulado_anterior,backlog:a.backlog,_origen_atributos:a.origen});
     backlog.push(b);
   }
@@ -113,10 +114,12 @@ async function obtenerTimeline(query={}) {
       ON a.anio_forecast=c.anio_forecast AND a.archivo_id IS NOT DISTINCT FROM c.archivo_id
       WHERE EXISTS(SELECT 1 FROM proyecto_snapshot s WHERE s.carga_id=c.id) ORDER BY c.id`);
     const ids=cargas.map(c=>c.id);
-    const {rows:atributos}=await client.query(`SELECT forecast_clave_timeline(s.atributos,s.proyecto_id,c.anio_forecast) AS clave_proyecto,
+    // Un Project ID con dos PA en una Carga es un solo proyecto: gana la fila mas reciente (mayor proyecto_id).
+    const {rows:atributos}=await client.query(`SELECT DISTINCT ON (forecast_clave_timeline(s.atributos,s.proyecto_id,c.anio_forecast),c.id) forecast_clave_timeline(s.atributos,s.proyecto_id,c.anio_forecast) AS clave_proyecto,
       s.atributos,s.origen,s.proyecto_id,c.id AS carga_id,c.anio_forecast,ra.valor_of,ra.acum_2025 AS acumulado_anterior,
       ra.backlog,ra.total_ejecutado_acumulado FROM proyecto_snapshot s JOIN carga c ON c.id=s.carga_id
-      LEFT JOIN revenue_anual ra ON ra.carga_id=c.id AND ra.proyecto_id=s.proyecto_id WHERE c.id=ANY($1::bigint[])`,[ids]);
+      LEFT JOIN revenue_anual ra ON ra.carga_id=c.id AND ra.proyecto_id=s.proyecto_id WHERE c.id=ANY($1::bigint[])
+      ORDER BY forecast_clave_timeline(s.atributos,s.proyecto_id,c.anio_forecast),c.id,s.proyecto_id DESC`,[ids]);
     const {rows:mensuales}=await client.query(`SELECT forecast_clave_timeline(s.atributos,r.proyecto_id,c.anio_forecast) AS clave_proyecto,
       r.carga_id,to_char(make_date(c.anio_forecast,r.mes,1),'YYYY-MM') AS periodo,r.commit_usd,r.upside_usd
       FROM revenue_mes r JOIN carga c ON c.id=r.carga_id JOIN proyecto_snapshot s ON s.carga_id=r.carga_id AND s.proyecto_id=r.proyecto_id

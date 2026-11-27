@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname,'../../..');
 const container = 'forecast-api-test-'+randomUUID();
-function run(args,input){const r=spawnSync('podman',args,{input,encoding:'utf8',maxBuffer:16*1024*1024});if(r.status!==0)throw Error(r.stderr||r.stdout);return r.stdout;}
+function run(args,input){const r=spawnSync('podman',args,{input,encoding:'utf8',maxBuffer:16*1024*1024});if(r.status!==0)throw Error((r.stdout||"")+(r.stderr||""));return r.stdout;}
 (async()=>{let started=false;try{
   run(['run','-d','--rm','--name',container,'--network','none','--tmpfs','/var/lib/postgresql/data','-e','POSTGRES_HOST_AUTH_METHOD=trust','docker.io/library/postgres:16-alpine']);started=true;
   let ready=false;for(let i=0;i<100;i++){if(spawnSync('podman',['exec',container,'pg_isready','-h','127.0.0.1','-U','postgres']).status===0){ready=true;break;}await setTimeout(150);}if(!ready)throw Error('PG temporal no disponible');

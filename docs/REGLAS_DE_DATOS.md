@@ -140,9 +140,11 @@ se reimporta en n8n.
   America/Bogota; si falta, el anterior más cercano; si solo hay futuro, el más
   cercano. La Carga más reciente desempata. No se rellena un importe ausente con
   Info Proyectos ni con cero.
-- La clave de proyecto es PA. Sin PA se usa Project ID (PR); sin ambos, la
-  identidad se aísla por año y exige conciliación manual. No se unen proyectos
-  por tener nombres parecidos.
+- La clave de proyecto es el Project ID (ADR 0003). Sin Project ID se usa el
+  PA; sin ambos, el proyecto queda «sin identificar» (`sin_identificar`), aislado
+  por año y marcado para conciliación manual. El PA se muestra pero no
+  identifica. Un mismo Project ID con dos PA en una Carga es un solo proyecto,
+  con el PA de la fila más reciente. No se unen proyectos por nombre.
 - El filtro rápido ofrece Todo NOLA, México y NSSA. México se identifica por
   País; NSSA es el complemento (los proyectos sin país quedan ahí, marcados sin
   dato). Cambiar el filtro limpia la selección de país.
