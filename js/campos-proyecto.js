@@ -20,7 +20,7 @@ export function identificador(p) {
 }
 
 /** Chips de identidad de un proyecto: el PA (o el PR), el Project ID junto al
-    PA y la marca «Sin identificar» cuando no tiene Project ID ni PA. */
+    PA y la marca «sin identificar» cuando no tiene Project ID ni PA. */
 export function chipsIdentidad(p) {
   const id = identificador(p);
   const chips = [{
@@ -31,7 +31,7 @@ export function chipsIdentidad(p) {
     chips.push({ texto: 'Project ID ' + p.project_id, clase: 'chip-id', titulo: 'Project ID: identidad del proyecto entre años' });
   }
   if (p.sin_identificar) {
-    chips.push({ texto: 'Sin identificar', clase: 'chip-critico',
+    chips.push({ texto: 'sin identificar', clase: 'chip-sin-identificar',
       titulo: 'No trae Project ID ni PA: no se puede seguir entre cargas ni entre años' });
   }
   return chips;

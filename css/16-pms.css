@@ -97,3 +97,6 @@
   grid-template-columns: repeat(7, 1fr);
 }
 
+
+/* Proyectado parcial (ADR 0002): mismo ámbar que .kpi-aviso-parcial y el hero del detalle. */
+.celda-parcial { color: #8a5f00; }

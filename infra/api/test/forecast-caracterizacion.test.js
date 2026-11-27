@@ -265,7 +265,7 @@ test('el detalle muestra el Project ID junto al PA y marca los proyectos sin ide
   assert.deepEqual(textos({ num_pa: '123', project_id: 'PR-123' }), ['PA 123', 'Project ID PR-123']);
   assert.deepEqual(textos({ num_pa: '123' }), ['PA 123']);
   assert.deepEqual(textos({ project_id: 'PR-7' }), ['PR-7']);
-  assert.deepEqual(textos({ sin_identificar: true }), ['—', 'Sin identificar']);
+  assert.deepEqual(textos({ sin_identificar: true }), ['—', 'sin identificar']);
 });
 
 test('el periodo por trimestre, año, mes o todo el historico suma solo sus meses', async () => {

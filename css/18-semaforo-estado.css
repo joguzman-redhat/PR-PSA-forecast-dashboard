@@ -102,3 +102,18 @@
   vertical-align: middle;
 }
 
+
+/* Marca de proyecto sin Project ID ni PA (ADR 0003). En el listado va como caja
+   gris; en el detalle (dentro de .chip-dato) conserva el rojo de un chip crítico. */
+.chip-sin-identificar:not(.chip-dato) {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  background: #8a8d90;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.chip-dato.chip-sin-identificar { color: #a32020; background: color-mix(in srgb, var(--color-critico) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-critico) 40%, transparent); }
