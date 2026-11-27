@@ -42,9 +42,15 @@ INSERT INTO revenue_mes SELECT 2,4,m,7,1 FROM generate_series(1,2) m;`;
   assert.equal(claves,'PA:777,PR:PR-061990,SIN_ID:2026:4','un solo proyecto por Project ID');
   assert.equal(consulta(`SELECT count(*)||'/'||min(periodo)||'/'||max(periodo) FROM forecast_revenue_mensual WHERE clave_proyecto='PR:PR-061990'`),'6/2026-01-01/2026-06-01','historial completo del proyecto unido');
   assert.equal(consulta('SELECT sum(commit_usd)||\'/\'||sum(upside_usd) FROM forecast_revenue_mensual'),totalAntes,'los totales no cambian');
-  const una = consulta(FOTO);
+  // proyecto.clave: la que usa el ETL de n8n para actualizar. Gana la fila mas reciente de cada identidad;
+  // la otra conserva su clave vieja (sus cargas y su historial no se tocan, ni se borran filas).
+  const CLAVES_PROYECTO = `SELECT string_agg(id||'='||clave,',' ORDER BY id) FROM proyecto`;
+  assert.equal(consulta(CLAVES_PROYECTO),'1=pa:PR-061990,2=PR:PR-061990,3=PA:777,4=SIN_ID:2026:4','proyecto.clave sigue la regla nueva');
+  assert.equal(consulta('SELECT count(*) FROM proyecto'),'4','no se borran proyectos');
+  const una = consulta(FOTO), unaClaves = consulta(CLAVES_PROYECTO);
   psql(sqlMig);
   assert.equal(consulta(FOTO),una,'correrla dos veces deja los mismos datos');
+  assert.equal(consulta(CLAVES_PROYECTO),unaClaves,'proyecto.clave tambien es idempotente');
   // El trigger nuevo sigue la regla nueva para escrituras posteriores.
   psql(`INSERT INTO revenue_mes VALUES (2,2,7,1,0)`);
   assert.equal(consulta(`SELECT count(*) FROM forecast_revenue_mensual WHERE clave_proyecto='PR:PR-061990'`),'7');

@@ -95,6 +95,20 @@ Las pruebas levantan y eliminan un Postgres temporal sin red, puertos ni
 volumenes del stack real. Verifican los encabezados actuales y anteriores de
 BackLog NOLA, montos exactos y columnas completamente vacias.
 
+## Importar el export de n8n (identidad por Project ID)
+
+El export `n8n/n8n_nola_completo.json` trae la regla del ADR 0003 (claves `PR:`/`PA:`/`SIN_ID:`).
+Orden, con el stack local arriba y sin abrir el workflow en el navegador (el autoguardado de una
+pestana vieja pisaria el cambio):
+
+1. `pg_dump -Fc -U forecast -d forecast -f forecast_antes_identidad.dump` (respaldo).
+2. `./forecast.sh migrate`: reescribe `proyecto.clave` y el historial. Debe ir **antes** de la
+   primera Ejecucion nueva; si no, el ETL inserta un proyecto nuevo por cada clave.
+3. `podman cp ../n8n/n8n_nola_completo.json n8n:/tmp/wf.json && podman exec n8n n8n import:workflow --input=/tmp/wf.json`
+   (upsert por el `id` del export; reasigna la credencial de Postgres si hace falta).
+4. Reabrir el workflow en el navegador (Discard si pide restaurar) y ejecutar desde Manual Trigger.
+   Los avisos de un Project ID con dos PA salen en el log y en `avisos_identidad` del resultado.
+
 ## Modo demo
 
 `FORECAST_DEMO=true` sirve el front con datos ficticios, incluido `/api/timeline`, sin Postgres; `scripts/comparar-front.sh` lo usa para comparar el front entre dos versiones (ver `docs/VERIFICAR_FRONT.md`).

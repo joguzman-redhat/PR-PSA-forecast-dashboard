@@ -8,6 +8,13 @@
 -- reconstruye completa con la misma regla que 01_schema.sql. Los importes de revenue_mes y
 -- revenue_anual no se tocan: Booking, Ejecutado y Backlog totales no cambian.
 --
+-- Tambien reescribe proyecto.clave (la clave UNIQUE con la que el ETL de n8n actualiza `proyecto`)
+-- a la misma regla: sin esto la siguiente Ejecucion insertaria una fila nueva por proyecto. Si dos
+-- filas caen en la misma clave (el proyecto partido), la mas reciente (ultima_carga_id, luego id)
+-- toma la clave nueva y la otra conserva la vieja: sus cargas e historial no se tocan ni se borran.
+-- Un proyecto sin identificar toma SIN_ID:<año de su ultima carga>:<id>; el ETL usa la posicion de
+-- fila, asi que esos proyectos (hoy 0) se recrean en la proxima Ejecucion.
+--
 -- Transaccional e idempotente: correrla dos veces deja los mismos datos.
 -- Debe aplicarse DESPUES de 2026-11-22_timeline.sql (forecast.sh migrate respeta el orden).
 --
@@ -61,4 +68,20 @@ SELECT DISTINCT ON (forecast_clave_timeline(s.atributos,r.proyecto_id,c.anio_for
  JOIN proyecto_snapshot s ON s.carga_id=r.carga_id AND s.proyecto_id=r.proyecto_id
  ORDER BY forecast_clave_timeline(s.atributos,r.proyecto_id,c.anio_forecast),c.anio_forecast,r.mes,
    (c.archivo_id IS NOT NULL) DESC,c.id DESC,r.proyecto_id DESC;
+
+-- proyecto.clave a la regla nueva (mismo orden de desempate; las filas que ya la tienen ganan).
+WITH calculada AS (
+  SELECT p.id, p.clave,
+    forecast_clave_timeline(jsonb_build_object('project_id',p.project_id,'num_pa',p.num_pa), p.id,
+      coalesce((SELECT anio_forecast FROM carga WHERE id=coalesce(p.ultima_carga_id,p.primera_carga_id)),
+               extract(year FROM now())::int)) AS nueva,
+    p.ultima_carga_id
+  FROM proyecto p
+), ganadora AS (
+  SELECT id, nueva, clave,
+    row_number() OVER (PARTITION BY nueva ORDER BY (clave=nueva) DESC, ultima_carga_id DESC NULLS LAST, id DESC) AS puesto
+  FROM calculada
+)
+UPDATE proyecto p SET clave = g.nueva
+ FROM ganadora g WHERE g.id=p.id AND g.puesto=1 AND p.clave<>g.nueva;
 COMMIT;

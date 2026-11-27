@@ -103,7 +103,7 @@ $$ LANGUAGE plpgsql;
 -- cliente, PM y zona son atributos, no series de tiempo.
 CREATE TABLE proyecto (
   id                    bigserial PRIMARY KEY,
-  clave                 text NOT NULL UNIQUE,   -- num_pa, o nombre normalizado
+  clave                 text NOT NULL UNIQUE,   -- PR:<Project ID>, PA:<PA> o SIN_ID:<año>:<fila> (ADR 0003)
   -- Clave con la que el dashboard indexa las series: String(num_pa), o
   -- 'fila-<n>' con el numero de fila de BackLog NOLA cuando no hay PA.
   clave_historia        text,
