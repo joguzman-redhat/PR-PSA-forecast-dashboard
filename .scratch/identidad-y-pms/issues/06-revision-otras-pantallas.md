@@ -6,6 +6,8 @@
 
 **Status:** ready-for-human
 
-- [ ] El informe compara KPIs, listado, detalle e informe PDF, con cifras reales
-- [ ] Cada desajuste trae un proyecto de ejemplo, su causa y cuántos proyectos afecta
+- [x] El informe compara KPIs, listado, detalle e informe PDF, con cifras reales
+- [x] Cada desajuste trae un proyecto de ejemplo, su causa y cuántos proyectos afecta
 - [ ] El informe concluye con una recomendación sobre el módulo de dinero, que decide el usuario
+
+**Nota:** informe en `.scratch/identidad-y-pms/informe-revision-pantallas.md`. Recomienda no construir el módulo de dinero por ahora; la decisión final queda pendiente del usuario, por eso el Status sigue en `ready-for-human`.
