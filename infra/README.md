@@ -57,6 +57,12 @@ credencial Postgres (host `postgres`, puerto `5432`, mismas credenciales de
 | `down` | Apaga, conserva los volúmenes |
 | `destroy` | Apaga y **borra el histórico de Postgres** (el de n8n no se toca) |
 
+> Migración de identidad por Project ID (`db/migraciones/2026-11-26_identidad_project_id.sql`,
+> ADR 0003): reconstruye `forecast_revenue_mensual` con la clave nueva y une los proyectos
+> partidos. Es transaccional e idempotente. Procedimiento: (1) `pg_dump` previo de la base;
+> (2) aplicarla primero en la base local y revisar series y totales; (3) OpenShift después,
+> con su propio `pg_dump`. Prueba con Postgres temporal: `node infra/api/test/run-migracion-identidad.cjs`.
+
 > Tras el refactor modular del front, la imagen de la API debe reconstruirse
 > (`./forecast.sh rebuild`) para que el contenedor sirva `js/` y `css/` nuevos.
 
