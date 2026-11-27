@@ -101,6 +101,17 @@ Las pruebas levantan y eliminan un Postgres temporal sin red, puertos ni
 volumenes del stack real. Verifican los encabezados actuales y anteriores de
 BackLog NOLA, montos exactos y columnas completamente vacias.
 
+Paridad del esquema con las migraciones (misma técnica, Postgres temporal):
+
+```bash
+node infra/api/test/run-esquema-migraciones.cjs
+```
+
+Una base creada con `01_schema.sql` y otra puesta al día con todas las migraciones, partiendo del esquema
+anterior (`infra/api/test/fixtures/esquema-antes-de-cortes.sql`), deben tener las mismas columnas, también
+tras aplicarlas dos veces; y `openshift/base/postgres/01_schema.sql` debe ser copia exacta del esquema
+original. Falla si una migración deja una base desplegada distinta de una nueva.
+
 ## Importar el export de n8n (identidad por Project ID)
 
 El export `n8n/n8n_nola_completo.json` trae la regla del ADR 0003 (claves `PR:`/`PA:`/`SIN_ID:`).
