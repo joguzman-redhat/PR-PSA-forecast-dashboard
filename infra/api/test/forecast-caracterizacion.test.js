@@ -238,18 +238,34 @@ test('el acumulado anterior acepta el nombre anterior acum_2025', async () => {
   assert.equal(ui.acumuladoAnterior(ui.estado.proyectos[0]), 333086);
 });
 
-test('la fila de BackLog se une por clave, luego por PA y luego por nombre, nunca por posicion', async () => {
+test('la fila de BackLog se une solo por la clave del timeline, no por PA ni por nombre', async () => {
   const { ui } = await cargar(d => {
     d.proyectos = [entidad('555')];
     d.backlog = [entidad('555', { nombre_del_proyecto: 'Proyecto Ñandú', valor_of: 42 })];
   });
   const esperada = ui.estado.backlog[0];
   assert.equal(ui.backlogDe({ clave_timeline: 'PA:555' }), esperada);
-  assert.equal(ui.backlogDe({ num_pa: 555 }), esperada);
-  assert.equal(ui.backlogDe({ nombre_del_proyecto: 'PROYECTO NANDU' }), esperada);
-  assert.equal(ui.backlogDe({ num_pa: 999, nombre_del_proyecto: 'otro proyecto' }), null);
+  assert.equal(ui.backlogDe({ num_pa: 555 }), null);
+  assert.equal(ui.backlogDe({ nombre_del_proyecto: 'PROYECTO NANDU' }), null);
   // Con una clave que no existe no se rescata por PA: evita mezclar proyectos distintos.
   assert.equal(ui.backlogDe({ clave_timeline: 'PA:000', num_pa: 555 }), null);
+  assert.equal(ui.estado.backlogPorPA, undefined);
+  assert.equal(ui.estado.backlogPorNombre, undefined);
+});
+
+test('claveProyecto es la clave del timeline, sin respaldo por PA ni por fila', () => {
+  const { ui } = pagina();
+  assert.equal(ui.claveProyecto({ clave_timeline: 'PR:PR-9', num_pa: '5' }), 'PR:PR-9');
+  assert.equal(ui.claveProyecto({ clave_timeline: 'SIN_ID:x' }), 'SIN_ID:x');
+});
+
+test('el detalle muestra el Project ID junto al PA y marca los proyectos sin identificar', () => {
+  const { ui } = pagina();
+  const textos = p => Array.from(ui.chipsIdentidad(p), c => c.texto);
+  assert.deepEqual(textos({ num_pa: '123', project_id: 'PR-123' }), ['PA 123', 'Project ID PR-123']);
+  assert.deepEqual(textos({ num_pa: '123' }), ['PA 123']);
+  assert.deepEqual(textos({ project_id: 'PR-7' }), ['PR-7']);
+  assert.deepEqual(textos({ sin_identificar: true }), ['—', 'Sin identificar']);
 });
 
 test('el periodo por trimestre, año, mes o todo el historico suma solo sus meses', async () => {

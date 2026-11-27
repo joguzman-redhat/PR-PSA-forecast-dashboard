@@ -52,6 +52,9 @@ const ESPECIFICACIONES = [
 
 const redondear = (n) => Math.round(n / 100) * 100;
 const pa = (k) => `DEMO-${String(k + 1).padStart(3, '0')}`;
+// Project ID de la demo: presente en todos, y con el la clave del timeline es PR: (ADR 0003).
+const projectId = (k) => `PR-${pa(k)}`;
+const claveTimeline = (k) => `PR:${projectId(k)}`;
 
 // Commit y Upside por periodo (null = sin cobertura). Variacion fija por indice.
 function serieMensual(k, [, , , , ini, fin, base, , , extras]) {
@@ -78,7 +81,7 @@ function construirProyectos() {
     // Booking = Ejecutado + Commit pendiente + Backlog continuo.
     const booking = acumulado + delAnio + posterior + continuo;
     return {
-      pa: pa(k), k, estado, semaforo, handover, fin, anio, acumulado, meses,
+      pa: pa(k), projectId: projectId(k), clave: claveTimeline(k), k, estado, semaforo, handover, fin, anio, acumulado, meses,
       booking, backlogFuente: booking - acumulado - delAnio,
       totalEjecutado: acumulado + delAnio, sinBacklog: !!extras.sinBacklog,
     };
@@ -89,7 +92,7 @@ function filaInfo(e) {
   const i = e.k;
   return {
     _tipo_fila: 'proyecto', _fila_excel: i + 2, _errores: {}, _recalculado: {},
-    num_pa: e.pa, project_id: `PR-${e.pa}`, num_opp: `OPP-${e.pa}`,
+    num_pa: e.pa, project_id: e.projectId, num_opp: `OPP-${e.pa}`,
     nombre_del_proyecto: `DEMO · Proyecto ficticio ${String(i + 1).padStart(2, '0')}`,
     cliente: `Cliente Ficticio ${CLIENTES[i % CLIENTES.length]}`,
     pm_lider: PMS[i % PMS.length], pm_lider_psa: PMS[i % PMS.length],
@@ -100,14 +103,14 @@ function filaInfo(e) {
     executive_watchlist: e.handover, project_status: e.semaforo, start_at_risk: e.semaforo === 'Red',
     fecha_fin: e.fin, estado_contrato: e.fin ? 'Contrato vigente' : null,
     estatus: 'DEMO · ejemplo ficticio', actions: 'DEMO · sin acciones operativas',
-    clave_timeline: `PA:${e.pa}`, anio_atributos: e.anio, _origen_atributos: 'demo',
+    clave_timeline: e.clave, sin_identificar: false, anio_atributos: e.anio, _origen_atributos: 'demo',
   };
 }
 
 function filaBacklog(e, info) {
   const fila = {
     num_pa: e.pa, nombre_del_proyecto: info.nombre_del_proyecto, _tipo_fila: 'proyecto',
-    clave_timeline: info.clave_timeline, anio_atributos: e.anio, valor_of: e.booking,
+    clave_timeline: info.clave_timeline, sin_identificar: false, anio_atributos: e.anio, valor_of: e.booking,
     acumulado_anterior: e.acumulado, backlog: e.backlogFuente,
     total_ejecutado_acumulado: e.totalEjecutado, acumulado_a_fecha: null, meses: e.meses,
   };
@@ -134,16 +137,16 @@ function construirHistoria(estados) {
       meses.forEach(([cm, up], i) => {
         entry.fijo += cm || 0; entry.upside += up || 0;
         por_mes[PERIODOS[i]].fijo += cm || 0; por_mes[PERIODOS[i]].upside += up || 0;
-        const anterior = series[`PA:${e.pa}`]?.at(-1)?.meses[i];
+        const anterior = series[e.clave]?.at(-1)?.meses[i];
         if (!anterior) return;
         for (const [j, tipo] of [[0, 'commit'], [1, 'upside']]) {
           if (anterior[j] === null || [cm, up][j] === null || [cm, up][j] === anterior[j]) continue;
-          eventos.push({ snapshot_id: c.id, timestamp: c.timestamp, num_pa: `PA:${e.pa}`,
+          eventos.push({ snapshot_id: c.id, timestamp: c.timestamp, num_pa: e.clave,
             nombre: `DEMO · Proyecto ficticio ${String(e.k + 1).padStart(2, '0')}`, campo: PERIODOS[i], tipo,
             valor_anterior: anterior[j], valor_nuevo: [cm, up][j], delta: [cm, up][j] - anterior[j] });
         }
       });
-      (series[`PA:${e.pa}`] ||= []).push(entry);
+      (series[e.clave] ||= []).push(entry);
       fijo += entry.fijo; upside += entry.upside; backlog += e.backlogFuente; total += e.totalEjecutado;
     }
     return { id: c.id, timestamp: c.timestamp, etiqueta: c.etiqueta, ejecucion_id: `demo-${c.id}`,
@@ -160,7 +163,7 @@ function crearTimelineDemo(query = {}) {
   const infos = estados.map(filaInfo);
   const backlog = estados.map((e, i) => (e.sinBacklog ? null : filaBacklog(e, infos[i]))).filter(Boolean);
   const desde = query.desde || PERIODOS[0], hasta = query.hasta || PERIODOS.at(-1);
-  const columnas = Object.keys(infos[0]).filter(k => !k.startsWith('_') && !['clave_timeline', 'anio_atributos'].includes(k))
+  const columnas = Object.keys(infos[0]).filter(k => !k.startsWith('_') && !['clave_timeline', 'sin_identificar', 'anio_atributos'].includes(k))
     .map(key => ({ key, label: key.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()), verde: true, recalculado: false }));
   return {
     meta: { timeline: true, origen: 'demo', demo: true, aviso: 'DEMO: datos 100% sinteticos, sin informacion de clientes reales.',

@@ -9,9 +9,9 @@ export function cambiarPestana(nombre, omitirHash) {
   // La pestaña queda en el hash de la URL: así se puede compartir un enlace
   // directo a la trazabilidad o a un proyecto concreto.
   if (!omitirHash) {
-    const pa = (nombre === 'detalle' && estado.proyectoSeleccionado)
-      ? '/' + estado.proyectoSeleccionado.num_pa : '';
-    history.replaceState(null, '', '#' + nombre + pa);
+    const clave = (nombre === 'detalle' && estado.proyectoSeleccionado)
+      ? '/' + estado.proyectoSeleccionado.clave_timeline : '';
+    history.replaceState(null, '', '#' + nombre + clave);
   }
 
   // Ocultar todas

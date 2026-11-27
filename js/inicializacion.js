@@ -62,10 +62,12 @@ export async function inicializar() {
   });
   setupMutationObserver();
 
-  // Abrir la pestaña que venga en la URL (#trazabilidad, #detalle/65085...).
-  const [vista, pa] = decodeURIComponent(location.hash.slice(1)).split('/');
-  if (vista === 'detalle' && pa) {
-    const p = estado.proyectos.find(x => String(x.num_pa) === pa);
+  // Abrir la pestaña que venga en la URL (#trazabilidad, #detalle/PR:PR-65085...).
+  const [vista, ...resto] = decodeURIComponent(location.hash.slice(1)).split('/');
+  const ref = resto.join('/');
+  if (vista === 'detalle' && ref) {
+    const p = estado.proyectos.find(x => x.clave_timeline === ref)
+      || estado.proyectos.find(x => String(x.num_pa) === ref); // enlaces viejos por PA
     if (p) { estado.proyectoSeleccionado = p; cambiarPestana('detalle', true); }
   } else if (vista === 'trazabilidad' || vista === 'detalle' || vista === 'pms') {
     cambiarPestana(vista, true);

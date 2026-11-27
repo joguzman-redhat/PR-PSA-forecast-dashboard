@@ -156,6 +156,14 @@ export function renderizarTabla() {
           td.appendChild(document.createTextNode(' '));
           td.appendChild(b);
         }
+        if (proyecto.sin_identificar) {
+          const marca = document.createElement('span');
+          marca.className = 'chip-sin-backlog';
+          marca.textContent = 'sin identificar';
+          marca.title = 'No trae Project ID ni PA: no se puede seguir entre cargas ni entre años';
+          td.appendChild(document.createTextNode(' '));
+          td.appendChild(marca);
+        }
         // "sin backlog" chip si no hay fila de backlog
         if (!backlogDe(proyecto)) {
           const chip = document.createElement('span');
