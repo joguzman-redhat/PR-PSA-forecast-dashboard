@@ -6,3 +6,4 @@ resources:
   - api.yaml
   - schema-job.yaml
   - route.yaml
+  - n8n.yaml
