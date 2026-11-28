@@ -24,7 +24,7 @@ if not rules or rules[-1].get('type') != 'Deny' or rules[-1].get('to', {}).get('
     raise SystemExit('Revisar política: falta Deny final. No se aplicaron cambios.')
 patch = [{'op': 'test', 'path': '/metadata/resourceVersion', 'value': current['metadata']['resourceVersion']}]
 index = len(rules) - 1
-for host in ('github.com', 'registry.npmjs.org', 'registry.access.redhat.com'):
+for host in ('github.com', 'registry.npmjs.org', 'registry.access.redhat.com', 'access.redhat.com'):
     ports = [{'port': 443, 'protocol': 'TCP'}]
     if any(r.get('type') == 'Allow' and r.get('to', {}).get('dnsName') == host
            and (not r.get('ports') or all(p in r['ports'] for p in ports)) for r in rules):
