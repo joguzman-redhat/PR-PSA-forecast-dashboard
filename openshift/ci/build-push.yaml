@@ -1,0 +1,160 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: forecast-build-push
+  namespace: nola-consulting-services-tenant--pipeline
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  description: Verifica un commit exacto y publica su imagen en el registro del tenant.
+  params:
+    - name: revision
+      description: SHA completo del commit revisado que se desea construir.
+      type: string
+  results:
+    - name: commit
+      value: $(tasks.verificar-y-publicar.results.commit)
+    - name: image
+      value: $(tasks.verificar-y-publicar.results.image)
+    - name: digest
+      value: $(tasks.verificar-y-publicar.results.digest)
+  tasks:
+    - name: verificar-y-publicar
+      params:
+        - name: revision
+          value: $(params.revision)
+      taskSpec:
+        params:
+          - name: revision
+            type: string
+        results:
+          - name: commit
+          - name: image
+          - name: digest
+        volumes:
+          - name: source
+            emptyDir: {}
+          - name: containers
+            emptyDir: {}
+          - name: corporate-ca
+            configMap:
+              name: redhat-ca-bundle
+          - name: registry-auth
+            secret:
+              secretName: images-paas-push-config
+              items:
+                - key: .dockercfg
+                  path: .dockercfg
+        steps:
+          - name: verificar
+            image: registry.access.redhat.com/ubi9/nodejs-22:latest
+            computeResources:
+              requests:
+                cpu: 500m
+                memory: 512Mi
+              limits:
+                cpu: "2"
+                memory: 2Gi
+            env:
+              - name: SOURCE_REVISION
+                value: $(params.revision)
+              - name: HOME
+                value: /workspace/home
+              - name: npm_config_cache
+                value: /workspace/home/.npm
+              - name: GIT_TERMINAL_PROMPT
+                value: "0"
+              - name: CI
+                value: "true"
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            volumeMounts:
+              - name: source
+                mountPath: /workspace
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || {
+                echo 'revision debe ser un SHA completo, no una rama ni código de shell.' >&2
+                exit 2
+              }
+              mkdir -p "$HOME" /workspace/repo
+              cd /workspace/repo
+              git init --quiet
+              git remote add origin https://github.com/joguzman-redhat/PR-PSA-forecast-dashboard.git
+              git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 fetch --depth=1 origin "$SOURCE_REVISION"
+              git checkout --detach FETCH_HEAD
+              [[ "$(git rev-parse HEAD)" == "$SOURCE_REVISION" ]]
+              printf '%s' "$SOURCE_REVISION" > "$(results.commit.path)"
+              cd infra/api
+              npm ci --include=dev --no-audit --no-fund
+              npm test
+              npm run lint:front
+              # Producción se instala aparte; las devDependencies no pasan al contexto.
+              rm -rf node_modules
+          - name: build-push
+            # Digest de la Task buildah instalada por OpenShift Pipelines 1.20.5.
+            image: registry.redhat.io/rhel9/buildah@sha256:18453ab0a62154283aaf4c45efd7543d1c8ecca1aebae46dedc7ddc0f410b232
+            computeResources:
+              requests:
+                cpu: 500m
+                memory: 1Gi
+              limits:
+                cpu: "2"
+                memory: 4Gi
+            env:
+              - name: SOURCE_REVISION
+                value: $(params.revision)
+              - name: HOME
+                value: /workspace/builder-home
+              - name: BUILDAH_ISOLATION
+                value: chroot
+            securityContext:
+              # El SA pipeline ya dispone de pipelines-scc; no se añade una SCC.
+              # Root dentro del contenedor de build, sin contenedor privilegiado.
+              runAsUser: 0
+              privileged: false
+              capabilities:
+                add: [SETFCAP]
+            volumeMounts:
+              - name: source
+                mountPath: /workspace
+              - name: containers
+                mountPath: /var/lib/containers
+              - name: registry-auth
+                mountPath: /registry-auth
+                readOnly: true
+              - name: corporate-ca
+                mountPath: /corporate-ca
+                readOnly: true
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+              umask 077
+              mkdir -p "$HOME" /etc/pki/ca-trust/source/anchors
+              cp /corporate-ca/ca-bundle.crt /etc/pki/ca-trust/source/anchors/redhat-corporate.crt
+              update-ca-trust
+              authfile="$HOME/auth.json"
+              trap 'rm -f "$authfile"' EXIT
+              # Adaptar formato dockercfg sin imprimir ningún valor secreto.
+              { printf '{"auths":'; cat /registry-auth/.dockercfg; printf '}'; } > "$authfile"
+              image="images.paas.redhat.com/nola-consulting-services-tenant/forecast-api:$SOURCE_REVISION"
+              cd /workspace/repo
+              buildah --storage-driver=vfs bud --isolation=chroot --tls-verify=true \
+                --authfile="$authfile" --format=oci \
+                --label="org.opencontainers.image.revision=$SOURCE_REVISION" \
+                --file=infra/api/Dockerfile --tag="$image" .
+              buildah --storage-driver=vfs push --tls-verify=true \
+                --authfile="$authfile" --digestfile=/workspace/image.digest \
+                "$image" "docker://$image"
+              digest=$(cat /workspace/image.digest)
+              [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              printf '%s' "$digest" > "$(results.digest.path)"
+              printf 'images.paas.redhat.com/nola-consulting-services-tenant/forecast-api@%s' "$digest" > "$(results.image.path)"
