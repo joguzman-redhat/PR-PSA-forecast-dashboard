@@ -9,4 +9,5 @@ configMapGenerator:
     files:
       - backup.sh
       - upload.sh
+      - sign-s3.py
       - n8n-backup.py

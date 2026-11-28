@@ -151,3 +151,17 @@ El uploader normaliza únicamente endpoints AWS heredados con la forma exacta
 coincida con `BUCKET_REGION`. En este tenant, `s3-us-east-1.amazonaws.com` pasa a
 `s3.us-east-1.amazonaws.com`. No modifica el ConfigMap del OBC ni las reglas de
 salida: conserva HTTPS, firma SigV4, nombre del bucket y verificación del objeto.
+
+El uploader firma las cabeceras `x-amz-*` y el SHA-256 real de cada archivo con
+Python 3 (biblioteca estándar), enviando la configuración privada a curl por una
+tubería. No usa el firmador incorporado de curl 7.76: esa implementación calcula
+el hash desde `postfields`, y no firma las cabeceras adicionales que usa el
+backup. Véanse el [código oficial de curl 7.76.1](https://github.com/curl/curl/blob/curl-7_76_1/lib/http_aws_sigv4.c)
+y las [reglas de firma S3](https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html).
+La comparación offline con el firmador independiente del SDK AWS se ejecuta con
+`python3 openshift/operations/s3-backup/test-sign-s3.py` (requiere `botocore` solo
+en el entorno de verificación; el Job no lo requiere).
+
+Ante errores se informa el estado HTTP, el resultado de transporte y únicamente
+los campos XML `Code`/`Message` filtrados. No se imprime la respuesta completa,
+credenciales, cabeceras de autorización, petición canónica ni cadena de firma.
