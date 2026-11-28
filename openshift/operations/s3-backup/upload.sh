@@ -31,21 +31,59 @@ bytes=$(stat -c %s "$dump")
 printf '%s  %s\n' "$digest" "${key##*/}" > /work/checksum.txt
 endpoint="https://${bucket_host}/${BUCKET_NAME}"
 
-signed_curl() {
-  # Process substitution keeps the access keys out of process arguments and files.
-  curl --silent --show-error --fail --connect-timeout 10 --max-time 300 \
-    --retry 2 --retry-delay 2 --aws-sigv4 "aws:amz:${BUCKET_REGION}:s3" \
-    --config <(printf 'user = "%s:%s"\n' "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY") \
-    "$@"
+report_s3_error() {
+  local operation=$1 status=$2 transport=$3
+  printf 'S3 %s falló: HTTP %s; curl=%s\n' "$operation" "$status" "$transport" >&2
+  # Deliberately omit RequestId, CanonicalRequest, StringToSign and raw body.
+  python3 - /work/response.xml <<'PYERROR' >&2
+import os, re, sys, xml.etree.ElementTree as ET
+try:
+    root = ET.fromstring(open(sys.argv[1], 'rb').read(32768))
+except (OSError, ET.ParseError):
+    raise SystemExit(0)
+for field in ('Code', 'Message'):
+    node = root.find(field)
+    if node is None or node.text is None:
+        continue
+    text = node.text
+    for name in ('AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'):
+        if os.environ.get(name):
+            text = text.replace(os.environ[name], '[redacted]')
+    if re.search(r'credential|authorization|signature=|string.?to.?sign|canonical.?request', text, re.I):
+        text = '[detalle omitido por seguridad]'
+    text = re.sub(r'[^A-Za-z0-9 .,;:/_()=!?-]', ' ', text)[:300]
+    print(f'S3 {field}: {text}')
+PYERROR
 }
 
-status=$(signed_curl --upload-file "$dump" \
-  --header "x-amz-content-sha256: $digest" \
-  --header "x-amz-meta-sha256: $digest" \
-  --header 'x-amz-server-side-encryption: AES256' \
-  --output /work/response.xml --write-out '%{http_code}' "$endpoint/$key")
-[[ "$status" == 200 ]] || { echo "S3 PUT no confirmó éxito: HTTP $status" >&2; exit 1; }
-signed_curl --head --output "$headers" "$endpoint/$key"
+signed_curl() {
+  local method=$1 payload_hash=$2 url=$3
+  shift 3
+  local extra=()
+  if [[ "$method" == PUT ]]; then
+    extra+=("x-amz-server-side-encryption:AES256")
+    [[ "$url" == *.sha256 ]] || extra+=("x-amz-meta-sha256:$payload_hash")
+  fi
+  local configuration
+  configuration=$(python3 /opt/backup/sign-s3.py "$method" "$url" "$payload_hash" "${extra[@]}") || return 2
+  # Sign all x-amz headers and the actual payload hash, including on curl7.76.
+  # Process substitution keeps authorization out of arguments and files.
+  curl --silent --show-error --connect-timeout 10 --max-time 300 \
+    --retry 2 --retry-delay 2 \
+    --config <(printf '%s\n' "$configuration") \
+    "$@" "$url"
+}
+
+transport=0
+status=$(signed_curl PUT "$digest" "$endpoint/$key" --upload-file "$dump" \
+  --output /work/response.xml --write-out '%{http_code}') || transport=$?
+[[ "$transport" == 0 && "$status" == 200 ]] || { report_s3_error PUT "$status" "$transport"; exit 1; }
+empty_digest=$(printf '' | sha256sum)
+empty_digest=${empty_digest%% *}
+transport=0
+status=$(signed_curl HEAD "$empty_digest" "$endpoint/$key" --head \
+  --output "$headers" --write-out '%{http_code}') || transport=$?
+[[ "$transport" == 0 && "$status" == 200 ]] || { : > /work/response.xml; report_s3_error HEAD "$status" "$transport"; exit 1; }
 tr -d '\r' < "$headers" > /work/response.xml
 grep -Eiq "^content-length: ${bytes}$" /work/response.xml || {
   echo 'S3 HEAD no confirmó el tamaño del respaldo.' >&2; exit 1;
@@ -58,9 +96,8 @@ grep -Eiq '^x-amz-server-side-encryption: AES256$' /work/response.xml || {
 }
 checksum_hash=$(sha256sum /work/checksum.txt)
 checksum_hash=${checksum_hash%% *}
-status=$(signed_curl --upload-file /work/checksum.txt \
-  --header "x-amz-content-sha256: $checksum_hash" \
-  --header 'x-amz-server-side-encryption: AES256' \
-  --output /work/response.xml --write-out '%{http_code}' "$endpoint/$key.sha256")
-[[ "$status" == 200 ]] || { echo "S3 PUT del checksum falló: HTTP $status" >&2; exit 1; }
+transport=0
+status=$(signed_curl PUT "$checksum_hash" "$endpoint/$key.sha256" --upload-file /work/checksum.txt \
+  --output /work/response.xml --write-out '%{http_code}') || transport=$?
+[[ "$transport" == 0 && "$status" == 200 ]] || { report_s3_error PUT-checksum "$status" "$transport"; exit 1; }
 printf 'Backup confirmado: key=%s bytes=%s sha256=%s encryption=AES256\n' "$key" "$bytes" "$digest"
