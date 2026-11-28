@@ -64,6 +64,16 @@ clonó el mismo commit de main. Se detuvo con el diagnóstico explícito de lock
 faltante. Queda comprobada la salida a ambos destinos; los tests de aplicación
 en el clúster siguen pendientes de integrar el código preparado en main.
 
+## Ejecución exitosa verificada
+
+El usuario integró los cambios y ejecutó `forecast-ci-prueba-a89q2z`, que terminó
+en `Succeeded` el 27 de noviembre de 2026 a las 21:11 (Bogotá). El resultado
+registró el commit `815d9f0d4f979e65bf3cf1b06fe67629708ab975`.
+Los logs confirman 122 pruebas aprobadas, ninguna fallida, y lint del front
+completado. Queda validado el CI manual desde GitHub en el clúster.
+La construcción/publicación de imagen y el despliegue mediante Argo CD siguen
+pendientes; esta prueba no modificó Postgres ni desplegó la aplicación.
+
 ## Argo CD para entrega
 
 El usuario indicó usar el Argo corporativo para CD. Puede sincronizar Git desde

@@ -28,6 +28,11 @@ Los criterios operativos requieren evidencia del clúster; preparar código no l
   cambios versionados de la rama de trabajo, sin omitir verificaciones.
 
 Evidencia y comandos: [Prueba manual de CI](../../openshift/ci/README.md).
+
+- CI manual confirmado: `forecast-ci-prueba-a89q2z` terminó `Succeeded`, commit
+  `815d9f0d4f979e65bf3cf1b06fe67629708ab975`, 122 tests y lint aprobados.
+  Esto acredita la parte de verificación de CI, no el build/push de imagen,
+  migraciones ni rollout del ticket 06, ni la sincronización por Argo.
 - AppCode aportado por el usuario: `NLFC-001`; validación de CMDB/admisión pendiente.
 - [Diagnóstico y evidencia de plataforma](../../openshift/PRERREQUISITOS.md):
   sesión corporativa autenticada y preflight corregido ejecutado; cero permisos
