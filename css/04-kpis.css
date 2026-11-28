@@ -1,0 +1,51 @@
+/* ============================================================================
+   FILA DE KPIs (condensada)
+   ============================================================================ */
+.fila-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Fondo, borde, radio y relleno vienen del componente real .pf-v6-c-card
+   (+ .pf-v6-c-card__body); acá solo el layout propio del KPI. */
+.kpi-tile {
+  text-align: center;
+}
+
+.kpi-tile .pf-v6-c-card__body {
+  padding: var(--spacing-md) var(--spacing-sm);
+}
+
+.kpi-valor {
+  font-size: 1.375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: var(--spacing-xs);
+  color: var(--brand);
+  word-break: break-word;
+}
+
+.kpi-etiqueta {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 1200px) {
+  .fila-kpis {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .fila-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+
+.kpi-aviso-parcial { margin-top: 2px; font-size: 0.72rem; color: #8a5f00; }
+.kpi-aviso-parcial:empty { display: none; }

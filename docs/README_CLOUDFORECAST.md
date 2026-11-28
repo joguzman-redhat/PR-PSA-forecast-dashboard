@@ -108,8 +108,8 @@ cd infra && podman-compose down
 |---------|--------|---------|
 | `etl.py` | ✏️ Modificar | Agregar función `write_to_postgres()` |
 | `index.html` | ✏️ Modificar | Cambiar 3 fetch: `data/*.json` → `http://api:3000/api/*` |
-| `app.js` | ✅ Sin cambios | Lógica igual, datos vienen de API |
-| `styles.css` | ✅ Sin cambios | |
+| `js/` (antes `app.js`) | ✅ Sin cambios | Lógica igual, datos vienen de API |
+| `css/` (antes `styles.css`) | ✅ Sin cambios | |
 | `flows/flow_cloud_forecast.json` | 🆕 Crear | Workflow n8n (si no existe) |
 | `infra/docker-compose.yml` | 🆕 Crear | 3 servicios: postgres, api, n8n |
 | `infra/init.sql` | 🆕 Crear | Schema, views, permisos |

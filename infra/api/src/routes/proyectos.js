@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../db');
+const { resolverForecast, metaForecast } = require('../forecast');
 
 const router = express.Router();
 
@@ -43,7 +44,8 @@ function proyectoBase(f) {
     ejecucion_deseada: f.ejecucion_deseada,
     pct_ejecucion_actual: f.pct_ejecucion_actual,
     pct_peso_contrato: f.pct_peso_contrato,
-    fecha_fin: f.fecha_fin,
+    fecha_fin: typeof f.fecha_fin === 'string'
+      ? f.fecha_fin.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$2/$3/$1') : f.fecha_fin,
     estado_contrato: f.estado_contrato,
     dias_para_vencimiento: f.dias_para_vencimiento,
     meses_transcurridos: f.meses_transcurridos,
@@ -51,6 +53,8 @@ function proyectoBase(f) {
     q_del_clawback: f.q_del_clawback,
     estatus: f.estatus,
     start_at_risk: f.start_at_risk,
+    executive_watchlist: f.executive_watchlist,
+    project_status: f.project_status,
     _errores: f.campos_con_error || {},
     _recalculado: f.campos_recalculados || {},
     _tipo_fila: 'proyecto',
@@ -84,38 +88,34 @@ function columnasDerivadas(filas) {
 // la dejo el ETL -- incluidos los tipos originales (num_pa llega como numero
 // en 310 filas y como texto en 24) y las claves con guion bajo que el
 // dashboard lee (_fila_excel, _errores, _recalculado, _tipo_fila).
-router.get('/', async (_req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
-    const { rows: cargas } = await pool.query('SELECT * FROM v_carga_actual');
-    if (!cargas.length) {
-      return res.status(503).json({ error: 'No hay ninguna carga en la base de datos' });
+    const ctx = await resolverForecast(req.query);
+    if (!ctx.carga) {
+      return res.json({ meta: { ...metaForecast(ctx), columnas: [] }, proyectos: [] });
     }
-    const carga = cargas[0];
+    const carga = ctx.carga;
 
     // Se piden las columnas normalizadas Y el jsonb: la fila que se devuelve
     // es la union de las dos. Ver proyectoBase() para por que.
     const { rows } = await pool.query(
-      `SELECT num_pa, project_id, num_opp, nombre, cliente, pm_lider, pm_lider_psa,
-              zona, pais, vendedor, tsm, billing_type, billing_arrangement, estado,
-              valor_of, valor_of_anterior, acumulado_a_hoy, consumido_2025,
-              backlog_2026, ejecucion_deseada,
-              -- Si el ETL no la trajo se calcula: verificado contra el Excel,
-              -- coincide en las 309 filas que tienen los dos operandos.
-              coalesce(pct_ejecucion_actual,
-                       CASE WHEN valor_of <> 0
-                            THEN acumulado_a_hoy / valor_of END) AS pct_ejecucion_actual,
-              pct_peso_contrato, estado_contrato, dias_para_vencimiento,
-              meses_transcurridos, tipo_de_ejecucion, q_del_clawback, estatus,
-              start_at_risk, campos_con_error, campos_recalculados, datos_info,
-              to_char(fecha_fin, 'FMMM/FMDD/YYYY') AS fecha_fin
-         FROM proyecto
-        WHERE ultima_carga_id = $1
-        ORDER BY id`,
+      `SELECT s.proyecto_id, s.atributos, s.origen,
+              ra.valor_of, ra.acum_2025 AS acumulado_anterior, ra.backlog
+         FROM proyecto_snapshot s
+         LEFT JOIN revenue_anual ra ON ra.carga_id=s.carga_id AND ra.proyecto_id=s.proyecto_id
+        WHERE s.carga_id = $1 ORDER BY s.proyecto_id`,
       [carga.id],
     );
 
-    const proyectos = rows.map(proyectoBase);
+    const proyectos = rows.map(r => ({ ...proyectoBase(r.atributos), _origen_atributos: r.origen,
+      valor_of: r.valor_of, acumulado_anterior: r.acumulado_anterior, backlog: r.backlog }));
     const meta = { ...(carga.meta_proyectos || {}) };
+    if (Array.isArray(meta.columnas)) {
+      const vistos = new Set();
+      meta.columnas = meta.columnas.map(col => ({ ...col,
+        key: ({ backlog_2026: 'backlog', consumido_2025: 'acumulado_anterior' })[col.key] || col.key,
+      })).filter(col => !vistos.has(col.key) && vistos.add(col.key));
+    }
 
     // El dashboard hace metadataProyectos.columnas.filter(...) sin guarda: si
     // la carga no trajo meta, la pantalla se cae con un TypeError antes de
@@ -130,10 +130,7 @@ router.get('/', async (_req, res, next) => {
     res.json({
       meta: {
         ...meta,
-        carga_id: carga.id,
-        carga_etiqueta: carga.etiqueta,
-        carga_ejecutada_en: carga.ejecutada_en,
-        origen: 'postgres',
+        ...metaForecast(ctx),
       },
       proyectos,
     });
@@ -143,3 +140,6 @@ router.get('/', async (_req, res, next) => {
 });
 
 module.exports = router;
+
+module.exports.proyectoBase = proyectoBase;
+module.exports.columnasDerivadas = columnasDerivadas;

@@ -1,0 +1,132 @@
+.forecast-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+.forecast-toolbar label { display: grid; gap: .35rem; font-weight: 600; }
+.forecast-toolbar select { max-width: min(34rem, 80vw); padding: .45rem; font: inherit; }
+.forecast-toolbar #forecast-desde,
+.forecast-toolbar #forecast-hasta { min-width: 11rem; }
+#forecast-estado { flex: 1 1 18rem; margin: 0; color: var(--text-secondary); }
+.forecast-sin-datos > .pf-v6-c-tabs,
+.forecast-sin-datos > .pestana-contenido { display: none !important; }
+
+/* ============================================================================
+   VARIABLES DE DISEÑO - Tinta y Chrome
+   ============================================================================ */
+:root {
+  /* Marca Red Hat */
+  --rh-red: #ee0000;
+  --rh-red-dark: #a30000;
+  --rh-black: #151515;
+
+  /* Acento de marca para el "chrome" de la interfaz (pestañas activas, focos,
+     botones, bordes de tarjetas). Deliberadamente separado de --series-1:
+     ese sigue siendo azul PatternFly porque es el color de datos (gráficas,
+     KPIs comparables), y mezclarlo con el rojo de marca chocaría con el rojo
+     que ya significa "crítico/vencido" en el propio dashboard. */
+  --brand: var(--rh-red);
+  --brand-hover: var(--rh-red-dark);
+
+  /* Colores de superficie y página */
+  --surface-1: #ffffff;
+  --surface-page: #f2f2f2;
+  --text-primary: #151515;
+  --text-secondary: #4d4d4d;
+  --text-dim: #606060;
+  --grid-color: #e0e0e0;
+  --baseline-color: #c7c7c7;
+  --border-color: #d2d2d2;
+
+  /* Colores de series categóricas (en orden fijo; base = azul PatternFly) */
+  --series-1: #4877a5;
+  --series-2: #b17c55;
+  --series-3: #568c78;
+  --series-4: #b18b37;
+  --series-5: #aa728e;
+  --series-6: #6d874b;
+  --series-7: #82709e;
+  --series-8: #ad6262;
+  --series-otros: #a8a6a0;
+
+  /* Colores de estado */
+  --color-bueno: #0ca30c;
+  --color-advertencia: #fab219;
+  --color-serio: #ec835a;
+  --color-critico: #d03b3b;
+
+  /* Tipografía: fuentes de marca Red Hat con fallback del sistema para no
+     depender de internet (ver README: el dashboard funciona sin conexión) */
+  --font-stack: "Red Hat Text", "RedHatText", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-stack-display: "Red Hat Display", "RedHatDisplay", var(--font-stack);
+
+  /* Espaciado */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+
+  /* Border radius (PatternFly usa radios compactos, poco redondeados) */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Sin modo oscuro automático: PatternFly real (vendor/patternfly.css) no
+   sigue prefers-color-scheme por defecto (requiere la clase .pf-v6-theme-dark
+   explícita), así que dejar que el navegador oscurezca solo nuestras
+   variables producía una mezcla rota: paneles oscuros con texto claro sobre
+   tarjetas/tablas de PatternFly que seguían blancas (texto invisible). El
+   dashboard se queda siempre en tema claro hasta que se integre el tema
+   oscuro real de PatternFly en ambas hojas a la vez. */
+
+/* ============================================================================
+   RESET Y ESTILOS BASE
+   ============================================================================ */
+.aviso-demo {
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--color-advertencia);
+  color: var(--text-primary);
+  border-bottom: 2px solid currentColor;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+html {
+  font-size: clamp(16px, 0.5vw + 9px, 21px);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 100%;
+  height: auto;
+}
+
+body {
+  background-color: var(--surface-page);
+  color: var(--text-primary);
+  font: 400 1rem/1.5 var(--font-stack);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-stack-display);
+  font-weight: 600;
+  margin-bottom: var(--spacing-md);
+}
+

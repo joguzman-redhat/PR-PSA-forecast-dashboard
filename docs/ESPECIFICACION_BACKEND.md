@@ -48,7 +48,7 @@ Google Drive (.xlsx)
   importan: `Info Proyectos` y `BackLog NOLA`. Incluye recálculo de 8 columnas rotas,
   mapeo de columnas por nombre y seis validaciones que abortan si el Excel cambió de
   forma. Hoy escribe JSON; **hay que cambiarle la salida a Postgres**.
-- **El dashboard** (`index.html`, `app.js`, `styles.css`) — todas las vistas.
+- **El dashboard** (`index.html`, `js/`, `css/`) — todas las vistas.
 
 ### Hay que construir
 

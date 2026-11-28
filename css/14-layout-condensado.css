@@ -1,0 +1,239 @@
+/* ============================================================================
+   LAYOUT CONDENSADO DEL DASHBOARD
+   ============================================================================ */
+
+/* Card de resumen de vendedor */
+.card-vendedor-resumen {
+  margin-bottom: var(--spacing-lg);
+}
+
+.vendedor-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--spacing-lg);
+  margin: var(--spacing-md) 0;
+  padding: var(--spacing-md) 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.vendedor-stat {
+  text-align: center;
+}
+
+.vendedor-stat-valor {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+
+.vendedor-stat-label {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vendedor-detalle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-md);
+}
+
+.vendedor-seccion-titulo {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-sm);
+}
+
+.vendedor-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-right: 6px;
+  font-size: 0.8125rem;
+  background: var(--surface-page);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.vendedor-cliente {
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+/* Layouts de gráficas condensadas */
+.panel-graficas-dos-cols {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.panel-graficas-tres-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  align-items: start;
+}
+
+.grafica-svg-condensed {
+  width: 100%;
+  height: auto;
+}
+
+.grafica-svg-small {
+  width: 100%;
+  height: auto;
+}
+
+/* Tabla de proyectos no iniciados con barra inline */
+.filtros-no-iniciados {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+.filtros-no-iniciados label { margin: 0; }
+.filtros-no-iniciados select { flex: 0 1 auto; max-width: 100%; }
+
+.tabla-no-iniciados-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.tabla-no-iniciados {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 900px;
+}
+
+.tabla-no-iniciados td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 8px !important;
+  font-size: 0.8125rem;
+}
+
+.tabla-no-iniciados th {
+  font-size: 0.8125rem;
+  padding: 6px 8px !important;
+}
+
+.celda-backlog-barra {
+  position: relative;
+  padding: var(--spacing-sm) !important;
+  overflow: visible !important;
+}
+
+.backlog-participacion {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+.inline-backlog-barra-container {
+  flex: 1;
+  min-width: 72px;
+  position: relative;
+  height: 1.5rem;
+  background: var(--grid-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.inline-backlog-barra-container .inline-backlog-relleno {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--series-1) 24%, transparent);
+}
+.inline-backlog-porcentaje {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5rem;
+  color: var(--text-primary);
+}
+.backlog-participacion .inline-backlog-valor { white-space: nowrap; flex-shrink: 0; padding: 0; }
+.tabla-no-iniciados .tabla-no-iniciados-vacia { text-align: center; color: var(--text-dim); white-space: normal; }
+.tabla-no-iniciados .no-iniciados-total td { font-weight: 600; }
+
+.inline-backlog-barra {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  background: var(--grid-color);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.inline-backlog-relleno {
+  height: 100%;
+  background: var(--series-1);
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+
+.inline-backlog-valor {
+  position: relative;
+  z-index: 1;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px;
+}
+
+/* Reducir padding en cards de gráficas */
+.grafica-contenedor .pf-v6-c-card__body {
+  padding: var(--spacing-md);
+}
+
+.grafica-contenedor h3 {
+  margin-bottom: var(--spacing-sm);
+  font-size: 0.8125rem;
+}
+
+/* Responsive condensado */
+@media (max-width: 1200px) {
+  .panel-graficas-tres-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-graficas-dos-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .fila-kpis {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .vendedor-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .vendedor-detalle {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .fila-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .vendedor-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+

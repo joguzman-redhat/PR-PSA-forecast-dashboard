@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - postgres/pvc.yaml
+  - postgres/deployment.yaml
+  - postgres/service.yaml
+  - jobs/schema-init-job.yaml
+  - api/imagestream.yaml
+  - api/buildconfig.yaml
+  - api/deployment.yaml
+  - api/service.yaml
+  - api/route.yaml
+  - n8n/pvc.yaml
+  - n8n/deployment.yaml
+  - n8n/service.yaml
+  - n8n/route.yaml
+
+# kustomize no deja referenciar archivos fuera de este directorio (por
+# seguridad), asi que postgres/01_schema.sql es una COPIA de
+# infra/db/init/01_schema.sql -- si el schema real cambia, hay que copiarlo
+# de nuevo aqui (o el Job de init va a aplicar una version vieja).
+configMapGenerator:
+  - name: postgres-schema
+    files:
+      - postgres/01_schema.sql
+    options:
+      disableNameSuffixHash: true

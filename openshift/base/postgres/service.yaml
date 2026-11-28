@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: forecast-postgres
+  labels:
+    app: forecast-postgres
+spec:
+  selector:
+    app: forecast-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres

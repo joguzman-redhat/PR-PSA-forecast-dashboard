@@ -18,6 +18,11 @@ exposición pública):
 ./forecast.sh public    # lo mismo + ngrok
 ```
 
+`up` y `public` reconstruyen la imagen de la API y reemplazan su contenedor
+para servir el codigo de la rama que tengas activa, incluidos los archivos del
+dashboard. El build reutiliza cache y conserva los volumenes de Postgres y n8n.
+Despues de cambiar de rama o actualizar el codigo, vuelve a ejecutar el comando.
+
 - Dashboard: <http://localhost:3000/>
 - n8n: <http://localhost:8080/> (vía nginx) o <http://localhost:5678/> (directo)
 - n8n público (solo con `public`): `./forecast.sh public` la imprime en la
@@ -43,13 +48,29 @@ credencial Postgres (host `postgres`, puerto `5432`, mismas credenciales de
 
 | Comando | Qué hace |
 |---|---|
-| `up` | Levanta postgres + api + n8n + nginx |
+| `up` | Actualiza la API/dashboard y levanta postgres + api + n8n + nginx |
 | `public` | Lo mismo + ngrok (perfil `public`) |
 | `seed` | Carga datos a Postgres e invalida caché — ver aviso abajo |
+| `migrate` | Aplica migraciones de esquema (`db/migraciones/*.sql`, idempotentes) |
 | `rebuild` | Reconstruye la imagen de la API y recrea el contenedor |
 | `logs` / `psql` | Logs de la API / consola SQL |
 | `down` | Apaga, conserva los volúmenes |
 | `destroy` | Apaga y **borra el histórico de Postgres** (el de n8n no se toca) |
+
+> Migración de identidad por Project ID (`db/migraciones/2026-11-26_identidad_project_id.sql`,
+> ADR 0003): reconstruye `forecast_revenue_mensual` con la clave nueva y une los proyectos
+> partidos. Es transaccional e idempotente. Procedimiento: (1) `pg_dump` previo de la base;
+> (2) aplicarla primero en la base local y revisar series y totales; (3) OpenShift después,
+> con su propio `pg_dump`. Prueba con Postgres temporal: `node infra/api/test/run-migracion-identidad.cjs`.
+
+> Reglas de la identidad (ADR 0003) que conviene saber al leer los datos: (a) el «PA de la fila
+> más reciente» de un Project ID con dos PA es la mayor posición de fila en n8n y el mayor
+> `proyecto_id` en SQL/API; equivalen porque el ETL inserta en orden de fila. (b) La clave de un
+> proyecto sin identificar es `SIN_ID:<año>:<posición de fila>` en n8n y `SIN_ID:<año>:<proyecto_id>`
+> en SQL; hoy hay 0 casos. (c) Un `proyecto.clave` duplicado tras la migración conserva la clave vieja.
+
+> Tras el refactor modular del front, la imagen de la API debe reconstruirse
+> (`./forecast.sh rebuild`) para que el contenedor sirva `js/` y `css/` nuevos.
 
 > `seed` depende de `PoC/data/*.json`, que ya no está en este repo (era del
 > ETL en Python, retirado). En esta máquina no hace falta — el volumen
@@ -58,7 +79,7 @@ credencial Postgres (host `postgres`, puerto `5432`, mismas credenciales de
 
 ## Credenciales de la BD
 
-En `.env` (no se sube a git), de **desarrollo**: usuario/contraseña/base son
+Copia `.env.example` a `.env`; no pegues `.env` en conversaciones. `.env` (no se sube a git) lleva credenciales de **desarrollo**: usuario/contraseña/base son
 todos `forecast`, Postgres solo en `127.0.0.1:5432`. Cámbialas antes de sacar
 esto de la máquina local.
 
@@ -67,3 +88,44 @@ esto de la máquina local.
 <http://localhost:3000/api/docs/> (Swagger, sin CDN). Spec crudo en
 `api/src/openapi.yaml`. Esquema de Postgres (tablas y vistas) en
 `db/init/01_schema.sql`.
+
+## Pruebas del SQL del ETL
+
+Desde la raiz del repo, con Node.js y Podman disponibles:
+
+```bash
+node --test n8n/test/carga-sql.test.js
+```
+
+Las pruebas levantan y eliminan un Postgres temporal sin red, puertos ni
+volumenes del stack real. Verifican los encabezados actuales y anteriores de
+BackLog NOLA, montos exactos y columnas completamente vacias.
+
+Paridad del esquema con las migraciones (misma técnica, Postgres temporal):
+
+```bash
+node infra/api/test/run-esquema-migraciones.cjs
+```
+
+Una base creada con `01_schema.sql` y otra puesta al día con todas las migraciones, partiendo del esquema
+anterior (`infra/api/test/fixtures/esquema-antes-de-cortes.sql`), deben tener las mismas columnas, también
+tras aplicarlas dos veces; y `openshift/base/postgres/01_schema.sql` debe ser copia exacta del esquema
+original. Falla si una migración deja una base desplegada distinta de una nueva.
+
+## Importar el export de n8n (identidad por Project ID)
+
+El export `n8n/n8n_nola_completo.json` trae la regla del ADR 0003 (claves `PR:`/`PA:`/`SIN_ID:`).
+Orden, con el stack local arriba y sin abrir el workflow en el navegador (el autoguardado de una
+pestana vieja pisaria el cambio):
+
+1. `pg_dump -Fc -U forecast -d forecast -f forecast_antes_identidad.dump` (respaldo).
+2. `./forecast.sh migrate`: reescribe `proyecto.clave` y el historial. Debe ir **antes** de la
+   primera Ejecucion nueva; si no, el ETL inserta un proyecto nuevo por cada clave.
+3. `podman cp ../n8n/n8n_nola_completo.json n8n:/tmp/wf.json && podman exec n8n n8n import:workflow --input=/tmp/wf.json`
+   (upsert por el `id` del export; reasigna la credencial de Postgres si hace falta).
+4. Reabrir el workflow en el navegador (Discard si pide restaurar) y ejecutar desde Manual Trigger.
+   Los avisos de un Project ID con dos PA salen en el log y en `avisos_identidad` del resultado.
+
+## Modo demo
+
+`FORECAST_DEMO=true` sirve el front con datos ficticios, incluido `/api/timeline`, sin Postgres; `scripts/comparar-front.sh` lo usa para comparar el front entre dos versiones (ver `docs/VERIFICAR_FRONT.md`).

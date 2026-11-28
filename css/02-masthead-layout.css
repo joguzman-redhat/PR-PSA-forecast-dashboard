@@ -1,0 +1,149 @@
+/* ============================================================================
+   MASTHEAD (marca Red Hat) — franja superior fuera del contenedor principal
+   ============================================================================ */
+.rh-masthead {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 var(--spacing-xl);
+  background: var(--rh-black);
+  border-bottom: 3px solid var(--rh-red);
+}
+
+.rh-masthead-marca {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: #ffffff;
+}
+
+.rh-logo {
+  width: 22px;
+  height: 22px;
+  fill: var(--rh-red);
+  flex-shrink: 0;
+}
+
+.rh-wordmark {
+  font-family: var(--font-stack-display);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+}
+
+.rh-masthead-separador {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.25);
+  margin: 0 2px;
+}
+
+.rh-masthead-producto {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+@media (max-width: 768px) {
+  .rh-masthead { padding: 0 var(--spacing-lg); }
+  .rh-masthead-producto { display: none; }
+}
+
+h1 {
+  font-size: 2.0rem;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+h3 {
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+
+/* ============================================================================
+   LAYOUT PRINCIPAL
+   ============================================================================ */
+.contenedor-principal {
+  max-width: min(96vw, 2400px);
+  margin: 0 auto;
+  padding: var(--spacing-xl);
+}
+
+.encabezado {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: var(--spacing-lg);
+}
+.btn-exportar-graficas { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+
+/* Tarjetas tipo PatternFly: superficie elevada y radio compacto */
+.kpi-tile,
+.panel-filtros,
+.grafica-contenedor,
+.panel-tabla,
+.panel-detalle,
+.panel-trazabilidad,
+.hero-proyecto,
+.tarjeta-rango {
+  box-shadow: var(--shadow-sm);
+}
+
+/* Filo superior rojo de marca: firma visual de Red Hat en cada tarjeta.
+   .tarjeta-rango queda fuera porque su borde completo ya es semántico
+   (tono-bueno/tono-malo). El borde real de .pf-v6-c-card lo dibuja un
+   ::before en inset:0, que al sumar nuestro border-top queda 3px más abajo
+   que el borde de la tarjeta: esa línea de 1px gris quedaba visible como una
+   franja entre el rojo y la tarjeta. Se apaga ese borde propio de PatternFly
+   (ancho a 0) para que solo se vea nuestro filo rojo. */
+.kpi-tile,
+.panel-filtros,
+.grafica-contenedor,
+.panel-tabla,
+.panel-detalle,
+.panel-trazabilidad,
+.hero-proyecto {
+  --pf-v6-c-card--BorderWidth: 0;
+  border-top: 3px solid var(--brand);
+}
+
+/* Marcador de sección: una franja roja corta antes del título, como en los
+   productos de Red Hat (console.redhat.com, Hybrid Cloud Console). */
+.grafica-contenedor h3,
+.panel-tabla h3,
+.tabla-eventos h3,
+.panel-trazabilidad > h2 {
+  position: relative;
+  padding-left: 14px;
+}
+.grafica-contenedor h3::before,
+.panel-tabla h3::before,
+.tabla-eventos h3::before,
+.panel-trazabilidad > h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 4px;
+  background: var(--brand);
+  border-radius: 2px;
+}
+.panel-trazabilidad > h2::before { top: 4px; bottom: 10px; }
+
+.encabezado h1 {
+  margin-bottom: var(--spacing-sm);
+}
+
+.subtitulo {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+

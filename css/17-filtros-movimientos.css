@@ -1,0 +1,93 @@
+/* ============================================================================
+   Movement filters
+   ============================================================================ */
+
+.filtros-resumen-proyectos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+  margin-top: var(--spacing-md);
+}
+
+.filtros-resumen-proyectos .filtro-input {
+  flex: 1 1 200px;
+  max-width: 280px;
+}
+
+.filtros-resumen-proyectos select {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  background: var(--surface-page);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  min-width: 160px;
+}
+
+.filtro-eventos {
+  flex-wrap: wrap;
+}
+
+.filtro-eventos select {
+  min-width: 140px;
+}
+
+@media (max-width: 768px) {
+  .filtros-resumen-proyectos {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filtros-resumen-proyectos .filtro-input,
+  .filtros-resumen-proyectos select {
+    max-width: none;
+  }
+}
+
+/* Fix sub-table width and column sizing */
+.tabla-proyectos-pm {
+  table-layout: fixed;
+}
+
+.tabla-proyectos-pm th:nth-child(1) { width: 80px; }   /* PA */
+.tabla-proyectos-pm th:nth-child(2) { width: 200px; }  /* Proyecto - ellipsis */
+.tabla-proyectos-pm th:nth-child(3) { width: 120px; }  /* Cliente */
+.tabla-proyectos-pm th:nth-child(4) { width: 100px; }  /* Estado */
+.tabla-proyectos-pm th:nth-child(5) { width: 100px; }  /* Booking */
+.tabla-proyectos-pm th:nth-child(6) { width: 100px; }  /* Revenue acum */
+.tabla-proyectos-pm th:nth-child(7) { width: 100px; }  /* Backlog */
+.tabla-proyectos-pm th:nth-child(8) { width: 80px; }   /* % ejecución */
+
+.tabla-proyectos-pm .celda-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Ensure main table tfoot doesn't bleed into expanded area */
+#tabla-pms > tfoot {
+  background: var(--surface-1);
+}
+
+.fila-proyectos-pm-expandida > td {
+  border-bottom: 2px solid var(--border-color);
+}
+
+
+/* La tabla de PMs tiene scroll horizontal: sin esto, la subtabla de proyectos
+   se estira al ancho total y las columnas de dinero quedan fuera de vista. */
+.contenedor-proyectos-pm {
+  position: sticky;
+  left: 0;
+  width: min(1240px, calc(100vw - 160px));
+}
+
+/* Pestañas inactivas en tinta oscura: el gris de PatternFly se pierde sobre el fondo gris. */
+.pf-v6-c-tabs__link {
+  --pf-v6-c-tabs__link--Color: var(--text-primary);
+  color: var(--text-primary);
+}
+

@@ -6,7 +6,10 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "pretest": "npm run lint:front",
+    "test": "node --test test/*.test.js",
+    "lint:front": "cd ../.. && infra/api/node_modules/.bin/eslint --no-config-lookup -c infra/api/eslint.config.mjs js"
   },
   "dependencies": {
     "express": "^4.19.2",
@@ -15,5 +18,9 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "globals": "^17.14.0"
   }
 }

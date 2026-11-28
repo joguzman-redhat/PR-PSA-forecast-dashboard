@@ -1,0 +1,37 @@
+# Corre UNA vez para aplicar infra/db/init/01_schema.sql. No se reactiva
+# solo en cada sync de Argo CD (backoffLimit 0 + sin Recreate automatico) --
+# si hay que re-aplicar el esquema a mano: "oc delete job forecast-postgres-init-schema"
+# y luego "oc apply" de nuevo, o "argocd app sync --resource batch:Job:forecast-postgres-init-schema".
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: forecast-postgres-init-schema
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: init-schema
+          image: quay.io/sclorg/postgresql-16-c9s:latest
+          command:
+            - sh
+            - -c
+            - |
+              export PGPASSWORD="$POSTGRESQL_PASSWORD"
+              psql -h forecast-postgres -U "$POSTGRESQL_USER" -d "$POSTGRESQL_DATABASE" \
+                -v ON_ERROR_STOP=1 -f /schema/01_schema.sql
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+      volumes:
+        - name: schema
+          configMap:
+            name: postgres-schema

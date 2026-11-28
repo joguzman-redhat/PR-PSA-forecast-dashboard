@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { mesesAClaves } = require('../dominio');
+const { resolverForecast, metaForecast } = require('../forecast');
 
 const router = express.Router();
 
@@ -9,35 +10,32 @@ const router = express.Router();
 // revenue_mes / revenue_anual, que son su unica fuente de verdad. Por eso los
 // quarters se recalculan en vez de leerse: si alguna vez dejan de cuadrar, es
 // que el dato cambio, no que la vista mienta.
-router.get('/', async (_req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
-    const { rows: cargas } = await pool.query('SELECT * FROM v_carga_actual');
-    if (!cargas.length) {
-      return res.status(503).json({ error: 'No hay ninguna carga en la base de datos' });
+    const ctx = await resolverForecast(req.query);
+    if (!ctx.carga) {
+      return res.json({ meta: metaForecast(ctx), backlog: [] });
     }
-    const carga = cargas[0];
+    const carga = ctx.carga;
 
     const { rows } = await pool.query(
-      `SELECT p.id,
-              p.datos_backlog,
-              p.num_pa, p.num_opp, p.nombre, p.estado, p.pm_lider,
-              p.billing_type, p.billing_arrangement,
+      `SELECT s.proyecto_id, s.atributos,
               ra.valor_of,
               ra.acum_2025,
               ra.backlog,
               ra.total_ejecutado_acumulado,
               coalesce(rm.meses, '[]'::jsonb) AS meses
-         FROM proyecto p
+         FROM proyecto_snapshot s
          LEFT JOIN revenue_anual ra
-           ON ra.proyecto_id = p.id AND ra.carga_id = $1
+           ON ra.proyecto_id = s.proyecto_id AND ra.carga_id = $1
          LEFT JOIN LATERAL (
               SELECT jsonb_agg(jsonb_build_object(
                        'mes', r.mes, 'commit_usd', r.commit_usd, 'upside_usd', r.upside_usd)) AS meses
                 FROM revenue_mes r
-               WHERE r.proyecto_id = p.id AND r.carga_id = $1
+               WHERE r.proyecto_id = s.proyecto_id AND r.carga_id = $1
          ) rm ON true
-        WHERE p.ultima_carga_id = $1
-        ORDER BY p.id`,
+        WHERE s.carga_id = $1
+        ORDER BY s.proyecto_id`,
       [carga.id],
     );
 
@@ -45,17 +43,18 @@ router.get('/', async (_req, res, next) => {
     // jsonb encima. Un ETL que solo llene las columnas ya pinta el dashboard.
     const backlog = rows
       .map((r) => ({
-        estado: r.estado,
-        num_opp: r.num_opp,
-        num_pa: r.num_pa,
-        nombre_del_proyecto: r.nombre,
-        pm_lider: r.pm_lider,
-        billing_type: r.billing_type,
-        billing_arrangement: r.billing_arrangement,
+        estado: r.atributos.estado,
+        num_opp: r.atributos.num_opp,
+        num_pa: r.atributos.num_pa,
+        nombre_del_proyecto: r.atributos.nombre,
+        pm_lider: r.atributos.pm_lider,
+        billing_type: r.atributos.billing_type,
+        billing_arrangement: r.atributos.billing_arrangement,
         _tipo_fila: 'proyecto',
-        ...r.datos_backlog,
+        ...r.atributos.datos_backlog,
         valor_of: r.valor_of,
-        acum_2025: r.acum_2025,
+        acumulado_anterior: r.acum_2025,
+        acum_2025: ctx.anio === 2026 ? r.acum_2025 : undefined,
         backlog: r.backlog,
         total_ejecutado_acumulado: r.total_ejecutado_acumulado,
         ...mesesAClaves(r.meses),
@@ -64,9 +63,7 @@ router.get('/', async (_req, res, next) => {
     res.json({
       meta: {
         ...(carga.meta_backlog || {}),
-        carga_id: carga.id,
-        carga_etiqueta: carga.etiqueta,
-        origen: 'postgres',
+        ...metaForecast(ctx),
       },
       backlog,
     });

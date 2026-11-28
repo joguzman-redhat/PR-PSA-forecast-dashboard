@@ -38,9 +38,76 @@ tags:
     description: Salud e invalidación de caché
 
 paths:
+  /api/timeline:
+    get:
+      tags: [datos]
+      summary: Calendario multianual consolidado por proyecto
+      description: |
+        Una respuesta consistente con proyectos, backlog mensual e historia de capturas.
+        Los meses se identifican como YYYY-MM. Booking y atributos se toman una sola
+        vez por proyecto, dando prioridad al año actual de America/Bogota, luego al
+        anterior mas cercano y finalmente al futuro mas cercano. No se suman los
+        acumulados de los distintos años. Un mes sin cobertura devuelve null.
+        Los endpoints anuales se conservan para compatibilidad y diagnostico.
+      parameters:
+        - name: desde
+          in: query
+          schema: { type: string, pattern: '^20[0-9]{2}-(0[1-9]|1[0-2])$' }
+          description: Primer mes incluido. Por defecto, inicio del calendario disponible.
+        - name: hasta
+          in: query
+          schema: { type: string, pattern: '^20[0-9]{2}-(0[1-9]|1[0-2])$' }
+          description: Ultimo mes incluido. Por defecto, final del calendario disponible.
+      responses:
+        "200":
+          description: El calendario completo viaja en meta.periodos; meta.periodos_seleccionados identifica el rango solicitado. Sin cargas devuelve estado sin_datos y colecciones vacias.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [meta, proyectos, backlog, historia]
+                properties:
+                  meta: { type: object, additionalProperties: true }
+                  proyectos: { type: array, items: { type: object, additionalProperties: true } }
+                  backlog: { type: array, items: { type: object, additionalProperties: true } }
+                  historia: { type: object, additionalProperties: true }
+        "400": { $ref: "#/components/responses/ConsultaInvalida" }
+        "500": { $ref: "#/components/responses/ErrorInterno" }
+  /api/forecasts:
+    get:
+      tags: [datos]
+      summary: Años, fuentes y últimas capturas disponibles
+      description: Incluye FY26/FY27 aunque un año aún no tenga cargas. Una fuente con archivo_id null corresponde al histórico de origen desconocido.
+      responses:
+        "200":
+          description: Catálogo de selección
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  anios:
+                    type: array
+                    items: { type: integer }
+                  fuentes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        anio_forecast: { type: integer }
+                        archivo_id: { type: string, nullable: true }
+                        archivo_nombre: { type: string, nullable: true }
+                        carga_id: { type: integer }
+                        snapshots: { type: integer }
+        "500": { $ref: "#/components/responses/ErrorInterno" }
+
   /api/proyectos:
     get:
       tags: [datos]
+      parameters:
+        - $ref: "#/components/parameters/Anio"
+        - $ref: "#/components/parameters/Archivo"
+        - $ref: "#/components/parameters/Carga"
       summary: Estado actual de cada proyecto
       description: |
         Reemplaza a `data/proyectos.json`. Devuelve las filas de la hoja
@@ -51,7 +118,7 @@ paths:
         a 349.
       responses:
         "200":
-          description: Carga actual
+          description: Captura seleccionada; sin datos devuelve HTTP 200, estado sin_datos y una lista vacía.
           content:
             application/json:
               schema:
@@ -62,12 +129,17 @@ paths:
                   proyectos:
                     type: array
                     items: { $ref: "#/components/schemas/Proyecto" }
-        "503": { $ref: "#/components/responses/SinCarga" }
+        "400": { $ref: "#/components/responses/ConsultaInvalida" }
+        "404": { $ref: "#/components/responses/CargaNoEncontrada" }
         "500": { $ref: "#/components/responses/ErrorInterno" }
 
   /api/backlog:
     get:
       tags: [datos]
+      parameters:
+        - $ref: "#/components/parameters/Anio"
+        - $ref: "#/components/parameters/Archivo"
+        - $ref: "#/components/parameters/Carga"
       summary: Revenue mes a mes de la carga actual
       description: |
         Reemplaza a `data/backlog_nola.json`. Una fila por proyecto con las 24
@@ -77,7 +149,7 @@ paths:
         la BD la columna es `commit_usd`. Es lo mismo. El negocio dice *commit*.
       responses:
         "200":
-          description: Carga actual
+          description: Captura seleccionada; sin datos devuelve HTTP 200, estado sin_datos y una lista vacía.
           content:
             application/json:
               schema:
@@ -88,12 +160,17 @@ paths:
                   backlog:
                     type: array
                     items: { $ref: "#/components/schemas/FilaBacklog" }
-        "503": { $ref: "#/components/responses/SinCarga" }
+        "400": { $ref: "#/components/responses/ConsultaInvalida" }
+        "404": { $ref: "#/components/responses/CargaNoEncontrada" }
         "500": { $ref: "#/components/responses/ErrorInterno" }
 
   /api/historia:
     get:
       tags: [datos]
+      parameters:
+        - $ref: "#/components/parameters/Anio"
+        - $ref: "#/components/parameters/Archivo"
+        - $ref: "#/components/parameters/Carga"
       summary: Todos los snapshots, las series por proyecto y los movimientos
       description: |
         Reemplaza a `data/historia_revenue.json`. Es la respuesta pesada
@@ -109,11 +186,12 @@ paths:
         implementado.
       responses:
         "200":
-          description: Historia completa
+          description: Historia del año y fuente seleccionados, hasta carga_id si se indica. Sin datos devuelve HTTP 200 y colecciones vacías.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Historia" }
-        "503": { $ref: "#/components/responses/SinCarga" }
+        "400": { $ref: "#/components/responses/ConsultaInvalida" }
+        "404": { $ref: "#/components/responses/CargaNoEncontrada" }
         "500": { $ref: "#/components/responses/ErrorInterno" }
 
   /api/reload:
@@ -158,12 +236,35 @@ paths:
                   error: { type: string }
 
 components:
+  parameters:
+    Anio:
+      name: anio
+      in: query
+      description: Año del calendario de forecast; no es el año de la fecha de carga.
+      schema: { type: integer, minimum: 2000, maximum: 2100, default: 2026 }
+    Archivo:
+      name: archivo_id
+      in: query
+      allowEmptyValue: true
+      description: ID de Drive. Omitir elige la fuente más reciente del año. Vacío selecciona solo el histórico de origen desconocido.
+      schema: { type: string, maxLength: 256 }
+    Carga:
+      name: carga_id
+      in: query
+      description: Fija una captura del año/fuente solicitado. Usar el mismo valor en los tres endpoints evita mezclar capturas durante una carga concurrente.
+      schema: { type: integer, minimum: 1 }
   responses:
-    SinCarga:
-      description: La base de datos está vacía. Falta correr `./forecast.sh seed`.
+    ConsultaInvalida:
+      description: Parámetros inválidos.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    CargaNoEncontrada:
+      description: La carga solicitada no pertenece al año/fuente o no tiene atributos capturados.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
     ErrorInterno:
       description: Error no controlado
       content:
@@ -183,6 +284,9 @@ components:
         carga_id:       { type: integer, example: 32 }
         carga_etiqueta: { type: string,  example: "Hoy (6 oct 2026)" }
         origen:         { type: string,  example: postgres }
+        anio_forecast:  { type: integer, example: 2026 }
+        archivo_id:     { type: string, nullable: true }
+        estado:         { type: string, enum: [disponible, sin_datos] }
       additionalProperties: true
 
     MetaProyectos:
@@ -267,8 +371,8 @@ components:
           example: Multi Deliverable
         valor_of:        { type: number, nullable: true, example: 21665.8 }
         acumulado_a_hoy: { type: number, nullable: true }
-        consumido_2025:  { type: number, nullable: true }
-        backlog_2026:    { type: number, nullable: true }
+        acumulado_anterior: { type: number, nullable: true }
+        backlog: { type: number, nullable: true }
         fecha_fin:
           type: string
           nullable: true
@@ -298,6 +402,19 @@ components:
             (se buscó). Está generado con un hash del `project_id` al 15% solo
             para poder enseñar el filtro. Hay que pedírselo a la fuente antes
             de producción, y advertirlo en cualquier respuesta que lo use.
+        executive_watchlist:
+          type: boolean
+          nullable: true
+          description: |
+            Indica si el proyecto está en la watchlist ejecutiva. Puede llegar
+            como TRUE/FALSE, "Sí"/"No", 1/0, o vacío (null).
+        project_status:
+          type: string
+          nullable: true
+          enum: [Red, Yellow, Green, null]
+          description: |
+            Estado visual del proyecto (semáforo). Se normaliza a Red/Yellow/Green
+            desde variantes en español o inglés. Null si no está definido.
         estatus:
           type: string
           nullable: true
@@ -337,10 +454,14 @@ components:
           oneOf: [{ type: integer }, { type: string }]
         nombre_del_proyecto: { type: string }
         valor_of:  { type: number, nullable: true }
+        acumulado_anterior:
+          type: number
+          nullable: true
+          description: Ejecutado acumulado antes del año seleccionado, tomado de BackLog NOLA.
         acum_2025:
           type: number
           nullable: true
-          description: Lo consumido en 2025. Entra en el TOTAL EJECUTADO.
+          description: Alias de compatibilidad solo presente para FY26.
         backlog:   { type: number, nullable: true }
         enero_fijo:
           type: number
@@ -360,7 +481,7 @@ components:
           type: number
           nullable: true
           description: |
-            **Recalculado**: `Q1+Q2+Q3+Q4 + acum_2025`. Verificado en 348 de
+            **Recalculado**: `Q1+Q2+Q3+Q4 + acumulado_anterior`. Verificado en 348 de
             348 filas.
         _fila_excel: { type: integer }
         _tipo_fila:  { type: string, enum: [proyecto, ajuste] }
@@ -422,8 +543,9 @@ components:
           properties:
             fijo:      { type: number }
             upside:    { type: number }
-            acum_2025: { type: number }
-            total:     { type: number, description: "`fijo + acum_2025`" }
+            acumulado_anterior: { type: number }
+            acum_2025: { type: number, description: Alias solo para FY26 }
+            total:     { type: number, description: "`fijo + acumulado_anterior`" }
             backlog:   { type: number }
             q1:        { type: number }
             q2:        { type: number }
@@ -444,7 +566,7 @@ components:
         snapshot_id: { type: string, example: s01 }
         fijo:        { type: number, description: Suma del commit de los 12 meses }
         upside:      { type: number }
-        total:       { type: number, description: "`fijo + acum_2025`" }
+        total:       { type: number, description: "`fijo + acumulado_anterior`" }
         backlog:
           type: number
           nullable: true
