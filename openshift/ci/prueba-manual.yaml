@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: forecast-ci-prueba
+  namespace: nola-consulting-services-tenant--pipeline
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+automountServiceAccountToken: false
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: forecast-ci-prueba
+  namespace: nola-consulting-services-tenant--pipeline
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  description: Prueba manual de CI sobre main, sin despliegue ni acceso a Postgres.
+  results:
+    - name: commit
+      value: $(tasks.verificar.results.commit)
+  tasks:
+    - name: verificar
+      taskSpec:
+        results:
+          - name: commit
+            description: Commit de main descargado para esta ejecución.
+        steps:
+          - name: clonar-y-probar
+            image: registry.access.redhat.com/ubi9/nodejs-22:latest
+            computeResources:
+              requests:
+                cpu: 500m
+                memory: 512Mi
+              limits:
+                cpu: "2"
+                memory: 2Gi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            env:
+              - name: HOME
+                value: /workspace/home
+              - name: npm_config_cache
+                value: /workspace/home/.npm
+              - name: GIT_TERMINAL_PROMPT
+                value: "0"
+              - name: CI
+                value: "true"
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              mkdir -p "$HOME"
+              node --version
+              npm --version
+              git --version
+              git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 \
+                clone --depth=1 --single-branch --branch main \
+                https://github.com/joguzman-redhat/PR-PSA-forecast-dashboard.git \
+                /workspace/repo
+              cd /workspace/repo
+              git rev-parse HEAD | tee "$(results.commit.path)"
+              cd infra/api
+              npm ci --include=dev --no-audit --no-fund
+              npm test
+              npm run lint:front

@@ -1,3 +1,5 @@
+# LEGACY: no aplicar al tenant nola-consulting-services-tenant.
+# Destino, rama y base corresponden al entorno anterior. Ver ../ci/README.md.
 # Aplicar este archivo con "oc apply -f" en el namespace openshift-gitops,
 # UNA vez, para registrar la app. De ahi en adelante, Argo CD sincroniza solo
 # cada vez que haya push a la rama v2 de este repo.

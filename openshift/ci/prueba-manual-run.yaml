@@ -1,0 +1,18 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: forecast-ci-prueba-
+  namespace: nola-consulting-services-tenant--pipeline
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  pipelineRef:
+    name: forecast-ci-prueba
+  taskRunTemplate:
+    serviceAccountName: forecast-ci-prueba
+    podTemplate:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+  timeouts:
+    pipeline: 15m0s

@@ -12,6 +12,17 @@ Los criterios operativos requieren evidencia del clúster; preparar código no l
 
 - Mantener configuración local del tracker y los ADR vigentes.
 - Validar por pipeline y dashboard/API, sin nueva base temporal.
+- El usuario autorizó probar CI manual antes de resolver toda la entrega:
+  `forecast-ci-prueba-mfjnj` arrancó en el namespace build y falló al conectar
+  por HTTPS a GitHub. No ejecutó tests ni tocó Postgres.
+- El usuario indicó usar Argo CD para CD. Investigar su incorporación al tenant;
+  no tratar webhook externo como prerrequisito de sincronización GitOps.
+- Se identificó `TenantEgress/default` en el namespace de build; la consulta
+  anterior en `--config` no describía su egress efectivo. Parche limitado
+  GitHub/npm validado en dry-run, rechazado en aplicación por revisión automática:
+  requiere aprobación explícita del usuario por su alcance persistente.
+
+Evidencia y comandos: [Prueba manual de CI](../../openshift/ci/README.md).
 - AppCode aportado por el usuario: `NLFC-001`; validación de CMDB/admisión pendiente.
 - [Diagnóstico y evidencia de plataforma](../../openshift/PRERREQUISITOS.md):
   sesión corporativa autenticada y preflight corregido ejecutado; cero permisos
