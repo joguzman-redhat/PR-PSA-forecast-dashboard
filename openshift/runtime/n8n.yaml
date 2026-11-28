@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: forecast-n8n
+  namespace: nola-consulting-services-tenant--runtime-int
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forecast-n8n-data
+  namespace: nola-consulting-services-tenant--runtime-int
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+  annotations:
+    trident.netapp.io/reclaimPolicy: Retain
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: rh-restricted-iscsi
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forecast-n8n
+  namespace: nola-consulting-services-tenant--runtime-int
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  selector:
+    app: forecast-n8n
+  ports:
+    - name: http
+      port: 5678
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forecast-n8n
+  namespace: nola-consulting-services-tenant--runtime-int
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: forecast-n8n
+  template:
+    metadata:
+      labels:
+        app: forecast-n8n
+        app.kubernetes.io/part-of: cloud-forecast
+        paas.redhat.com/appcode: NLFC-001
+    spec:
+      serviceAccountName: forecast-n8n
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: n8n
+          # Match the version verified in the user's existing local instance.
+          image: docker.io/n8nio/n8n:2.48.8
+          ports:
+            - name: http
+              containerPort: 5678
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: HOME
+              value: /home/node
+            - name: XDG_CACHE_HOME
+              value: /home/node/.cache
+            - name: N8N_HOST
+              value: localhost
+            - name: N8N_PORT
+              value: "5678"
+            - name: N8N_LISTEN_ADDRESS
+              value: "0.0.0.0"
+            - name: N8N_PROTOCOL
+              value: http
+            - name: N8N_EDITOR_BASE_URL
+              value: http://localhost:5678/
+            - name: WEBHOOK_URL
+              value: http://localhost:5678/
+            - name: N8N_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-n8n-secrets
+                  key: N8N_ENCRYPTION_KEY
+            - name: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+              value: "true"
+            - name: GENERIC_TIMEZONE
+              value: America/Bogota
+            - name: TZ
+              value: America/Bogota
+            - name: N8N_DIAGNOSTICS_ENABLED
+              value: "false"
+            - name: N8N_VERSION_NOTIFICATIONS_ENABLED
+              value: "false"
+            - name: N8N_TEMPLATES_ENABLED
+              value: "false"
+            - name: N8N_LOG_LEVEL
+              value: info
+            - name: EXECUTIONS_DATA_PRUNE
+              value: "true"
+            - name: EXECUTIONS_DATA_MAX_AGE
+              value: "168"
+            - name: EXECUTIONS_DATA_PRUNE_MAX_COUNT
+              value: "1000"
+            - name: EXECUTIONS_DATA_SAVE_ON_SUCCESS
+              value: none
+            - name: EXECUTIONS_DATA_SAVE_ON_ERROR
+              value: all
+            - name: EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS
+              value: "false"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz/readiness
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /home/node/.n8n
+            - name: cache
+              mountPath: /home/node/.cache
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: forecast-n8n-data
+        - name: cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

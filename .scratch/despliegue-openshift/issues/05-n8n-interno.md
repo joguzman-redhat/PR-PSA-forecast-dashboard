@@ -4,7 +4,7 @@
 
 **Blocked by:** 02.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Versión fija verificable, UID arbitrario y volúmenes escribibles.
 - [ ] Sin Route administrativa permanente ni copia automática de secretos locales.
