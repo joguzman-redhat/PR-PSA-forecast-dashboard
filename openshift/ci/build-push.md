@@ -75,16 +75,22 @@ de ampliar permisos.
 Tras una PipelineRun exitosa:
 
 ```bash
-bash openshift/ci/build-image-patch.sh forecast-build-push-<sufijo> > /ruta/privada/imagen-api.patch.json
+bash openshift/ci/build-image-patch.sh forecast-build-push-<sufijo> > /ruta/privada/kustomization.yaml
 ```
 
-Este comando comprueba éxito, SHA y repositorio/digest y **solo imprime** un
-parche de Deployment. No parchea la aplicación ni modifica Git. Integrar ese
-parche en los manifiestos GitOps revisados y sincronizar mediante el Argo
-corporativo, o usarlo durante el bootstrap manual explícito antes de activar
-GitOps. No generar PAT ni crear pushes automáticos hasta disponer del mecanismo
-corporativo con alcance mínimo. Una imagen debe quedar rastreable al commit
-probado; Argo debe consumir el digest de esa entrega, no un tag `latest` mutable.
+Este comando requiere Python 3 con PyYAML, comprueba éxito, SHA y repositorio/digest,
+y **solo imprime** una Kustomization actualizada. Sustituye la entrada compartida
+`images` de la API, conservando las imágenes de Postgres y n8n. Así Deployment y
+Job de migraciones consumen el mismo digest. Falla si falta esa entrada o su forma
+es desconocida. No parchea la aplicación ni modifica Git.
+
+Revisar el resultado y copiarlo a `openshift/runtime/kustomization.yaml`; ejecutar
+`oc kustomize openshift/runtime` y comprobar el mismo digest en `forecast-api` y
+`forecast-schema` antes de integrar el cambio en Git y sincronizar con Argo.
+No redirigir el helper directamente sobre su archivo de entrada. El comentario
+incluye el commit probado para conservar esa evidencia en la revisión. No generar
+PAT ni crear pushes automáticos hasta disponer del mecanismo corporativo con
+alcance mínimo. Argo debe consumir el digest aprobado, no un tag mutable.
 
 ## Evidencia pendiente
 

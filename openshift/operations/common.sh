@@ -4,12 +4,20 @@ set -euo pipefail
 readonly runtime_namespace=nola-consulting-services-tenant--runtime-int
 readonly expected_server='https://api.prod-scale-spoke1-dc-rdu3.prod-scale-mgmthub1-dc-rdu3.itup.redhat.com:6443'
 
+runtime_oc() {
+  [[ -n ${validated_context:-} ]] || { echo 'Primero valida el contexto.' >&2; return 2; }
+  command oc --context="$validated_context" --server="$expected_server" "$@"
+}
+
 require_runtime_context() {
   command -v oc >/dev/null || { echo 'Falta el cliente oc.' >&2; exit 2; }
-  [[ $(oc whoami --show-server --request-timeout=15s) == "$expected_server" ]] || {
+  validated_context=$(command oc config current-context)
+  [[ -n "$validated_context" ]] || { echo 'No hay contexto activo.' >&2; exit 2; }
+  readonly validated_context
+  [[ $(command oc --context="$validated_context" whoami --show-server --request-timeout=15s) == "$expected_server" ]] || {
     echo 'El contexto no corresponde al clúster oficial esperado.' >&2; exit 2;
   }
-  oc whoami --request-timeout=15s >/dev/null
+  runtime_oc whoami --request-timeout=15s >/dev/null
 }
 
 require_encrypted_destination() {

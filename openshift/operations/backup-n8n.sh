@@ -5,14 +5,14 @@ source "$(dirname "$0")/common.sh"
 [[ $# -eq 2 ]] || { echo "Uso: $0 /ruta/n8n.tar.gz.gpg HUELLA_GPG" >&2; exit 2; }
 require_runtime_context
 require_encrypted_destination "$1" "$2"
-replicas=$(oc get deployment forecast-n8n -n "$runtime_namespace" --request-timeout=15s -o 'jsonpath={.spec.replicas}')
+replicas=$(runtime_oc get deployment forecast-n8n -n "$runtime_namespace" --request-timeout=15s -o 'jsonpath={.spec.replicas}')
 [[ "$replicas" == 0 ]] || {
   echo 'Detén n8n durante una ventana de mantenimiento antes de respaldar SQLite.' >&2; exit 1;
 }
-[[ -z $(oc get pods -n "$runtime_namespace" -l app=forecast-n8n --request-timeout=15s -o name) ]] || {
+[[ -z $(runtime_oc get pods -n "$runtime_namespace" -l app=forecast-n8n --request-timeout=15s -o name) ]] || {
   echo 'Todavía existen pods de n8n; espera a su terminación.' >&2; exit 1;
 }
-image=$(oc get deployment forecast-n8n -n "$runtime_namespace" --request-timeout=15s -o 'jsonpath={.spec.template.spec.containers[?(@.name=="n8n")].image}')
+image=$(runtime_oc get deployment forecast-n8n -n "$runtime_namespace" --request-timeout=15s -o 'jsonpath={.spec.template.spec.containers[?(@.name=="n8n")].image}')
 [[ -n "$image" ]] || { echo 'No se pudo identificar la imagen de n8n.' >&2; exit 1; }
 umask 077
 output=$1 recipient=$2
@@ -21,11 +21,11 @@ helper=''
 cleanup() {
   rm -f "$partial"
   if [[ -n "$helper" ]]; then
-    oc delete -n "$runtime_namespace" "$helper" --wait=false --request-timeout=15s >/dev/null
+    runtime_oc delete -n "$runtime_namespace" "$helper" --wait=false --request-timeout=15s >/dev/null
   fi
 }
 trap cleanup EXIT
-helper=$(python3 - "$image" "$runtime_namespace" <<'PY' | oc create --request-timeout=20s -f - -o name
+helper=$(python3 - "$image" "$runtime_namespace" <<'PY' | runtime_oc create --request-timeout=20s -f - -o name
 import json, sys
 print(json.dumps({
   'apiVersion': 'v1', 'kind': 'Pod',
@@ -48,15 +48,15 @@ print(json.dumps({
                 {'name': 'key-copy', 'emptyDir': {'medium': 'Memory', 'sizeLimit': '1Mi'}}]}}))
 PY
 )
-oc wait -n "$runtime_namespace" "$helper" --for=condition=Ready --timeout=120s >/dev/null
+runtime_oc wait -n "$runtime_namespace" "$helper" --for=condition=Ready --timeout=120s >/dev/null
 # Refuse if an automatic reconciler restarted n8n during setup.
-[[ $(oc get deployment forecast-n8n -n "$runtime_namespace" --request-timeout=15s -o 'jsonpath={.spec.replicas}') == 0 ]] || {
+[[ $(runtime_oc get deployment forecast-n8n -n "$runtime_namespace" --request-timeout=15s -o 'jsonpath={.spec.replicas}') == 0 ]] || {
   echo 'n8n fue reactivado durante el respaldo. Pausa la reconciliación y repite.' >&2; exit 1;
 }
-oc exec -n "$runtime_namespace" "$helper" -c archive -- \
+runtime_oc exec -n "$runtime_namespace" "$helper" -c archive -- \
   sh -ceu 'cp /encryption-key/N8N_ENCRYPTION_KEY /backup-key/N8N_ENCRYPTION_KEY; tar -czf - -C / state backup-key' \
   | gpg --batch --yes --encrypt --recipient "$recipient" --output "$partial"
-[[ $(oc get deployment forecast-n8n -n "$runtime_namespace" --request-timeout=15s -o 'jsonpath={.spec.replicas}') == 0 ]] || {
+[[ $(runtime_oc get deployment forecast-n8n -n "$runtime_namespace" --request-timeout=15s -o 'jsonpath={.spec.replicas}') == 0 ]] || {
   echo 'n8n fue reactivado durante la copia: no se publicará un respaldo inconsistente.' >&2; exit 1;
 }
 ln "$partial" "$output"

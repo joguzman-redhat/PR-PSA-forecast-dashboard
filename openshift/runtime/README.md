@@ -95,3 +95,10 @@ Las políticas gestionadas por el tenant son aditivas. Estos manifiestos no
 prometen aislamiento entre pods anulando `internal-1`, ni modifican esa política.
 Conservar las reglas de plataforma y verificar el control de red efectivo antes
 de afirmar aislamiento adicional. n8n y backups se documentan separadamente.
+
+El Job espera a que Postgres acepte conexiones antes de ejecutar migraciones,
+con el mismo plazo total de 300 segundos del Job. Esto cubre reinicios del
+Deployment durante un cambio de imagen. El propietario `forecast_owner` tiene
+`USAGE` y `SELECT` sobre el historial en `forecast_ops` para que el backup incluya
+esos metadatos; no tiene permisos para escribirlos. El lector y el escritor del
+ETL no reciben acceso a ese esquema.
