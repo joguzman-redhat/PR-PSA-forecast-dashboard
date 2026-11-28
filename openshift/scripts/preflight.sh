@@ -16,7 +16,7 @@ if ! command -v oc >/dev/null 2>&1; then
 fi
 
 # No leer kubeconfig, tokens, .env ni el contenido de ningún Secret.
-current_server=$(oc whoami --show-server 2>/dev/null) || {
+current_server=$(oc whoami --show-server --request-timeout=15s 2>/dev/null) || {
   echo 'NO LISTO: no se pudo identificar el servidor del contexto actual.' >&2
   exit 2
 }
@@ -34,11 +34,15 @@ echo 'Servidor esperado y autenticación: verificados.'
 failures=0
 
 can_i() {
-  local namespace=$1 verb=$2 resource=$3 answer
-  if answer=$(oc auth can-i "$verb" "$resource" -n "$namespace" --request-timeout=15s 2>/dev/null) && [[ "$answer" == yes ]]; then
-    printf 'PERMISO %s %s %s: sí\n' "$namespace" "$verb" "$resource"
+  local namespace=$1 verb=$2 resource=$3 subresource=${4:-} answer
+  local -a args=(auth can-i "$verb" "$resource" -n "$namespace" --request-timeout=15s)
+  if [[ -n "$subresource" ]]; then
+    args+=(--subresource="$subresource")
+  fi
+  if answer=$(oc "${args[@]}" 2>/dev/null) && [[ "$answer" == yes ]]; then
+    printf 'PERMISO %s %s %s%s: sí\n' "$namespace" "$verb" "$resource" "${subresource:+/$subresource}"
   else
-    printf 'PENDIENTE %s %s %s: no permitido o no verificable\n' "$namespace" "$verb" "$resource"
+    printf 'PENDIENTE %s %s %s%s: no permitido o no verificable\n' "$namespace" "$verb" "$resource" "${subresource:+/$subresource}"
     failures=$((failures + 1))
   fi
 }
@@ -72,8 +76,8 @@ for resource in deployments.apps services persistentvolumeclaims configmaps \
 done
 can_i "$runtime_namespace" patch deployments.apps
 can_i "$runtime_namespace" get pods
-can_i "$runtime_namespace" get pods/log
-can_i "$runtime_namespace" create pods/portforward
+can_i "$runtime_namespace" get pods log
+can_i "$runtime_namespace" create pods portforward
 
 metadata "$build_namespace" pipelines.tekton.dev
 metadata "$build_namespace" tasks.tekton.dev
