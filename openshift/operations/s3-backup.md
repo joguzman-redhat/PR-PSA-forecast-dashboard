@@ -145,3 +145,9 @@ destino corporativo específico; no ampliar salida a Internet de forma general.
 
 Referencias: [curl SigV4](https://curl.se/docs/manpage.html#--aws-sigv4),
 [S3 PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html).
+
+El uploader normaliza únicamente endpoints AWS heredados con la forma exacta
+`s3-<región>.amazonaws.com` a `s3.<región>.amazonaws.com`, verificando que la región
+coincida con `BUCKET_REGION`. En este tenant, `s3-us-east-1.amazonaws.com` pasa a
+`s3.us-east-1.amazonaws.com`. No modifica el ConfigMap del OBC ni las reglas de
+salida: conserva HTTPS, firma SigV4, nombre del bucket y verificación del objeto.

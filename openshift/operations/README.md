@@ -142,3 +142,7 @@ y comprobación efectiva con su mecanismo corporativo antes de cerrar el ticket.
 - [Retención de ejecuciones](https://docs.n8n.io/hosting/configuration/environment-variables/executions/).
 - [Guía corporativa de almacenamiento](https://source.redhat.com/departments/strategy_and_operations/it/datacenter_infrastructure/itcloudservices/itocp/itocp_wiki/storage_offerings).
 - [ADR de identidad](../../docs/adr/0003-identidad-por-project-id.md).
+
+Los scripts de mantenimiento fijan el nombre del contexto validado y el servidor
+explícito en cada llamada mediante `runtime_oc`; cambiar el contexto activo en
+otra terminal no cambia su destino. No crean copias de kubeconfig ni leen `.env`.

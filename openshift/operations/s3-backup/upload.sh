@@ -12,6 +12,16 @@ umask 077
    ${BUCKET_REGION} =~ ^[a-z0-9-]+$ ]] || {
   echo 'Configuración del bucket no válida o no HTTPS.' >&2; exit 2;
 }
+# Some legacy OBCs publish s3-<region>.amazonaws.com, including the invalid
+# s3-us-east-1.amazonaws.com. Normalize only that exact AWS endpoint family.
+bucket_host=$BUCKET_HOST
+if [[ "$bucket_host" =~ ^s3-([a-z]{2}(-[a-z]+)+-[0-9]+)\.amazonaws\.com$ ]]; then
+  legacy_region=${BASH_REMATCH[1]}
+  [[ "$BUCKET_REGION" =~ ^(us|eu|ap|ca|me|sa|af|il|mx)-(central|north|south|east|west|northeast|southeast)-[1-9][0-9]*$ && "$legacy_region" == "$BUCKET_REGION" ]] || {
+    echo 'El endpoint AWS y la región del bucket no coinciden.' >&2; exit 2;
+  }
+  bucket_host="s3.${BUCKET_REGION}.amazonaws.com"
+fi
 dump=$1 key=$2
 headers=/work/head.headers
 trap 'rm -f /work/head.headers /work/response.xml /work/checksum.txt' EXIT
@@ -19,7 +29,7 @@ digest=$(sha256sum "$dump")
 digest=${digest%% *}
 bytes=$(stat -c %s "$dump")
 printf '%s  %s\n' "$digest" "${key##*/}" > /work/checksum.txt
-endpoint="https://${BUCKET_HOST}/${BUCKET_NAME}"
+endpoint="https://${bucket_host}/${BUCKET_NAME}"
 
 signed_curl() {
   # Process substitution keeps the access keys out of process arguments and files.

@@ -125,8 +125,7 @@ async function provisionRoles() {
   // El propietario necesita leer el historial para incluirlo en pg_dump.
   // Estos permisos no permiten modificarlo ni se conceden al lector o al ETL.
   await client.query('GRANT USAGE ON SCHEMA forecast_ops TO forecast_owner');
-  await client.query('GRANT SELECT ON ALL TABLES IN SCHEMA forecast_ops TO forecast_owner');
-  await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA forecast_ops GRANT SELECT ON TABLES TO forecast_owner');
+  await client.query('GRANT SELECT ON TABLE forecast_ops.schema_migrations, forecast_ops.bootstrap TO forecast_owner');
 }
 
 async function main() {
