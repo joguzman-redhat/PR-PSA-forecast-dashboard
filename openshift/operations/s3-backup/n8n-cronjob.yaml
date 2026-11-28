@@ -132,7 +132,9 @@ spec:
             - name: state
               persistentVolumeClaim:
                 claimName: forecast-n8n-data
-                readOnly: true
+                # Keep the CSI publish mode identical to the running n8n pod.
+                # The container bind mount above remains read-only.
+                readOnly: false
             - name: key
               secret:
                 secretName: forecast-n8n-secrets
