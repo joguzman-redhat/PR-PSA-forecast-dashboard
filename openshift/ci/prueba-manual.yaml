@@ -60,6 +60,7 @@ spec:
               node --version
               npm --version
               git --version
+              npm ping --registry=https://registry.npmjs.org --fetch-retries=0 --fetch-timeout=20000
               git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 \
                 clone --depth=1 --single-branch --branch main \
                 https://github.com/joguzman-redhat/PR-PSA-forecast-dashboard.git \
@@ -67,6 +68,11 @@ spec:
               cd /workspace/repo
               git rev-parse HEAD | tee "$(results.commit.path)"
               cd infra/api
+              if [[ ! -f package-lock.json ]]; then
+                echo 'main no contiene infra/api/package-lock.json: integrar primero los cambios de CI versionados.' >&2
+                exit 1
+              fi
+              node -e 'const p=require("./package.json"); for (const s of ["test","lint:front"]) { if (!p.scripts?.[s]) { console.error("main no define el script requerido: " + s); process.exit(1); } }'
               npm ci --include=dev --no-audit --no-fund
               npm test
               npm run lint:front

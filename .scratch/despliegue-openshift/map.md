@@ -20,7 +20,12 @@ Los criterios operativos requieren evidencia del clúster; preparar código no l
 - Se identificó `TenantEgress/default` en el namespace de build; la consulta
   anterior en `--config` no describía su egress efectivo. Parche limitado
   GitHub/npm validado en dry-run, rechazado en aplicación por revisión automática:
-  requiere aprobación explícita del usuario por su alcance persistente.
+  requirió aprobación explícita del usuario por su alcance persistente.
+- El usuario aprobó el egress limitado y se aplicó con las reglas previas y
+  Deny final conservados. `egressReady=true`. La ejecución `forecast-ci-prueba-rbknc`
+  clonó main, commit `ccbdcaf67fd6f4636b81feac59914cb6d58a319a`, pero falló por
+  falta de lockfile. Ese main tampoco define test/lint; integrar primero los
+  cambios versionados de la rama de trabajo, sin omitir verificaciones.
 
 Evidencia y comandos: [Prueba manual de CI](../../openshift/ci/README.md).
 - AppCode aportado por el usuario: `NLFC-001`; validación de CMDB/admisión pendiente.

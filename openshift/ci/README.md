@@ -25,13 +25,13 @@ La ejecución terminó en `Failed` con el error de conexión a GitHub. El intent
 posterior de cancelación fue rechazado porque ya había finalizado; los logs
 permanecen disponibles.
 
-La política `TenantEgress/default` en el namespace build contiene una denegación
-final y no permite GitHub/npm. La guía corporativa define `TenantEgress` en cada
+La política `TenantEgress/default` en el namespace build contenía una denegación
+final y no permitía GitHub/npm. La guía corporativa define `TenantEgress` en cada
 namespace de trabajo, no en el namespace `--config`.
 
-## Cambio de egress preparado, pendiente de aprobación
+## Cambio de egress aprobado y aplicado
 
-`habilitar-egress.sh` preserva las reglas existentes y propone agregar TCP/443
+`habilitar-egress.sh` preserva las reglas existentes y agrega TCP/443
 a `github.com` y `registry.npmjs.org` antes de la denegación final. Comprueba el
 servidor y usa resourceVersion para no pisar cambios concurrentes. Por defecto
 solo valida mediante admisión con dry-run.
@@ -40,15 +40,29 @@ solo valida mediante admisión con dry-run.
 bash openshift/ci/habilitar-egress.sh --dry-run
 ```
 
-La validación server-side fue aceptada. **La aplicación efectiva fue rechazada
-por revisión automática y no se ejecutó:** ampliar persistentemente egress de
-todo el namespace requiere aprobación explícita del usuario. No ejecutar la
-opción `--apply` hasta recibirla. El permiso afectaría a todos los pods del
+La validación server-side fue aceptada. La primera aplicación fue rechazada por
+revisión automática; el usuario aprobó después explícitamente el cambio y se
+aplicó correctamente. Se verificaron ambas reglas TCP/443, las reglas anteriores,
+la denegación final y `egressReady: true`. El permiso afecta a todos los pods del
 namespace de build, no solo a esta ejecución; no publica servicios de entrada.
 
-Tras la aprobación y aplicación, comprobar reconciliación/conectividad y crear
-otro PipelineRun. Si aparecen redirects o endpoints adicionales, investigarlos
+Se inició otra ejecución: `forecast-ci-prueba-rbknc`. Si aparecen redirects o endpoints adicionales, investigarlos
 antes de ampliar la lista. No usar una regla de salida general a Internet.
+
+La segunda ejecución pudo clonar `main`, commit
+`ccbdcaf67fd6f4636b81feac59914cb6d58a319a`, y falló en `npm ci` porque no había
+lockfile válido. La revisión de ese commit confirma que su package.json tampoco
+define `test` ni `lint:front`. La rama de trabajo actual sí versiona lockfile,
+pruebas y lint. Es necesario integrar esos cambios en main antes de exigir un
+resultado verde; no sustituir `npm ci` por una instalación no reproducible ni
+omitir las pruebas para ocultar la diferencia entre ramas.
+
+La definición actual incluye diagnóstico explícito de esos prerrequisitos y
+`npm ping` para comprobar npm independientemente de la preparación de main.
+La ejecución `forecast-ci-prueba-447gk` confirmó `npm ping` con `PONG 177ms` y
+clonó el mismo commit de main. Se detuvo con el diagnóstico explícito de lockfile
+faltante. Queda comprobada la salida a ambos destinos; los tests de aplicación
+en el clúster siguen pendientes de integrar el código preparado en main.
 
 ## Argo CD para entrega
 
