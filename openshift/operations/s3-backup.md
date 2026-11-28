@@ -1,4 +1,4 @@
-# Backup financiero programado al bucket corporativo
+# Backups programados al bucket corporativo
 
 El bucket privado `forecast-backups` fue aprovisionado mediante ObjectBucketClaim
 y está separado del volumen de Postgres. El CronJob usa su ConfigMap y Secret
@@ -11,7 +11,7 @@ oc create job --from=cronjob/forecast-postgres-backup forecast-postgres-backup-i
 oc logs -f job/forecast-postgres-backup-inicial -n nola-consulting-services-tenant--runtime-int
 ```
 
-El cron se ejecuta a las 00:00 y 12:00 de Bogotá, sin solapar ejecuciones. La
+El cron financiero se ejecuta a las 00:00 y 12:00 de Bogotá, sin solapar ejecuciones. La
 primera prueba manual es necesaria: aceptar el YAML o ver el CronJob no acredita
 que haya un respaldo en S3. El Job no despliega la aplicación ni ejecuta el ETL.
 
@@ -69,12 +69,75 @@ conciliar el ledger real de migraciones y verificar Snapshots, períodos,
 Project ID y cifras por la API antes de volver a servir tráfico. Conservar el
 estado anterior hasta completar la validación.
 
-## Alcance
+## Backup coherente de n8n y su clave
 
-Este cron respalda **solo la base financiera**. No respalda SQLite ni la clave
-de cifrado de n8n: su copia coherente requiere la ventana de mantenimiento
-descrita en [operación de n8n](README.md). No afirmar recuperación completa de
-la aplicación únicamente porque el backup financiero esté programado.
+El segundo CronJob, `forecast-n8n-backup`, se ejecuta a las 00:15 y 12:15 de
+Bogotá. Esta copia hace una interrupción breve de n8n para copiar coherentemente
+su SQLite; debe programarse fuera de las Ejecuciones previstas del workflow.
+Los usuarios pueden ver interrumpido el editor durante esa ventana. El comando
+manual para comprobar la primera copia es:
+
+```bash
+oc create job --from=cronjob/forecast-n8n-backup forecast-n8n-backup-inicial -n nola-consulting-services-tenant--runtime-int
+oc logs -f job/forecast-n8n-backup-inicial -n nola-consulting-services-tenant--runtime-int
+oc rollout status deployment/forecast-n8n -n nola-consulting-services-tenant--runtime-int --timeout=180s
+```
+
+El pod de mantenimiento se sitúa obligatoriamente en el nodo del pod n8n activo
+para compartir el volumen RWO. Su ServiceAccount separada solo puede consultar
+el Deployment n8n, consultar/cambiar su subrecurso scale y listar los pods del
+namespace. No puede modificar otros Deployments ni leer Secrets mediante la API.
+Monta el PVC en solo lectura, el Secret de la clave y las credenciales del bucket.
+El token de Kubernetes solo se monta en este pod de mantenimiento; n8n y la API
+siguen sin token. Esta ampliación de RBAC debe revisarse antes de aplicar.
+
+El script registra la réplica original (debe ser exactamente una), solicita cero,
+espera la desaparición de los pods de n8n y vuelve a comprobar la quiescencia.
+Archiva `n8n-state/` y `n8n-encryption-key/N8N_ENCRYPTION_KEY`, comprueba que no
+haya sido reactivado durante la copia y restablece la réplica antes de subir el
+archivo. La copia usa el mismo uploader verificado con HTTPS, SSE-S3 y HEAD,
+bajo la clave `n8n/<UTC>-<pod>.tar.gz`, con su checksum acompañante.
+
+El bloque de salida intenta restablecer n8n incluso si falla la copia o recibe
+SIGTERM. No puede garantizar recuperación ante SIGKILL, fallo de nodo o pérdida
+total de API: en esos casos revisar inmediatamente la escala y reponer una
+réplica si corresponde. No se sobrescribe una escala distinta introducida por
+otro operador. Como el pod de backup monta RWO, el nuevo pod de n8n podría
+esperar a que finalice el Job si se programa en otro nodo. Comprobar readiness
+después del Job, no dar por disponible n8n únicamente al ver `replicas: 1`.
+
+Si n8n no tiene un pod en ejecución antes del backup, la afinidad impedirá
+arrancar el Job. El Job tiene deadline y no puede detener una instancia desde
+un pod que todavía no ha arrancado. El cron usa `concurrencyPolicy: Forbid` y
+no reintenta automáticamente una intervención que haya fallado.
+
+### Coordinación con Argo
+
+Cuando Argo gestione n8n, su Application debe ignorar `/spec/replicas` únicamente
+para el Deployment `forecast-n8n` y usar `RespectIgnoreDifferences=true`. Después
+de verificar esa configuración, establecer
+`N8N_BACKUP_ARGO_REPLICA_IGNORE_CONFIRMED=true` en el CronJob y guardar la decisión
+en Git. La configuración por defecto es `false`: si detecta tracking de Argo y
+no consta esa confirmación, el script falla antes de escalar. No deshabilitar
+globalmente la reconciliación ni ignorar todas las diferencias de la aplicación.
+
+### Recuperación de n8n desde S3
+
+Usar un objeto completo cuyo Job haya confirmado éxito y verificar su checksum.
+El GET autenticado a S3 devuelve el tar.gz descifrado por SSE-S3; no es GPG.
+Preparar un PVC de reemplazo vacío, mantener n8n detenido y pausar su
+reconciliación. Restaurar `n8n-state/` al directorio persistente y recuperar la
+clave exacta de `n8n-encryption-key/N8N_ENCRYPTION_KEY` en el Secret correspondiente,
+sin imprimirla ni publicarla. Arrancar la misma versión de n8n y comprobar
+readiness y credenciales antes de reanudar las Ejecuciones. No sobrescribir un
+PVC con datos ni probar restauración sobre la instancia oficial.
+
+## Alcance de verificación
+
+Los dos cron respaldan piezas distintas: base financiera, y estado/clave de
+n8n. Ningún Job exitoso de una pieza demuestra recuperación completa de ambas.
+Registrar la primera ejecución real de cada uno y una lectura/descarga de sus
+objetos. El RTO sigue pendiente hasta verificar una restauración segura.
 
 La conectividad efectiva al endpoint S3 y el cifrado deben verificarse mediante
 el primer Job. Las reglas de egress del tenant pueden necesitar permitir el

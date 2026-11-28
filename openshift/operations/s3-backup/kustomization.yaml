@@ -3,7 +3,10 @@ kind: Kustomization
 namespace: nola-consulting-services-tenant--runtime-int
 resources:
   - cronjob.yaml
+  - n8n-cronjob.yaml
 configMapGenerator:
   - name: forecast-s3-backup-script
     files:
       - backup.sh
+      - upload.sh
+      - n8n-backup.py
