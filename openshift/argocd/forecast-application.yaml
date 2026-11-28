@@ -1,0 +1,33 @@
+# Aplicar tras integrar openshift/runtime en main y crear el AppProject.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: forecast-dashboard
+  namespace: openshift-gitops
+spec:
+  project: nola-forecast
+  source:
+    repoURL: https://github.com/joguzman-redhat/PR-PSA-forecast-dashboard.git
+    targetRevision: main
+    path: openshift/runtime
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nola-consulting-services-tenant--runtime-int
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: forecast-n8n
+      jsonPointers:
+        - /spec/replicas
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

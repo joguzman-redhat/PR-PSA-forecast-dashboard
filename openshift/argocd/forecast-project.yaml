@@ -1,0 +1,39 @@
+# Lo registra el administrador del Argo existente. No crea otra instancia.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: nola-forecast
+  namespace: openshift-gitops
+spec:
+  description: Cloud Forecast NOLA en su namespace runtime interno.
+  sourceRepos:
+    - https://github.com/joguzman-redhat/PR-PSA-forecast-dashboard.git
+  destinations:
+    - namespace: nola-consulting-services-tenant--runtime-int
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ServiceAccount
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: PersistentVolumeClaim
+    - group: apps
+      kind: Deployment
+    - group: batch
+      kind: Job
+    - group: batch
+      kind: CronJob
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: route.openshift.io
+      kind: Route
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
+    - group: objectbucket.io
+      kind: ObjectBucketClaim
