@@ -57,10 +57,11 @@ migrado el estado de la instancia local.
 
 La Pipeline manual de pruebas pudo clonar GitHub y completó pruebas/lint.
 La Pipeline `forecast-build-push` construye un commit exacto, prueba antes de
-publicar y devuelve un digest; su construcción/publicación real sigue en
-validación. Consultar [`ci/build-push.md`](ci/build-push.md) para ejecutar y
+publicar y devuelve un digest; `forecast-build-push-9kk6r` completó ese ciclo y
+su imagen ya se desplegó después del Job de migraciones. Consultar [`ci/build-push.md`](ci/build-push.md) para ejecutar y
 promover una imagen. Las salidas específicas aprobadas para GitHub, npm y
-`registry.access.redhat.com:443` permiten esas operaciones; no equivalen a
+`registry.access.redhat.com`, `access.redhat.com` y `cdn01.quay.io` en TCP/443
+permiten esas operaciones; no equivalen a
 salida general a Internet.
 
 **Todavía no hay webhook ni promoción automática de extremo a extremo.**
@@ -95,9 +96,9 @@ migración hayan terminado correctamente.
 
 Los backups financieros y de n8n/clave están programados cada doce horas hacia
 el bucket corporativo privado, con TLS y SSE-S3. n8n se pausa para copiar SQLite
-con coherencia y luego se restaura su réplica. La verificación de los objetos
-S3 sigue pendiente por un fallo de firma en la primera ejecución; crear el
-CronJob no acredita un respaldo recuperable. Consultar
+con coherencia y luego se restaura su réplica. Ambos primeros respaldos terminaron con PUT/HEAD y checksum confirmados;
+ambos se descargaron y verificaron sin modificar el estado oficial. Crear un
+CronJob por sí solo no acredita recuperación integral. Consultar
 [`operations/README.md`](operations/README.md) y
 [`operations/s3-backup.md`](operations/s3-backup.md).
 
@@ -113,3 +114,5 @@ El OBC existente está versionado en
 no protegen frente a un borrado manual. **No borrar el ObjectBucketClaim**:
 la política de reclaim de la plataforma puede eliminar también el bucket y
 sus backups. Estas anotaciones no cambian esa política real.
+
+La evidencia y los límites de la validación están en [Estado del despliegue](ESTADO-DESPLIEGUE.md).

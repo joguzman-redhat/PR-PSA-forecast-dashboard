@@ -1,3 +1,4 @@
+# Entrega verificada desde commit a1a87c7a444590338e821aa6cdb9036e5f9a8968
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: nola-consulting-services-tenant--runtime-int
@@ -10,7 +11,7 @@ resources:
 images:
 - name: images.paas.redhat.com/nola-consulting-services-tenant/forecast-api
   newName: images.paas.redhat.com/nola-consulting-services-tenant/forecast-api
-  digest: sha256:84036456843b25130d862962de83fe84c47e582716bf9aaf7e8619eec0c38612
+  digest: sha256:17836f80b5edd3489143e71d791b04c60ee890b23d30f514ca3471c6762caefd
 - name: docker.io/n8nio/n8n
   newName: images.paas.redhat.com/nola-consulting-services-tenant/forecast-n8n
   digest: sha256:839485de4d54ed95178c0d8a9ffe868bcc09ce05ceb48dd0ace39d7b4afe2c65

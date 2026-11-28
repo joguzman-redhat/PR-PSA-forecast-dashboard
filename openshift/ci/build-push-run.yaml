@@ -11,7 +11,7 @@ spec:
     name: forecast-build-push
   params:
   - name: revision
-    value: 815d9f0d4f979e65bf3cf1b06fe67629708ab975
+    value: a1a87c7a444590338e821aa6cdb9036e5f9a8968
   taskRunTemplate:
     serviceAccountName: pipeline
     podTemplate:

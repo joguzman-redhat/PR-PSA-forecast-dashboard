@@ -4,7 +4,7 @@
 
 **Blocked by:** 02.
 
-**Status:** ready-for-agent
+**Status:** needs-info
 
 - [ ] Definir destino, retención, cifrado, permisos y frecuencia conforme RPO 24 horas.
 - [ ] Documentar restauración conforme objetivo RTO 4 horas en horario laboral.
@@ -15,3 +15,9 @@
 ## Comments
 
 Spec: [Despliegue oficial](../spec.md).
+
+## Actualización verificada
+
+Cron financiero 12h activo; PUT/HEAD/SSE, checksum, descarga real y pg_restore --list verificados. No se borran objetos. Retención corporativa y tiempo de recuperación integral pendientes; no se creó base temporal ni se sobrescribió la oficial.
+
+Evidencia: [Estado del despliegue](../../../openshift/ESTADO-DESPLIEGUE.md).

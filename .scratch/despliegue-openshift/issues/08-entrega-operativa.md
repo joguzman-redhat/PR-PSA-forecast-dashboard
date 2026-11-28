@@ -4,7 +4,7 @@
 
 **Blocked by:** 05, 07.
 
-**Status:** ready-for-agent
+**Status:** needs-info
 
 - [ ] Evidencia real commit→imagen→rollout→dashboard/API con histórico.
 - [ ] Aislamiento comprobado y límites de comprobación externa explícitos.
@@ -16,3 +16,9 @@
 ## Comments
 
 Spec: [Despliegue oficial](../spec.md).
+
+## Actualización verificada
+
+Despliegue, actualización manual y dos respaldos comprobados, documentación y evidencia actualizadas. No se cierra toda la entrega: Argo/webhook/promoción, aislamiento fino y recuperación integral/retención siguen pendientes. Usuario vigila fallos y configura n8n posteriormente.
+
+Evidencia: [Estado del despliegue](../../../openshift/ESTADO-DESPLIEGUE.md).

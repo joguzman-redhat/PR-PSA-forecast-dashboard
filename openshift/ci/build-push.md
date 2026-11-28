@@ -10,8 +10,8 @@ que construye/publica la imagen, no en el paso que ejecuta las pruebas.
 ## Una revisión, una imagen
 
 `forecast-build-push` acepta un SHA completo, obtiene exactamente ese commit,
-verifica su SHA y ejecuta pruebas y lint. Solo después construye y publica la
-el mismo SHA en un segundo pod y verifica otra vez el commit antes de construir.
+verifica su SHA y ejecuta pruebas y lint. Solo después obtiene
+el mismo SHA en un segundo pod, verifica de nuevo el commit y construye/publica.
 No comparte volúmenes persistentes entre tareas. Usa un tag con SHA y devuelve como resultados el commit, digest y
 referencia inmutable `repositorio@sha256:…`. No despliega nada ni accede a
 Postgres. El trigger automático futuro debe resolver el commit de main y aplicar
@@ -25,8 +25,8 @@ oc create -f openshift/ci/build-push-run.yaml
 oc get pipelineruns -n nola-consulting-services-tenant--pipeline
 ```
 
-La revisión fija de ejemplo corresponde al main que completó 122 tests en la
-prueba manual; debe reemplazarse para incluir cualquier cambio nuevo de runtime
+La revisión fija de ejemplo corresponde al commit que completó 123 tests y
+publicación de imagen desde la rama de integración; debe reemplazarse para incluir cualquier cambio nuevo de runtime
 o de migraciones. No construir una imagen nueva antes de publicar en GitHub el
 commit que contiene dichos cambios.
 
@@ -42,9 +42,8 @@ no se monta un token de API en el pod. El builder usa el digest de imagen y
 El contenedor de build corre como root dentro del contenedor, con
 `privileged: false`, `vfs` y aislamiento chroot; los contenedores de aplicación
 se configuran aparte y no heredan esos permisos. No presentar esta variante
-como rootless. La admisión y construcción reales aún deben validarse en el
-clúster: un fallo no autoriza habilitar un contenedor privilegiado ni modificar
-la SCC automáticamente.
+como rootless. La admisión y construcción se validaron en el clúster; un fallo futuro no
+autoriza habilitar un contenedor privilegiado ni modificar la SCC automáticamente.
 
 La primera ejecución fue rechazada porque el perfil seccomp explícito del paso
 de pruebas no es admitido por la SCC legacy del builder. La separación mantiene
@@ -92,14 +91,16 @@ incluye el commit probado para conservar esa evidencia en la revisión. No gener
 PAT ni crear pushes automáticos hasta disponer del mecanismo corporativo con
 alcance mínimo. Argo debe consumir el digest aprobado, no un tag mutable.
 
-## Evidencia pendiente
+## Evidencia real y límites
 
-- La autorización de `push/pull` fue comprobada por lectura de scopes, sin subir
-  capas ni modificar el repositorio remoto desde esta implementación.
-- La sintaxis YAML/Bash fue validada; la primera ejecución real corresponde al
-  operador principal, que controla las mutaciones del clúster.
-- No se han afirmado construcción, push, rollout ni pruebas de restauración
-  completados por guardar estos manifiestos.
+- `forecast-build-push-9kk6r` terminó `Succeeded`: 123 tests, lint, build y push
+  del commit `a1a87c7a444590338e821aa6cdb9036e5f9a8968`.
+- Se promovió su digest compartido a API y migraciones; el Job completó antes
+  del rollout y la comprobación HTTP/conciliación pasó después.
+- Salidas TCP/443 aprobadas específicamente para firmas y capas:
+  `registry.access.redhat.com`, `access.redhat.com`, `cdn01.quay.io`, además de GitHub/npm.
+- No configura webhook, push automático del digest a Git ni Argo central.
+  Ver [evidencia completa](../ESTADO-DESPLIEGUE.md).
 
 Referencias primarias:
 

@@ -4,7 +4,7 @@
 
 **Blocked by:** 01.
 
-**Status:** ready-for-agent
+**Status:** needs-info
 
 - [ ] Empaquetar módulos ES y CSS actuales, sin activar demo.
 - [ ] Inicialización y migraciones registradas sin reaplicar cambios absorbidos por el esquema inicial.
@@ -16,3 +16,9 @@
 ## Comments
 
 Spec: [Despliegue oficial](../spec.md).
+
+## Actualización verificada
+
+API/dashboard/Postgres desplegados y actualizados por digest; migraciones controladas, lector sin POST administrativo, salud y conciliación aprobadas. Cinco tablas y 254 filas renderizadas. Resta aislamiento fino de red: internal-1 no se puede restringir con políticas aditivas.
+
+Evidencia: [Estado del despliegue](../../../openshift/ESTADO-DESPLIEGUE.md).

@@ -4,7 +4,7 @@
 
 **Blocked by:** 06.
 
-**Status:** ready-for-agent
+**Status:** needs-info
 
 - [ ] Validar firma/autenticidad, repositorio, evento, main y commit exacto.
 - [ ] Rechazar eventos no autorizados y no ejecutar campos arbitrarios.
@@ -15,3 +15,9 @@
 ## Comments
 
 Spec: [Despliegue oficial](../spec.md).
+
+## Actualización verificada
+
+No hay receptor corporativo/webhook configurado. Argo central rechazó alta del repositorio. Usuario eligió registrar él mismo AppProject/Application preparados; esto no sustituye el trigger de build ni el commit del digest a Git.
+
+Evidencia: [Estado del despliegue](../../../openshift/ESTADO-DESPLIEGUE.md).

@@ -42,3 +42,9 @@ borrarla por cuenta propia, y verificación efectiva de ingress interno.
 Las solicitudes exactas y los criterios de aceptación están en el runbook de
 prerrequisitos. No se enviaron solicitudes a terceros. Los tickets dependientes
 siguen pendientes; no se declara el CI/CD ni el despliegue operativo.
+
+## Actualización verificada
+
+Admisión AppCode/PVC, registro corporativo, ingress interno, S3 y build reales confirmados. Pendientes externos: Argo central/webhook y refinamiento soportado de internal-1. No se envió ninguna solicitud a terceros.
+
+Evidencia: [Estado del despliegue](../../../openshift/ESTADO-DESPLIEGUE.md).

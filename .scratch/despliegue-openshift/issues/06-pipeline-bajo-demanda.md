@@ -4,7 +4,7 @@
 
 **Blocked by:** 04.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Suite existente y lint front compatibles con el entorno; no base temporal ni pruebas destructivas oficiales.
 - [ ] Construcción en ubicación soportada y publicación en registro corporativo.
@@ -16,3 +16,9 @@
 ## Comments
 
 Spec: [Despliegue oficial](../spec.md).
+
+## Actualización verificada
+
+Pipeline forecast-build-push-9kk6r Succeeded: commit a1a87c7, 123 tests/lint/build/push. Se promovió manualmente digest compartido API/migraciones; Job completó antes del rollout, salud/conciliación aprobadas. Falta integrar promoción serializada automática mediante Git/Argo; no se declara CD completo.
+
+Evidencia: [Estado del despliegue](../../../openshift/ESTADO-DESPLIEGUE.md).

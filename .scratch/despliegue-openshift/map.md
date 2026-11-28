@@ -40,14 +40,19 @@ Evidencia y comandos: [Prueba manual de CI](../../openshift/ci/README.md).
 - TenantNamespace build/runtime con zona internal y Ready; confirmar acceso
   efectivo de ingress además de la configuración declarada.
 
+## Estado actual
+
+Dashboard/histórico y n8n desplegados, pipeline de construcción y actualización
+manual comprobados. Dos respaldos S3 activos y verificados por descarga.
+[Evidencia consolidada](../../openshift/ESTADO-DESPLIEGUE.md).
+Tickets 04 y 05 resueltos; los demás conservan explícitas sus brechas pendientes.
+
 ## Fog
 
-- Webhook corporativo sin integración configurada; Repositories de Pipelines as Code vacío.
-- Identidad de build, repositorio y push/pull de registro; AppCode y admisión de almacenamiento.
-- Método soportado para refinar `internal-1`: las políticas son aditivas y la
-  base permite tráfico amplio. No modificar/borrar esa política por cuenta propia.
-- Destino de backups de aplicación (sin backups de volumen de plataforma ITUP),
-  origen del histórico y responsable por confirmar.
+- Usuario registra Argo central y se integra la rama en main.
+- Activación corporativa desde GitHub y promoción serializada del digest a Git.
+- Método soportado para refinar internal-1 sin anular políticas de plataforma.
+- Retención corporativa y recuperación integral con tiempo medido.
 
 ## Tickets
 
@@ -59,3 +64,5 @@ Evidencia y comandos: [Prueba manual de CI](../../openshift/ci/README.md).
 6. [Actualizar la aplicación mediante un pipeline bajo demanda](issues/06-pipeline-bajo-demanda.md).
 7. [Activar automáticamente el pipeline desde GitHub](issues/07-webhook-corporativo.md).
 8. [Cerrar la entrega operativa](issues/08-entrega-operativa.md).
+
+- Histórico importado y n8n/estado respaldados: [04](issues/04-historico-consultable.md) y [05](issues/05-n8n-interno.md) resueltos con evidencia del clúster.

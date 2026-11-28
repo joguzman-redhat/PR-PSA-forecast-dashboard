@@ -8,10 +8,11 @@ la réplica durante la copia coherente de SQLite. Esta interrupción programada
 fue aprobada por el usuario. Ver [operación S3](s3-backup.md) para horarios,
 permisos, coordinación con Argo, límites y comprobación de resultados.
 
-La primera ejecución encontró un fallo de firma S3; la corrección y la
-verificación de subida/lectura siguen en curso. No dar por cumplido el RPO
-hasta obtener evidencia de objetos recuperables de ambos CronJobs. Los
-comandos siguientes se conservan como alternativa manual cifrada con GPG.
+Los primeros respaldos de Postgres y n8n terminaron, se descargaron y
+verificaron por SHA-256 y estructura sin modificar el estado oficial. n8n
+volvió a readiness 1/1 y ambos CronJobs están habilitados. La evidencia está en
+[Estado del despliegue](../ESTADO-DESPLIEGUE.md). Los comandos siguientes se
+conservan como alternativa manual cifrada con GPG.
 
 Estos comandos usan la sesión autenticada de `oc` y verifican el servidor y el
 namespace oficial. No leen `infra/.env` ni imprimen credenciales. Se ejecutan
@@ -135,9 +136,9 @@ el PVC en solo lectura y no sirve como herramienta de restauración.
 
 Los objetivos aceptados son RPO de 24 horas y RTO de cuatro horas durante horario
 laboral. La programación S3 de doce horas y el destino corporativo independiente
-ya están configurados. Falta confirmar la primera subida y lectura de ambos
-backups después de corregir el fallo de firma, y registrar su fecha, objeto,
-tamaño y checksum. Revisar `lastSuccessfulTime` y los Jobs; el usuario vigila
+ya están configurados. La primera subida y lectura de ambos backups están
+verificadas; sus objetos, tamaños y checksums están registrados. Revisar
+`lastSuccessfulTime` para ejecuciones programadas y los Jobs manuales; el usuario vigila
 los fallos y no se han configurado notificaciones externas.
 
 No hay política automática de borrado en S3: los objetos usan nombres únicos y
