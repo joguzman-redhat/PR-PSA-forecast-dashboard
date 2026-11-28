@@ -10,6 +10,8 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from http import HTTPStatus
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -45,7 +47,7 @@ class Maintenance:
         return self.request(PODS)['items']
 
     def ensure_stopped(self):
-        if self.request(SCALE)['spec']['replicas'] != 0 or self.source_pods():
+        if self.request(SCALE)['spec'].get('replicas', 0) != 0 or self.source_pods():
             raise RuntimeError('n8n fue reactivado; se rechaza copiar SQLite en uso.')
 
     def stop(self):
@@ -59,7 +61,7 @@ class Maintenance:
         if argo_managed and os.environ.get('N8N_BACKUP_ARGO_REPLICA_IGNORE_CONFIRMED') != 'true':
             raise RuntimeError('Argo gestiona n8n: confirmar ignoreDifferences de replicas antes del mantenimiento.')
         scale = self.request(SCALE)
-        self.original_replicas = scale['spec']['replicas']
+        self.original_replicas = scale['spec'].get('replicas', 0)
         if self.original_replicas != 1:
             raise RuntimeError('Este backup requiere una sola réplica original de n8n.')
         self.stop_attempted = True
@@ -82,7 +84,7 @@ class Maintenance:
         for attempt in range(3):
             try:
                 scale = self.request(SCALE)
-                replicas = scale['spec']['replicas']
+                replicas = scale['spec'].get('replicas', 0)
                 if replicas == self.original_replicas:
                     self.stop_attempted = False
                     return
@@ -98,6 +100,26 @@ class Maintenance:
                 if attempt < 2:
                     time.sleep(2)
         raise RuntimeError('No se pudo restablecer n8n: requiere intervención inmediata.') from last_error
+
+
+def safe_error_chain(error):
+    """Only exception types and standard HTTP reasons, never response contents."""
+    parts = []
+    seen = set()
+    while error is not None and id(error) not in seen and len(parts) < 8:
+        seen.add(id(error))
+        detail = type(error).__name__
+        if isinstance(error, HTTPError):
+            code = error.code
+            if isinstance(code, int):
+                try:
+                    reason = HTTPStatus(code).phrase
+                except ValueError:
+                    reason = 'Unknown status'
+                detail += f' HTTP {code} {reason}'
+        parts.append(detail)
+        error = error.__cause__ or (None if error.__suppress_context__ else error.__context__)
+    return ' <- '.join(parts)
 
 
 def interrupted(_signal, _frame):
@@ -141,5 +163,5 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as error:
-        print(f'Falló el backup de n8n: {type(error).__name__}: {error}', file=sys.stderr)
+        print(f'Falló el backup de n8n: {safe_error_chain(error)}', file=sys.stderr)
         sys.exit(1)
