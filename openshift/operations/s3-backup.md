@@ -165,3 +165,17 @@ en el entorno de verificación; el Job no lo requiere).
 Ante errores se informa el estado HTTP, el resultado de transporte y únicamente
 los campos XML `Code`/`Message` filtrados. No se imprime la respuesta completa,
 credenciales, cabeceras de autorización, petición canónica ni cadena de firma.
+
+El Job n8n publica el PVC al nodo en modo RW, igual que el pod de n8n,
+y mantiene `volumeMounts.state.readOnly: true` para que el contenedor de backup
+solo pueda leerlo. La afinidad obliga al mismo nodo. Esto evita solicitar
+publicaciones CSI simultáneas RO y RW del mismo dispositivo; sigue siendo
+necesario validar el segundo montaje con el driver instalado. El script no copia
+SQLite hasta confirmar que n8n terminó. No se amplían permisos RBAC.
+Kubernetes distingue el [montaje del contenedor](https://kubernetes.io/docs/concepts/storage/volumes/)
+y el modo de acceso [RWO, que admite varios pods del mismo nodo](https://kubernetes.io/docs/concepts/storage/persistent-volumes/).
+
+El OBC deseado está en `openshift/operations/s3-bucket`. Declara la política
+`objectbucket.io/reclaimPolicy: Delete` con la que se creó el recurso y conserva
+`Prune=false,Delete=false` para impedir su eliminación automática por Argo.
+Eliminar manualmente el OBC queda fuera de las operaciones de backup.

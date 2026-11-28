@@ -1,0 +1,14 @@
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  annotations:
+    objectbucket.io/reclaimPolicy: Delete
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+  name: forecast-backups
+  namespace: nola-consulting-services-tenant--runtime-int
+spec:
+  generateBucketName: nola-forecast-backups
+  storageClassName: aws-s3
