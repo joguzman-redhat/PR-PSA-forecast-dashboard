@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/part-of: cloud-forecast
     paas.redhat.com/appcode: NLFC-001
 automountServiceAccountToken: false
+imagePullSecrets:
+  - name: forecast-registry-pull
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -19,6 +21,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
     trident.netapp.io/reclaimPolicy: Retain
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: rh-restricted-iscsi

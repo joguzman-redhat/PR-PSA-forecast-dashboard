@@ -1,0 +1,146 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: forecast-n8n-backup
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: forecast-n8n-backup
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [forecast-n8n]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    resourceNames: [forecast-n8n]
+    verbs: [get, patch]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: forecast-n8n-backup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: forecast-n8n-backup
+subjects:
+  - kind: ServiceAccount
+    name: forecast-n8n-backup
+    namespace: nola-consulting-services-tenant--runtime-int
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: forecast-n8n-backup
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  schedule: "15 */12 * * *"
+  timeZone: America/Bogota
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app: forecast-n8n-backup
+            app.kubernetes.io/part-of: cloud-forecast
+            paas.redhat.com/appcode: NLFC-001
+        spec:
+          serviceAccountName: forecast-n8n-backup
+          automountServiceAccountToken: true
+          enableServiceLinks: false
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 120
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app: forecast-n8n
+                  namespaces: [nola-consulting-services-tenant--runtime-int]
+                  topologyKey: kubernetes.io/hostname
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: registry.redhat.io/rhel9/postgresql-16:1
+              command: [python3, /opt/backup/n8n-backup.py]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              envFrom:
+                - configMapRef:
+                    name: forecast-backups
+                - secretRef:
+                    name: forecast-backups
+              env:
+                - name: HOME
+                  value: /work
+                # Set true only after the Argo Application ignores replicas for
+                # forecast-n8n AND uses RespectIgnoreDifferences=true.
+                - name: N8N_BACKUP_ARGO_REPLICA_IGNORE_CONFIRMED
+                  value: "false"
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /opt/backup
+                  readOnly: true
+                - name: state
+                  mountPath: /n8n-state
+                  readOnly: true
+                - name: key
+                  mountPath: /n8n-key
+                  readOnly: true
+                - name: work
+                  mountPath: /work
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: script
+              configMap:
+                name: forecast-s3-backup-script
+            - name: state
+              persistentVolumeClaim:
+                claimName: forecast-n8n-data
+                readOnly: true
+            - name: key
+              secret:
+                secretName: forecast-n8n-secrets
+                items:
+                  - key: N8N_ENCRYPTION_KEY
+                    path: N8N_ENCRYPTION_KEY
+            - name: work
+              emptyDir:
+                sizeLimit: 3Gi
+            - name: tmp
+              emptyDir: {}

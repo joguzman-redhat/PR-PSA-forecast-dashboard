@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/part-of: cloud-forecast
     paas.redhat.com/appcode: NLFC-001
 spec:
-  host: forecast-nola.apps.prod-scale-spoke1-dc-rdu3.itup.redhat.com
+  host: forecast-nola.apps.int.prod-scale-spoke1-dc-rdu3.itup.redhat.com
   to:
     kind: Service
     name: forecast-api

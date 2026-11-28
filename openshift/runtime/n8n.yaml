@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/part-of: cloud-forecast
     paas.redhat.com/appcode: NLFC-001
 automountServiceAccountToken: false
+imagePullSecrets:
+  - name: forecast-registry-pull
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
