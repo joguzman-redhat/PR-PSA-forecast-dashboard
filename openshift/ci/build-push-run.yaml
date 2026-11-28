@@ -1,0 +1,21 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: forecast-build-push-
+  namespace: nola-consulting-services-tenant--pipeline
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  pipelineRef:
+    name: forecast-build-push
+  params:
+    - name: revision
+      value: 815d9f0d4f979e65bf3cf1b06fe67629708ab975
+  taskRunTemplate:
+    serviceAccountName: pipeline
+    podTemplate:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+  timeouts:
+    pipeline: 30m0s
