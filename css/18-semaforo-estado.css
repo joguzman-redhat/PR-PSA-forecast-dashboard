@@ -1,0 +1,119 @@
+/* ============================================================================
+   Semáforo de proyectos
+   ============================================================================ */
+
+.card-semaforo-proyectos {
+  margin-bottom: var(--spacing-lg);
+}
+
+.card-semaforo-proyectos .pf-v6-c-card__body {
+  padding: var(--spacing-md);
+}
+
+.semaforo-titulo {
+  margin: 0 0 var(--spacing-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.semaforo-pills {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.semaforo-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+
+.semaforo-pill:hover {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 6%, var(--surface-1));
+}
+
+.semaforo-pill.activo {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface-1));
+  font-weight: 600;
+}
+
+.semaforo-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.semaforo-label {
+  flex: 1;
+}
+
+.semaforo-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ============================================================================
+   Row tinting por Semáforo
+   ============================================================================ */
+
+.fila-status-red {
+  background-color: color-mix(in srgb, #c9190b 8%, var(--surface-1));
+}
+
+.fila-status-yellow {
+  background-color: color-mix(in srgb, #f0ab00 8%, var(--surface-1));
+}
+
+/* Hover still works on tinted rows */
+.fila-status-red:hover,
+.fila-status-yellow:hover {
+  background-color: var(--grid-color) !important;
+}
+
+/* ============================================================================
+   Sin backlog chip
+   ============================================================================ */
+
+.chip-sin-backlog {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  background: #8a8d90;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+
+/* Marca de proyecto sin Project ID ni PA (ADR 0003). En el listado va como caja
+   gris; en el detalle (dentro de .chip-dato) conserva el rojo de un chip crítico. */
+.chip-sin-identificar:not(.chip-dato) {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  background: #8a8d90;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.chip-dato.chip-sin-identificar { color: #a32020; background: color-mix(in srgb, var(--color-critico) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-critico) 40%, transparent); }

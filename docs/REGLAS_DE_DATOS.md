@@ -1,20 +1,24 @@
 # Reglas del dato en el dashboard
 
-Reglas confirmadas con el negocio (reuniones del 19 y 22 de oct 2026). Si un
+Reglas confirmadas con el negocio (reuniones del 19 y 22 de oct 2026).
+Corregido el 26 de nov 2026 según los ADR 0001 y 0002
+(`docs/adr/0001-backlog-proyectado-toda-la-vida.md`,
+`docs/adr/0002-backlog-continuo-entre-anios.md`): esta versión reemplaza lo
+del 22 y 24 de nov en lo que se contradice. Vocabulario en `GLOSSARY.md`. Si un
 cálculo del dashboard, de la API o del agente de n8n contradice esto, el error
 es del cálculo.
 
 ## El dinero sale de BackLog NOLA, nunca de Info Proyectos
 
 `Info Proyectos` trae los montos **sin el factor de conversión**. `BackLog NOLA`
-trae los mismos montos ya convertidos (`Valor OF` de BackLog = `Valor OF` de
-Info × `Factor`, columna AO). Todo dinero se toma de BackLog NOLA.
+trae los mismos montos ya convertidos (el `Valor OF` de BackLog es el de
+Info × `Factor`, columna AO; en pantalla es el Booking). Todo dinero se toma de BackLog NOLA.
 
 Ejemplo, PA 65006 (HCS-BANRESERVAS, OIL DIA2):
 
 | Campo | Info Proyectos (mal) | BackLog NOLA (bien) |
 |---|---|---|
-| Valor OF | 974.930 | 920.541 |
+| Booking (`Valor OF`) | 974.930 | 920.541 |
 | Acumulado año anterior | 352.766 (`Consumido 2025`) | 333.086 (`Acum 2025`) |
 | Backlog | 622.164 | 13.547 |
 
@@ -23,39 +27,75 @@ de dinero y marcado "sin backlog"**. No se cae a los valores de Info.
 
 ## Cómo se calcula cada cifra
 
+Todo es por proyecto y sobre su **Vida del proyecto**. Booking y el Backlog de la
+fuente se toman **una sola vez** de la Carga más reciente; no se suman entre
+Años fuente.
+
 | Cifra | Regla |
 |---|---|
-| **Valor Booking** | `Valor OF` de BackLog NOLA. En pantalla se llama "Valor Booking"; en la BD sigue siendo `valor_of` |
-| **Revenue acumulado a hoy** | `Acum 2025` + commit de enero hasta el mes en curso, inclusive |
-| **Backlog** | La columna `Backlog` de BackLog NOLA, tal cual. El Excel la calcula como Valor OF − Acum 2025 − commit de **los 12 meses** |
-| **% ejecución** | Revenue acumulado / Valor Booking, ponderado por monto (no el promedio de porcentajes) |
+| **Booking** | `Valor OF` de BackLog NOLA, una vez por proyecto. En la BD sigue siendo `valor_of` |
+| **Backlog fuente** (dato de entrada) | La columna `Backlog` de BackLog NOLA (Carga más reciente). El Excel la calcula como Booking − acumulado anterior − Commit de los 12 meses de su Año fuente. No se muestra como tal |
+| **Backlog** | El **continuo entre años**: Backlog fuente − Commit posterior al Año fuente. Es lo que falta por planear de toda la vida y lo único que se muestra como Backlog |
+| **Ejecutado** | Acumulado anterior + Commit desde el inicio del calendario hasta el mes actual, inclusive. Se calcula; no se lee de la API |
+| **Proyectado** | Ejecutado + Commit de los meses posteriores al actual, incluidos los de años posteriores al Año fuente. **Solo Commit, nunca Upside**. Nunca desaparece: si faltan meses de Commit se calcula con el que existe y se marca **parcial** |
+| **Commit pendiente** | Commit de los meses posteriores al actual, hasta el fin de la Vida del proyecto (solo los meses con dato; ver Proyectado parcial) |
+| **% ejecución** | Ejecutado / Booking, ponderado por monto (no el promedio de porcentajes) |
 
-El backlog **ya descuenta el commit planeado para el resto del año**, así que:
+El Backlog fuente solo descuenta el Commit de su Año fuente; el Commit de años
+posteriores sigue sin descontar. Como este dashboard reemplaza a los dos Excel
+(FY26 y FY27) y se ve como uno solo, sin «cambio de año», el Backlog mostrado
+descuenta también ese Commit (ADR 0002). La identidad es:
 
-**Booking = Acumulado a hoy + commit planeado del resto del año + Backlog.**
+**Booking = Ejecutado + Commit pendiente + Backlog.**
 
-Es el mismo número de las tablas dinámicas del negocio (Backlog por PM y
-estado). Verificado el 22 de oct 2026: In Progress 142 · 5.244.100, On Hold
-21 · 2.120.585, Planned 34 · 1.569.347, total 197 · 8.934.032.
+Ejemplo, PA 66600: Backlog fuente $20.996, Commit de 2027 $19.975, **Backlog
+mostrado $1.021**. En tarjetas, listado, detalle, PMs, estadísticas de vendedor
+y PM e informe se muestra este número. Por eso ya no coincide con el Excel de un
+solo año ni con las tablas dinámicas del negocio: la suma del Backlog de todos
+los proyectos pasó de 9,69M (fuente) a 8,48M (continuo) el 26 de nov 2026. Antes
+(22 de oct 2026, solo FY26, sin Commit de 2027) sí coincidían: In Progress 142 ·
+5.244.100, On Hold 21 · 2.120.585, Planned 34 · 1.569.347, total 197 · 8.934.032;
+esas cifras son históricas, no las de hoy.
 
-> Antes se calculaba como Booking − Acumulado a hoy. Daba, por ejemplo,
-> 7,09M en In Progress en vez de 5,24M, porque no restaba el commit de
-> noviembre y diciembre. No volver a esa fórmula.
+La verificación de negocio es que Excel 2026 + Excel 2027 coincidan con el
+dashboard. Para los proyectos que están en ambas fuentes, el Backlog continuo
+debe coincidir con la columna Backlog del Excel FY27 (que ya descuenta el
+acumulado de 2026 y el Commit de 2027). El 26 de nov 2026 coincide (±$1) en 320
+de 331 proyectos con cifras; las 11 diferencias son cambios de Booking o de
+acumulado anterior entre los dos Excel, que hay que revisar con el negocio.
 
-## Proyección de Backlog vs. Revenue después de 2026
+> Antes se calculaba como Booking − Ejecutado. Daba, por ejemplo, 7,09M en
+> In Progress en vez de 5,24M, porque no restaba el Commit de noviembre y
+> diciembre. No volver a esa fórmula.
 
-El calendario mensual disponible comienza en enero de 2026. `Fecha fin` viene
-de Info Proyectos. La fecha de inicio de CCProjects todavía no se importa.
+## Vida del proyecto y Fecha fin
 
-Para proyectos que terminan después de diciembre de 2026, la gráfica reparte
-el **Backlog de BackLog NOLA** uniformemente entre enero de 2027 y el mes de
-finalización, ambos incluidos. Ese importe aumenta el Commit acumulado y
-reduce el saldo pendiente. El tramo aparece como **proyección estimada**, con
-líneas discontinuas. Es una estimación de la vista, no un cambio a los datos
-del calendario fuente ni al Backlog almacenado.
+- La Vida del proyecto va desde el primer mes con Commit distinto de cero hasta
+  la Fecha fin (Info Proyectos). Sin Fecha fin llega al último mes con Commit;
+  la Fecha fin nunca se inventa desde el Commit.
+- Con Fecha fin, las gráficas y la proyección llegan hasta ella.
+- Un Commit o Upside posterior a la Fecha fin se advierte en el detalle, sin
+  recortar el importe: se conserva en el Proyectado y en las gráficas.
+- Un mes sin cobertura es **sin dato**, no cero: en series mensuales y gráficas
+  queda sin dato y no se rellena.
+- **Proyectado parcial**: si la Fecha fin (o la vida) llega más allá del último
+  mes cargado, el Proyectado y el Commit pendiente se calculan con el Commit que
+  existe y se marcan parciales («cubre hasta dic 2027; faltan meses de 2028»),
+  sin inventar importes. Cuando llegue una fuente con ese Commit, el cálculo se
+  completa solo. La Diferencia vs. Booking no se afirma con proyectos parciales.
+- Un proyecto sin cifras no cuenta como cero: se ignora en el Backlog total y en
+  el % de ejecución, que solo usa proyectos con Booking y Ejecutado.
+- La fecha de inicio real no se importa: el calendario comienza con las Cargas.
+- La curva del detalle es el **Backlog** restante: parte de un Booking, incorpora
+  una sola vez el acumulado anterior al calendario y descuenta el Commit mes a
+  mes (Ejecutado hasta hoy, Proyectado después). No se fuerza a cero al terminar,
+  y un crédito o un exceso de ejecución puede subirlo o volverlo negativo.
 
-Los proyectos con saldo y sin fecha fin futura válida conservan ese pendiente;
-la gráfica no les asigna un calendario de ejecución estimado.
+## Commit y Upside en el tiempo
+
+- El Commit de un mes pasado es un hecho: queda congelado y no cambia.
+- El Upside solo existe del mes actual en adelante; no entra en el Ejecutado ni
+  en el Proyectado.
 
 ## Campos de Info Proyectos que sí se usan
 
@@ -82,105 +122,60 @@ esquema va **en los dos lugares**:
 El workflow de n8n vive en `n8n/n8n_nola_completo.json`. Se edita ese archivo y
 se reimporta en n8n.
 
+## Rangos, filtros y claves
 
-## Timeline multianual (requerimiento del 22 nov 2026)
-
-La vista combinada sustituye la seleccion de archivo por un rango mensual.
-Cada periodo se identifica por año y mes (`2026-01`, `2027-01`); un quarter
-siempre incluye su año. Se conserva la semantica de cada columna financiera
-anual: los acumulados de FY26 y FY27 NO se suman entre si.
-
-- Todo dinero sigue procediendo de BackLog NOLA. Commit/Upside se concatenan
-  por periodo. Booking, backlog fuente y acumulado anterior se seleccionan
-  una sola vez por proyecto, sin sumarlos por año.
-- Para esos atributos, prioridad por proyecto: año actual en America/Bogota;
-  si falta, anterior mas cercano; si solo existe en el futuro, futuro mas cercano.
-  La carga mas reciente resuelve empates en la misma fuente/año. No se rellena
-  un importe ausente con el de Info Proyectos ni con cero.
-- El acumulado a hoy parte del acumulado anterior de la fuente de referencia
-  y suma los meses de ESA fuente hasta hoy. No vuelve a sumar los años que
-  ya estan incluidos en su saldo anterior.
-- La clave multianual es PA. Sin PA, se utiliza Project ID/PR; sin ambos, la
-  identidad se aisla por año y proyecto existente y exige conciliacion manual.
-  No se unen proyectos desconocidos solo por tener nombres parecidos.
-- Desde/Hasta es el único rango global para listado, PMs y trazabilidad global.
-  Se eligen meses o trimestres visibles en el control «Ver por»; Q1 es enero-marzo,
-  Q2 abril-junio, Q3 julio-septiembre y Q4 octubre-diciembre, como en los Excel.
-  El rango limita tanto el revenue como los proyectos cuya vigencia se solapa
-  con él, desde el primer mes con commit distinto de cero registrado hasta el
-  mes de Fecha fin, inclusive. Incluye créditos negativos como actividad registrada.
-  No se toma la fecha de captura como fecha de inicio ni se inventa una fecha
-  de inicio anterior al calendario cargado. Sin primer commit o sin fecha fin,
-  solo se aplica el extremo conocido y se informa el dato faltante.
-  Booking y backlog se toman una vez por cada proyecto visible; cambiar de
-  periodo no cambia el año de referencia ni suma los importes de varios años.
-  Por eso esos totales sí pueden variar cuando el rango excluye proyectos.
-- «Mes y año fin» se deriva de Fecha fin, no de una columna de año ausente.
-  Solo fechas ausentes o inválidas se agrupan como «sin dato».
-- La grafica combinada muestra Commit/Upside fuente por mes y año, sin estimar
-  importes para meses fuera de cobertura. Un mes no disponible es null, distinto
-  de un cero cargado. Las reglas anteriores de proyeccion estimada se conservan
-  solo para consumidores anuales anteriores, no se aplican sobre el timeline.
-- Una fecha de inicio real no se inventa: el calendario disponible comienza
-  con las fuentes cargadas. Fecha fin se conserva como atributo; no se borran
-  montos de Excel por estar fuera de esa fecha. El detalle limita su gráfica
-  mensual a toda la vigencia conocida, independientemente del rango global; si hay importes fuera de
-  fecha fin, lo advierte sin borrar ni recortar el dinero fuente almacenado.
-
-Los snapshots originales conservan el historial de cambios; la tabla
-`forecast_revenue_mensual` es su consolidacion de lectura, mantenida en la
-misma transaccion por trigger. No sustituye ni elimina la evidencia original.
-
-
-## Ajustes de lectura del 24 nov 2026
-
-- Sin un rango explícito en la URL, se selecciona el trimestre actual en la fecha
-  de referencia de Colombia hasta Q4 del año siguiente. Un enlace con rango
-  explícito conserva su selección. Meses futuros sin fuente siguen sin dato.
+- Cada periodo se identifica por año y mes (`2026-01`, `2027-01`); un quarter
+  siempre incluye su año. Q1 es enero-marzo, Q2 abril-junio, Q3 julio-septiembre
+  y Q4 octubre-diciembre.
+- Desde/Hasta es el único rango global del listado, PMs y trazabilidad global,
+  y se elige en el control «Ver por». Commit y Upside suman los meses del rango.
+  Un proyecto entra si su Vida del proyecto se solapa con el rango; sin límite
+  conocido (primer Commit o Fecha fin) se aplica solo el otro. El rango no recorta
+  el detalle, que muestra la Vida del proyecto completa.
+- Sin rango en la URL se selecciona el trimestre actual (hora de Colombia) hasta
+  Q4 del año siguiente. Un enlace con rango explícito lo conserva.
+- Booking, Ejecutado, Proyectado y Backlog (continuo) son por proyecto, no por rango; los
+  totales varían solo porque el rango incluye o excluye proyectos.
+- Prioridad de la fuente por proyecto: Año fuente igual al Año fiscal en
+  America/Bogota; si falta, el anterior más cercano; si solo hay futuro, el más
+  cercano. La Carga más reciente desempata. No se rellena un importe ausente con
+  Info Proyectos ni con cero.
+- La clave de proyecto es el Project ID (ADR 0003). Sin Project ID se usa el
+  PA; sin ambos, el proyecto queda «sin identificar» (`sin_identificar`), aislado
+  por año y marcado para conciliación manual. El PA se muestra pero no
+  identifica. Un mismo Project ID con dos PA en una Carga es un solo proyecto,
+  con el PA de la fila más reciente. No se unen proyectos por nombre.
+  BackLog NOLA no trae Project ID: se une con Info Proyectos por PA (sin PA, por
+  nombre solo para ese cruce) y hereda la clave del proyecto de Info.
+- Una fila sin PA ni nombre no entra al cargar (el Project ID solo no hace un
+  proyecto), y un proyecto sin nombre ni Booking no se muestra en ninguna vista,
+  tampoco al pedir cancelados o completados.
 - El filtro rápido ofrece Todo NOLA, México y NSSA. México se identifica por
-  País; NSSA es el complemento dentro del portafolio NOLA, no una etiqueta de
-  Zona. Los proyectos sin país permanecen en el complemento y siguen marcados
-  sin dato. Cambiar este filtro limpia la selección de país para evitar conflictos.
-- La fila principal añade Upside del periodo, Commit pendiente del año de
-  referencia, Acumulado proyectado y Diferencia vs. Booking. Proyectado es
-  acumulado al corte más Commit de los meses posteriores del año de referencia.
-  Diferencia es Booking menos proyectado menos Backlog fuente: positivo indica
-  importe sin conciliar, negativo excedente, cero conciliación. No se modifica
-  ningún importe para forzar la igualdad; con cifras incompletas se muestra
-  ausencia de diferencia y se explica en la ayuda.
-- Los iconos de ayuda explican por separado el rango, los importes del periodo
-  y los importes del año financiero de referencia. No se mezclan ambas bases.
-- La barra de Planned/On Hold es ahora ejecución del contrato: acumulado al
-  corte / Booking del propio proyecto. No representa participación en el
-  backlog de los proyectos filtrados. El Backlog fuente se conserva como importe
-  separado. Para PA65723 es 81,1%, aunque solo quede ese proyecto visible.
-- On Hold tiene color naranja, separado del semáforo amarillo de Project Status.
-- El detalle muestra toda la vida disponible: primer Commit distinto de cero
-  hasta Fecha fin inclusive, sin recortarla por los quarters del listado. Sin
-  primer Commit no se inventa un inicio; sin Fecha fin se llega al último mes
-  con Commit registrado. Los meses sin cobertura conservan el hueco.
-- La curva del detalle se llama saldo contractual para distinguirla del Backlog
-  fuente. Comienza en un solo Booking, incorpora una sola vez el arrastre anterior
-  al calendario disponible y descuenta los Commit. El arrastre de un año posterior
-  se descuenta de los meses ya representados para evitar duplicarlos. Se muestran
-  saldo y revenue acumulado: no se fuerza el saldo a cero al finalizar ni se
-  redistribuyen importes sin Commit. Los créditos pueden aumentar el saldo y
-  una ejecución excedida puede volverlo negativo; ambos se muestran.
-- Las capturas crudas siguen separadas por fuente/año en PostgreSQL. La
-  comparación del dashboard usa cortes consolidados por ejecución n8n:
-  aplica todas las cargas de esa corrida y conserva la última conocida de cada
-  año sin cambios. Fecha/hora identifica el corte completo, no un Excel.
-  Eventos y diferencias se calculan entre esos estados completos; los meses
-  que aún no tenían cobertura no se consideran cero ni movimientos.
-- `carga.ejecucion_id` combina workflow e ID de ejecución de n8n y permite
-  unir fuentes aunque terminen en minutos distintos. Una corrida sin cambios
-  no crea un corte; si solo cambia un año, conserva los demás. Mientras una
-  corrida está en progreso su corte puede recibir la siguiente fuente; no es
-  una transacción atómica entre los dos archivos.
-- Las cargas anteriores solo se agrupan si hay evidencia del mismo ID de
-  corrida en el historial guardado de n8n. Localmente se recuperaron esos IDs
-  de los resultados de carga de ejecuciones exitosas. Sin evidencia se conserva
-  el corte independiente; no se fusionan cargas por cercanía temporal ni se
-  borran o reescriben sus importes. `ejecucion_identificada` informa la cobertura.
-- El rango de comparación evita elegir el mismo corte en ambos extremos si hay
-  varios; Último mes y Últimos 7 días usan la última fecha disponible.
+  País; NSSA es el complemento (los proyectos sin país quedan ahí, marcados sin
+  dato). Cambiar el filtro limpia la selección de país.
+- «Mes y año fin» se deriva de la Fecha fin; solo fechas ausentes o inválidas
+  se agrupan como «sin dato».
+- La barra de Planned/On Hold es Ejecutado / Booking del propio proyecto, no su
+  participación en el Backlog filtrado. On Hold es naranja, distinto del
+  Semáforo amarillo.
+
+## Snapshots
+
+- Las Cargas crudas siguen separadas por Año fuente en PostgreSQL. La tabla
+  `forecast_revenue_mensual` es su consolidación de lectura, mantenida en la
+  misma transacción por trigger; no sustituye la evidencia original.
+- Un Snapshot es el estado completo del portafolio tras una Ejecución de n8n:
+  aplica todas las Cargas de esa Ejecución y conserva la última conocida de
+  cada Año fuente sin cambios. Una Ejecución sin cambios no crea Snapshot.
+- `carga.ejecucion_id` combina workflow e ID de ejecución de n8n y une las
+  fuentes aunque terminen en minutos distintos. Mientras una Ejecución está en
+  progreso su Snapshot puede recibir la siguiente fuente (no es atómico entre
+  los dos archivos).
+- Las Cargas anteriores solo se agrupan si hay evidencia del mismo ID de
+  Ejecución en el historial de n8n (`ejecucion_identificada` informa la
+  cobertura). Sin evidencia se conserva el Snapshot independiente; no se
+  fusionan por cercanía temporal ni se reescriben importes.
+- Eventos y diferencias se calculan entre Snapshots completos; los meses que
+  aún no tenían cobertura no son cero ni movimiento. El rango de comparación
+  evita el mismo Snapshot en ambos extremos; Último mes y Últimos 7 días usan
+  la última fecha disponible.

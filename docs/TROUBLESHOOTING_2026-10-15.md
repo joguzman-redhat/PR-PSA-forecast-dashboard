@@ -68,7 +68,7 @@ muestra como `—`.
 ## Pendiente / no verificado
 
 - Confirmar si el texto `<script>...</script>` se ejecuta en algún dropdown
-  de filtro del dashboard (`app.js`, función que arma las opciones de
+  de filtro del dashboard (`app.js`, hoy repartido en `js/`, función que arma las opciones de
   filtro) — en la tabla principal no se ejecuta, pero no se probó ahí.
 - Volver a apuntar el `fileId` del nodo "Descargar data.xlsx de Drive" al
   archivo de producción antes de dejar el workflow corriendo "en serio".

@@ -22,7 +22,7 @@
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ Frontend: Dashboard (ya existe)                              │
-│ ├─ index.html / app.js / styles.css                         │
+│ ├─ index.html / js/ / css/                                   │
 │ ├─ Busca datos en API (cambio: 3 fetch)                     │
 │ └─ Vanilla JS, sin dependencias                             │
 ├──────────────────────────────────────────────────────────────┤

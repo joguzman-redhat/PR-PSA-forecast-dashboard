@@ -1,0 +1,20 @@
+:root { --estado-on-hold: #d76b00; }
+.territorio-rapido { display:flex; flex-wrap:wrap; gap:.5rem; margin:0; padding:.5rem .65rem; border:1px solid var(--border-color);border-radius:5px; }
+.territorio-rapido legend { font-weight:600;font-size:.85rem;padding:0 .3rem; }
+.forecast-toolbar .territorio-rapido label { display:flex;align-items:center;gap:.25rem;font-size:.85rem;cursor:pointer; }
+.territorio-rapido input { accent-color:var(--brand); }
+.ayuda-kpi { display:inline-flex;align-items:center;justify-content:center;width:1.2rem;height:1.2rem;border:1px solid currentColor;border-radius:50%;background:transparent;color:var(--text-secondary);font-size:.75rem;line-height:1;cursor:help;margin-left:.3rem;vertical-align:middle; }
+.ayuda-rango { position:relative;align-self:center; }
+#ayuda-rango-texto { display:none;position:absolute;top:100%;right:0;z-index:80;width:min(32rem,80vw);padding:1rem;background:var(--surface-1);border:1px solid var(--border-color);border-radius:6px;box-shadow:0 5px 20px #0003;font-size:.85rem;line-height:1.6; }
+.ayuda-rango:hover #ayuda-rango-texto,.ayuda-rango:focus-within #ayuda-rango-texto { display:block; }
+.fila-kpis-principal { grid-template-columns:repeat(10,minmax(0,1fr));gap:.4rem; }
+.fila-kpis-principal .kpi-valor { font-size:clamp(.9rem,1.4vw,1.3rem); }
+.fila-kpis-principal .kpi-etiqueta { font-size:.72rem;line-height:1.4; }
+.fila-kpis-principal .pf-v6-c-card__body { padding:.8rem .25rem; }
+.chip-dato.chip-on-hold,.chip-on-hold { color:#8f4000;background:#fff0df;border-color:#f4b276; }
+.estado-on-hold { color:var(--estado-on-hold);font-weight:600; }
+.valor-punto { font-size:10px;fill:var(--text-primary);paint-order:stroke;stroke:var(--surface-1);stroke-width:3px;stroke-linejoin:round;pointer-events:none; }
+@media(max-width:1050px){.fila-kpis-principal{grid-template-columns:repeat(5,minmax(0,1fr));}}
+@media(max-width:600px){.fila-kpis-principal{grid-template-columns:repeat(2,minmax(0,1fr));} .territorio-rapido{width:100%;}}
+
+.vendedor-badge.estado-on-hold { color:#8f4000;background:#fff0df;border-color:#f4b276; }

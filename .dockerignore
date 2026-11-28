@@ -2,8 +2,10 @@
 # Enviar solo sus fuentes y assets; .gitignore no protege el contexto de build.
 **
 !index.html
-!app.js
-!styles.css
+!css/
+!css/**
+!js/
+!js/**
 !vendor/
 !vendor/**
 !infra/

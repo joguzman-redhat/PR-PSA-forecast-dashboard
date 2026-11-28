@@ -1,25 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const fs = require('node:fs');
-const path = require('node:path');
-const code = fs.readFileSync(path.resolve(__dirname,'../../../app.js'),'utf8');
-function pagina(search='') {
-  const clases=new Set();const controles=new Map();
-  for(const id of ['forecast-desde','forecast-hasta','forecast-estado','forecast-unidad'])controles.set(id,{
-    value:'',textContent:'',disabled:false,opciones:[],handlers:{},
-    replaceChildren(...items){this.opciones=items;},appendChild(item){this.opciones.push(item);},
-    addEventListener(tipo,handler){this.handlers[tipo]=handler;},setCustomValidity(msg){this.validationMessage=msg;},reportValidity(){},
-  });
-  const context=vm.createContext({Intl,URL,URLSearchParams,console,Map,Set,
-    document:{addEventListener(){},getElementById(id){return controles.get(id);},
-      querySelector(){return {classList:{toggle(k,v){if(v)clases.add(k);else clases.delete(k);},add(k){clases.add(k);}}};}},
-    Option:function(text,value){this.text=text;this.value=String(value);},
-    location:{search,href:'http://localhost:3000/'+search,assign(url){this.destino=url;}},
-  });
-  vm.runInContext(code+'\nglobalThis.ui={estado,cargarDatos,configurarSelectorForecast,mesesEjecutadosForecast,serieBacklogRevenuePorMes,acumuladoAnterior,configurarCalendarioTimeline,periodoActual,revenuePeriodo,upsidePeriodo,valorBooking,claveProyecto,compararMeses,coberturaCalendario,vidaProyecto,pasaPeriodoProyecto,mesesTimelineProyecto,valorDimension,etiquetaDimension,calcularPMs,pasaTerritorio,porcentajeEjecucionProyecto,calendarioVidaProyecto,serieSaldoProyecto,resumenFinanciero,commitPendienteProyecto,rangoSnapshots,DIMENSIONES};',context);
-  return {context,ui:context.ui,controles,clases};
-}
+const { pagina, datosTimeline, simularElementos } = require('./pagina-simulada');
 test('el corte mensual distingue años pasados, actuales y futuros en hora Colombia',()=>{
   const {ui}=pagina();const hoy=new Date('2026-11-14T12:00:00Z');
   ui.estado.forecast.anio=2025;assert.equal(ui.mesesEjecutadosForecast(hoy),12);
@@ -29,23 +11,15 @@ test('el corte mensual distingue años pasados, actuales y futuros en hora Colom
 });
 test('el calendario y la proyeccion usan el año seleccionado y no duplican el acumulado anterior',()=>{
   const {ui}=pagina();ui.estado.forecast.anio=2027;
-  const p={num_pa:'123',fecha_fin:'03/31/2028'};
-  const fila={num_pa:'123',acumulado_anterior:160,valor_of:1000,total_ejecutado_acumulado:210,backlog:790,enero_fijo:50};
-  ui.estado.backlogPorPA=new Map([['123',fila]]);
+  const p={num_pa:'123',clave_timeline:'PR:PR-1',fecha_fin:'03/31/2028'};
+  const fila={num_pa:'123',acumulado_anterior:160,booking:1000,proyectado:210,backlog:790,enero_fijo:50};
+  ui.estado.backlogPorTimeline=new Map([['PR:PR-1',fila]]);
   const serie=ui.serieBacklogRevenuePorMes([p]);
   assert.ok(Object.keys(serie)[0].endsWith('2027'));
   assert.equal(serie['Dic 2027'].Backlog,790);
   assert.equal(serie['Mar 2028'].Backlog,0);
   assert.equal(ui.acumuladoAnterior(p),160);
 });
-function datosTimeline() {
-  const periodos=Array.from({length:24},(_,i)=>`${2026+Math.floor(i/12)}-${String(i%12+1).padStart(2,'0')}`);
-  return {meta:{timeline:true,anio_actual:2026,fecha_referencia:'2026-11-24',estado:'disponible',periodos,desde:'2026-01',hasta:'2027-12'},
-    proyectos:[{_tipo_fila:'proyecto',num_pa:'123',clave_timeline:'PA:123'}],
-    backlog:[{_tipo_fila:'proyecto',num_pa:'123',clave_timeline:'PA:123',valor_of:1000,acumulado_anterior:50,
-      '2026-01_fijo':100,'2027-01_fijo':200,'2026-10_fijo':10,'2027-12_fijo':20}],
-    historia:{snapshots:[],eventos:[],series_por_proyecto:{}}};
-}
 test('carga atomica del timeline sin selector de año ni fuente',async()=>{
   const {ui,context,controles}=pagina();const consultas=[];
   context.fetch=async url=>{consultas.push(url);return {ok:true,json:async()=>datosTimeline()};};
@@ -116,7 +90,7 @@ test('incorporar enero FY27 no es un movimiento y cambios posteriores si se dete
 
 
 test('capturas sin FY27 no dibujan cero para los meses FY27',()=>{
-  const {ui}=pagina();ui.estado.forecast.timeline=true;ui.configurarCalendarioTimeline(datosTimeline().meta);
+  const {ui}=pagina();ui.configurarCalendarioTimeline(datosTimeline().meta);
   assert.equal(ui.coberturaCalendario({anios_disponibles:[2026]},[0,12]),false);
   assert.equal(ui.coberturaCalendario({anios_disponibles:[2026]},[0,1]),true);
   assert.equal(ui.coberturaCalendario({anios_disponibles:[2026,2027]},[0,12]),true);
@@ -138,7 +112,7 @@ test('el rango filtra desde el primer commit hasta el mes fin sin inventar fecha
   const p=ui.estado.proyectos[0];p.fecha_fin='12/31/2026';
   ui.estado.rangoTimeline={desde:'2027-01',hasta:'2027-12'};ui.estado.periodo='rango';
   assert.equal(ui.pasaPeriodoProyecto(p),false); // Even with future commit in the source.
-  assert.equal(ui.vidaProyecto(p).fueraDeVigencia,true);
+  assert.equal(ui.vidaProyecto(p).posteriorAFechaFin,true);
   ui.estado.rangoTimeline={desde:'2026-12',hasta:'2026-12'};
   assert.equal(ui.pasaPeriodoProyecto(p),true);
   ui.estado.periodo='todos';assert.equal(ui.mesesTimelineProyecto(p).length,12);
@@ -182,6 +156,7 @@ test('barra contractual independiente del número de proyectos filtrados',async(
 });
 test('proyectado más Backlog explica Booking e informa diferencias sin rellenarlas',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();Object.assign(d.backlog[0],{anio_atributos:2026,valor_of:1000,acumulado_a_fecha:700,backlog:270,'2026-12_fijo':30});
+  delete d.backlog[0]['2027-01_fijo'];delete d.backlog[0]['2027-12_fijo']; // ADR 0001: el Proyectado cuenta 2027, y aqui quedaria con meses sin dato
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();let r=ui.resumenFinanciero(ui.estado.proyectos);
   assert.equal(r.proyectado,730);assert.equal(r.pendiente,30);assert.equal(r.diferencia,0);
   d.backlog[0]['2026-12_fijo']=10;r=ui.resumenFinanciero(ui.estado.proyectos);assert.equal(r.diferencia,20);
@@ -194,15 +169,16 @@ test('detalle conserva toda la vida, no duplica Bookings y no fuerza el saldo a 
   d.backlog[0]['2026-03_fijo']=200;d.backlog[0]['2027-01_fijo']=300;
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();ui.estado.rangoTimeline={desde:'2027-04',hasta:'2027-06'};
   const p=ui.estado.proyectos[0],meses=ui.calendarioVidaProyecto(p);assert.equal(meses[0],'2026-03');assert.equal(meses.at(-1),'2027-06');assert.equal(meses.length,16);
-  const serie=ui.serieSaldoProyecto(p);assert.equal(Object.values(serie.datos)[0]['Saldo contractual'],1000);assert.equal(serie.saldo,400);
+  const serie=ui.serieBacklogProyecto(p);assert.equal(Object.values(serie.datos)[0]['Backlog'],1000);assert.equal(serie.backlogFinal,400);
   assert.match(serie.nota,/No se fuerza a cero/);
-  d.backlog[0]['2027-07_fijo']=999999;assert.equal(ui.serieSaldoProyecto(p).saldo,400);
+  // Ticket 14: un Commit posterior a la Fecha fin ya no se recorta de la curva (se advierte).
+  d.backlog[0]['2027-07_fijo']=999999;assert.equal(ui.serieBacklogProyecto(p).backlogFinal,-999599);
 });
 test('meses sin cobertura no se convierten en ceros en la curva contractual',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();d.proyectos[0].fecha_fin='01/31/2028';
   Object.assign(d.backlog[0],{anio_atributos:2026,valor_of:1000,acumulado_anterior:0});
   for(const m of d.meta.periodos)d.backlog[0][m+'_fijo']=0;d.backlog[0]['2026-01_fijo']=10;
-  context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();const r=ui.serieSaldoProyecto(ui.estado.proyectos[0]);assert.equal(r.saldo,null);assert.match(r.nota,/sin cobertura/);
+  context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();const r=ui.serieBacklogProyecto(ui.estado.proyectos[0]);assert.equal(r.backlogFinal,null);assert.match(r.nota,/sin cobertura/);
 });
 test('orden de filtros y ausencia de tipo de ejecución',()=>{
   const {ui}=pagina();assert.equal(ui.DIMENSIONES.slice(0,8).map(d=>d.campo).join(','),'estado,cliente,pm_lider,vendedor,tsm,zona,pais,periodo_fin');
@@ -221,7 +197,7 @@ test('la curva no duplica el arrastre cuando cambia el año financiero de refere
   for(const m of d.meta.periodos)d.backlog[0][m+'_fijo']=0;
   d.backlog[0]['2026-01_fijo']=200;d.backlog[0]['2027-01_fijo']=300;
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();
-  assert.equal(ui.serieSaldoProyecto(ui.estado.proyectos[0]).saldo,400);
+  assert.equal(ui.serieBacklogProyecto(ui.estado.proyectos[0]).backlogFinal,400);
 });
 test('un proyecto que aparece solo en FY27 conserva el arrastre conocido sin inventar FY26',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();d.proyectos[0].fecha_fin='01/31/2027';
@@ -229,10 +205,65 @@ test('un proyecto que aparece solo en FY27 conserva el arrastre conocido sin inv
   for(const m of d.meta.periodos){if(m.startsWith('2026'))delete d.backlog[0][m+'_fijo'];else d.backlog[0][m+'_fijo']=0;}
   d.backlog[0]['2027-01_fijo']=100;
   context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();
-  assert.equal(ui.calendarioVidaProyecto(ui.estado.proyectos[0])[0],'2027-01');assert.equal(ui.serieSaldoProyecto(ui.estado.proyectos[0]).saldo,600);
+  assert.equal(ui.calendarioVidaProyecto(ui.estado.proyectos[0])[0],'2027-01');assert.equal(ui.serieBacklogProyecto(ui.estado.proyectos[0]).backlogFinal,600);
 });
-test('el rango inicial avanza al cambiar el año y deja sin cobertura los meses futuros',async()=>{
+test('el rango inicial avanza al cambiar el año y termina en el ultimo mes que trae la API',async()=>{
   const {ui,context}=pagina();const d=datosTimeline();d.meta.fecha_referencia='2027-02-01';d.meta.anio_actual=2027;
-  context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();assert.equal(ui.estado.rangoTimeline.desde,'2027-01');assert.equal(ui.estado.rangoTimeline.hasta,'2028-12');
-  assert.equal(ui.estado.forecast.periodos.at(-1),'2028-12');ui.estado.periodo='2028-01';assert.equal(ui.revenuePeriodo(ui.estado.proyectos[0]),null);
+  context.fetch=async()=>({ok:true,json:async()=>d});await ui.cargarDatos();assert.equal(ui.estado.rangoTimeline.desde,'2027-01');assert.equal(ui.estado.rangoTimeline.hasta,'2027-12');
+  assert.equal(ui.estado.forecast.periodos.at(-1),'2027-12');assert.equal(ui.estado.forecast.periodos.length,24);
+});
+test('la tabla de PMs trae Ejecutado y Proyectado por PM con las reglas de los KPIs, parcial marcado y sin cifras no es cero',async()=>{
+  const {ui,context}=pagina();const datos=datosTimeline();
+  const base={_tipo_fila:'proyecto',pm_lider:'PM A',estado:'In Progress',nombre_del_proyecto:'Proyecto'};
+  datos.proyectos=[
+    {...base,num_pa:'1',clave_timeline:'PA:1'},
+    {...base,num_pa:'2',clave_timeline:'PA:2'},
+    {...base,num_pa:'3',clave_timeline:'PA:3',pm_lider:'PM B'},
+    {...base,num_pa:'4',clave_timeline:'PA:4',pm_lider:'PM C',estado:'Canceled'}];
+  // Proyecto 1 (Ejecutado de la fila 160, mismo respaldo que los KPIs): Commit futuro 200+20 = 220 con meses de 2027 sin cargar, parcial.
+  // Proyecto 3: Ejecutado 40 (acumulado anterior), Commit futuro 30 completo, Proyectado 70.
+  // La columna del Excel (999999) no cuenta.
+  // Proyecto 2: sin fila de backlog, sin cifras.
+  datos.backlog=[{...datos.backlog[0],num_pa:'1',clave_timeline:'PA:1',total_ejecutado_acumulado:999999,ejecutado:160},
+    {_tipo_fila:'proyecto',num_pa:'3',clave_timeline:'PA:3',valor_of:500,acumulado_anterior:40,'2026-12_fijo':30}];
+  context.fetch=async()=>({ok:true,json:async()=>datos});await ui.cargarDatos();
+  ui.estado.periodo='todos';
+  const filas=Object.fromEntries(ui.calcularPMs().map(f=>[f.pm,f]));
+  assert.deepEqual(Object.keys(filas).sort(),['PM A','PM B']); // Canceled excluido
+  assert.equal(filas['PM A'].ejecutado,160);
+  assert.equal(filas['PM A'].proyectado,380);
+  assert.equal(filas['PM A'].proyectadoParciales,1);
+  // El proyecto 2 no cuenta como cero: PM A suma solo el proyecto 1 y sigue siendo 160.
+  assert.equal(filas['PM A'].proyectos.length,2);
+  assert.equal(filas['PM B'].ejecutado,40);
+  assert.equal(filas['PM B'].proyectado,70);
+  assert.equal(filas['PM B'].proyectadoParciales,0);
+  // La suma de Ejecutado de los PMs es la del KPI de Ejecutado (160 + 40 = 200).
+  const leer=simularElementos(context);
+  ui.estado.proyectosFiltrados=ui.calcularPMs().flatMap(f=>f.proyectos);ui.calcularKPIs();
+  assert.equal(ui.calcularPMs().reduce((a,f)=>a+f.ejecutado,0),200);
+  assert.equal(leer('kpi-acumulado-hoy'),ui.formatearDinero(200));
+});
+test('un PM sin ninguna cifra tiene Ejecutado y Proyectado sin dato, no cero',async()=>{
+  const {ui,context}=pagina();const datos=datosTimeline();
+  datos.proyectos=[{_tipo_fila:'proyecto',num_pa:'9',clave_timeline:'PA:9',pm_lider:'PM Z',estado:'Planned',nombre_del_proyecto:'Sin cifras'}];datos.backlog=[];
+  context.fetch=async()=>({ok:true,json:async()=>datos});await ui.cargarDatos();ui.estado.periodo='todos';
+  const [f]=ui.calcularPMs();assert.equal(f.ejecutado,null);assert.equal(f.proyectado,null);
+});
+test('un proyecto sin nombre ni Booking no aparece en ninguna vista, ni pidiendo los cancelados; con nombre o con Booking sí',async()=>{
+  const {ui,context}=pagina();const datos=datosTimeline();
+  const base={_tipo_fila:'proyecto',pm_lider:'PM A',estado:'In Progress'};
+  datos.proyectos=[
+    {...base,num_pa:'1',clave_timeline:'PR:PR-1',project_id:'PR-1',nombre_del_proyecto:'Con todo'},
+    {...base,num_pa:'2',clave_timeline:'PR:PR-2',project_id:'PR-2',nombre_del_proyecto:'Solo nombre'},
+    {...base,num_pa:'3',clave_timeline:'PR:PR-3',project_id:'PR-3'},
+    {...base,clave_timeline:'PR:PR-4',project_id:'PR-4',estado:null},
+    {...base,clave_timeline:'PR:PR-5',project_id:'PR-5',estado:'Canceled'}];
+  datos.backlog=[{_tipo_fila:'proyecto',clave_timeline:'PR:PR-1',valor_of:100},
+    {_tipo_fila:'proyecto',clave_timeline:'PR:PR-3',valor_of:50}];
+  context.fetch=async()=>({ok:true,json:async()=>datos});await ui.cargarDatos();
+  ui.estado.periodo='todos';ui.estado.incluirCancelados=true;ui.estado.incluirCompletados=true;
+  const visibles=ui.estado.proyectos.filter(ui.pasaVisibilidadProyecto).map(p=>p.project_id);
+  assert.deepEqual(visibles,['PR-1','PR-2','PR-3']); // PR-3 no tiene nombre pero sí Booking
+  assert.equal(ui.calcularPMs().flatMap(f=>f.proyectos).length,3);
 });

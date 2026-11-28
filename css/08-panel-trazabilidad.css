@@ -1,0 +1,110 @@
+/* ============================================================================
+   PANEL DE TRAZABILIDAD GLOBAL
+   ============================================================================ */
+/* Fondo, borde, radio y relleno vienen del componente real .pf-v6-c-card
+   (+ .pf-v6-c-card__body). */
+.panel-trazabilidad h2 {
+  margin-bottom: var(--spacing-2xl);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.selector-snapshot {
+  background-color: var(--surface-page);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-2xl);
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+}
+
+.selector-snapshot label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.selector-snapshot select {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-family: var(--font-stack);
+  min-width: 300px;
+  cursor: pointer;
+}
+
+.tabla-eventos {
+  background-color: var(--surface-page);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-sm);
+}
+
+.tabla-eventos h3 {
+  margin-bottom: var(--spacing-lg);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.filtro-eventos {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.filtro-eventos label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.filtro-eventos select {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-family: var(--font-stack);
+  min-width: 200px;
+  cursor: pointer;
+}
+
+.tabla-eventos-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.tabla-eventos-tabla thead {
+  background-color: var(--baseline-color);
+}
+
+.tabla-eventos-tabla th {
+  padding: var(--spacing-md);
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tabla-eventos-tabla td {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  word-break: break-word;
+}
+
+.tabla-eventos-tabla .celda-numero {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+

@@ -1,0 +1,47 @@
+/* ============================================================================
+   NAVEGACIÓN POR PESTAÑAS
+   ============================================================================ */
+/* La estructura y el look base (fondo, borde, espaciado) vienen del
+   componente real .pf-v6-c-tabs de PatternFly (vendor/patternfly.css).
+   Aquí solo se pone el acento de marca Red Hat encima. */
+.pf-v6-c-tabs {
+  margin-bottom: var(--spacing-2xl);
+  --pf-v6-c-tabs--link-accent--color: var(--brand);
+  --pf-v6-c-tabs__item--m-current__link--Color: var(--brand);
+}
+
+.pestana-btn:hover {
+  color: var(--brand);
+}
+
+.pestana-btn.activa {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+/* Respaldo directo (sin depender de la cadena de variables de PatternFly):
+   fuerza el rojo de marca en el texto y el subrayado de la pestaña activa. */
+.pf-v6-c-tabs__item.pf-m-current .pf-v6-c-tabs__link {
+  color: var(--brand);
+}
+.pf-v6-c-tabs__item.pf-m-current .pf-v6-c-tabs__link::after {
+  border-color: var(--brand);
+}
+
+.pestana-contenido {
+  display: none;
+}
+
+.pestana-contenido.activa {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+

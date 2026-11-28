@@ -1,0 +1,117 @@
+/* ============================================================================
+   PANEL DE GRÁFICAS
+   ============================================================================ */
+.panel-graficas {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-2xl);
+  margin-bottom: var(--spacing-2xl);
+}
+
+/* Fondo, borde, radio y relleno vienen del componente real .pf-v6-c-card
+   (+ .pf-v6-c-card__body). */
+.grafica-contenedor h3 {
+  margin-bottom: var(--spacing-lg);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.grafica-contenedor.ancho-completo {
+  grid-column: 1 / -1;
+}
+
+.grafica-svg {
+  width: 100%;
+  height: auto;
+  min-height: 300px;
+}
+
+/* ============================================================================
+   PANEL DE TABLA
+   ============================================================================ */
+/* Fondo, borde, radio y relleno vienen del componente real .pf-v6-c-card
+   (+ .pf-v6-c-card__body). */
+.panel-tabla {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.panel-tabla h3 {
+  margin-bottom: var(--spacing-lg);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.contenedor-tabla-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.tabla-proyectos {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.tabla-proyectos thead {
+  background-color: var(--surface-page);
+  position: sticky;
+  top: 0;
+}
+
+.tabla-proyectos th {
+  padding: var(--spacing-md);
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.tabla-proyectos th:hover {
+  background-color: var(--baseline-color);
+}
+
+.tabla-proyectos td {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  word-break: break-word;
+}
+
+.tabla-proyectos tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.tabla-proyectos tbody tr:hover {
+  background-color: var(--grid-color);
+  cursor: pointer;
+}
+
+/* El hover cubre las celdas sin mezclarse con el tinte del semáforo. */
+#tabla-proyectos > tbody > tr:hover > td {
+  background-color: var(--grid-color);
+}
+
+.tabla-proyectos td.celda-numero {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabla-proyectos td.celda-estado {
+  font-weight: 500;
+}
+
+.tabla-proyectos td.celda-nulo {
+  color: var(--text-dim);
+  font-style: italic;
+}
+

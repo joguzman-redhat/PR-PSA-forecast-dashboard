@@ -1,0 +1,39 @@
+/* Tooltip de las gráficas */
+.viz-tooltip {
+  position: fixed;
+  z-index: 100;
+  display: none;
+  min-width: 140px;
+  max-width: 280px;
+  padding: 9px 11px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+.viz-tooltip .tt-titulo {
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.viz-tooltip .tt-fila {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  justify-content: space-between;
+}
+.viz-tooltip .tt-marca {
+  width: 9px; height: 9px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+.viz-tooltip .tt-etiqueta { flex: 1; color: var(--text-secondary); }
+.viz-tooltip .tt-valor {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+

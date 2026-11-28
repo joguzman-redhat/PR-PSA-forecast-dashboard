@@ -1,0 +1,83 @@
+/* ============================================================================
+   TOOLTIP
+   ============================================================================ */
+.tooltip {
+  position: absolute;
+  background-color: var(--baseline-color);
+  color: var(--text-primary);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: nowrap;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+}
+
+.tooltip.visible {
+  display: block;
+}
+
+.tooltip.hidden {
+  display: none;
+}
+
+/* ============================================================================
+   ANIMACIONES DE CARGA
+   ============================================================================ */
+.cargando {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* ============================================================================
+   RESPONSIVE
+   ============================================================================ */
+@media (max-width: 1200px) {
+  .panel-graficas {
+    grid-template-columns: 1fr;
+  }
+
+  .fila-filtros-1,
+  .fila-filtros-2 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .detalle-contenedor {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .contenedor-principal {
+    padding: var(--spacing-lg);
+  }
+
+  .encabezado h1 {
+    font-size: 1.5rem;
+  }
+
+  .fila-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .fila-filtros-1,
+  .fila-filtros-2,
+  .fila-filtros-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .fila-filtros-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-tabla {
+    overflow-x: auto;
+  }
+
+  .campo-detalle {
+    grid-template-columns: 1fr;
+  }
+}
+
