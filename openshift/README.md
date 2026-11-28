@@ -1,141 +1,115 @@
-# Despliegue en OpenShift vía GitOps
+# Despliegue oficial en OpenShift
 
-Manifiestos para desplegar el stack (Postgres + API/Dashboard + n8n) en
-OpenShift, sincronizados por Argo CD desde este repo (rama `v2`, carpeta
-`openshift/base`).
+El dashboard interno está desplegado en
+[Cloud Forecast NOLA](https://forecast-nola.apps.int.prod-scale-spoke1-dc-rdu3.itup.redhat.com).
+Se accede desde la red corporativa/VPN. La Route usa el shard interno y termina
+TLS; el dashboard sirve consultas de lectura sin autenticación de aplicación,
+según el alcance inicial acordado. Tener el enlace no constituye control de
+acceso individual. El modelo de access control queda para otro release.
 
-**No corras nada de esto con `oc apply -f openshift/base` directo** — pasa
-primero por los secrets manuales de abajo, o los pods de Postgres/API van a
-quedar en `CrashLoopBackOff` por falta de credenciales.
+## Destino y componentes
 
-## 1. Secrets (fuera de Git, a propósito — ver política de seguridad del plan)
+Clúster: `prod-scale-spoke1-dc-rdu3`. AppCode: `NLFC-001`.
 
-Namespace de destino: `forecast-app` (Argo CD lo crea solo gracias a
-`CreateNamespace=true`, pero los secrets no te los crea nadie).
+| Namespace | Uso |
+| --- | --- |
+| `nola-consulting-services-tenant--runtime-int` | API/dashboard, Postgres, n8n y backups |
+| `nola-consulting-services-tenant--pipeline` | OpenShift Pipelines: pruebas y construcción |
+| `nola-consulting-services-tenant--config` | Configuración del tenant |
+| `openshift-gitops` | Argo CD central existente; requiere permisos de su administrador |
 
-```bash
-oc new-project forecast-app   # si Argo CD aún no lo creó
+La fuente vigente del runtime es [`runtime/`](runtime/), con Kustomize.
+`base/` y la antigua Application son referencias legacy; no representan este
+despliegue. API y archivos estáticos comparten una imagen. Postgres y n8n tienen
+Services internos y PVC independientes; no tienen Route pública. n8n se
+administra por [port-forward temporal](operations/README.md#n8n-interno).
 
-# Mismas credenciales que tengas en infra/.env de esta máquina.
-oc create secret generic postgres-credentials -n forecast-app \
-  --from-literal=POSTGRESQL_USER=<valor de POSTGRES_USER> \
-  --from-literal=POSTGRESQL_PASSWORD=<valor de POSTGRES_PASSWORD> \
-  --from-literal=POSTGRESQL_DATABASE=<valor de POSTGRES_DB> \
-  --from-literal=PGUSER=<mismo valor de POSTGRES_USER> \
-  --from-literal=PGPASSWORD=<mismo valor de POSTGRES_PASSWORD> \
-  --from-literal=PGDATABASE=<mismo valor de POSTGRES_DB>
+Las referencias inmutables están en
+[`runtime/kustomization.yaml`](runtime/kustomization.yaml):
 
-# Token de GitHub (Personal Access Token, scope "repo") para que el BuildConfig
-# pueda clonar el repo privado.
-oc create secret generic github-repo-credentials -n forecast-app \
-  --type=kubernetes.io/basic-auth \
-  --from-literal=username=<tu usuario de GitHub> \
-  --from-literal=password=<tu Personal Access Token>
-```
+- API: `images.paas.redhat.com/nola-consulting-services-tenant/forecast-api`.
+- n8n 2.48.8: copia en `images.paas.redhat.com/nola-consulting-services-tenant/forecast-n8n`.
+- Postgres 16: `registry.redhat.io/rhel9/postgresql-16`, por digest.
 
-Argo CD también necesita su propio acceso al repo privado (es un secret
-aparte, en el namespace `openshift-gitops`, con un label específico):
+Los PVC usan `rh-restricted-iscsi` y etiquetas del AppCode. `Retain` conserva
+volúmenes ante ciertas eliminaciones; no sustituye un backup. El histórico
+financiero ya fue importado y comparado con la fuente en siete tablas. La
+adopción explícita del baseline y las migraciones están documentadas en
+[`runtime/README.md`](runtime/README.md); un rollout no debe volver a importar
+el histórico ni ejecutar SQL manualmente dentro del pod.
 
-```bash
-oc create secret generic forecast-dashboard-repo -n openshift-gitops \
-  --from-literal=type=git \
-  --from-literal=url=https://github.com/joguzman-redhat/PR-PSA-forecast-dashboard.git \
-  --from-literal=username=<tu usuario de GitHub> \
-  --from-literal=password=<tu Personal Access Token>
+## Secretos existentes
 
-oc label secret forecast-dashboard-repo -n openshift-gitops \
-  argocd.argoproj.io/secret-type=repository
-```
+Las credenciales están fuera de Git y no se obtienen de `infra/.env`.
+En runtime existen `forecast-postgres-admin` (administración),
+`forecast-api-reader` (solo lectura), `forecast-etl-writer` (escritura del ETL),
+`forecast-n8n-secrets` (clave de cifrado) y `forecast-registry-pull` (descarga de
+imágenes). El OBC `forecast-backups` proporciona su ConfigMap y Secret S3.
+La construcción utiliza `images-paas-push-config` en el namespace pipeline.
+No copiar valores a manifiestos, historial de shell, issues ni logs.
 
-## 2. Registrar la Application en Argo CD
+La API usa el rol lector y `FORECAST_READ_ONLY=true`. El ETL permanece en n8n:
+el usuario configurará después la cuenta, el workflow exportado y sus
+credenciales. La instalación actual de n8n es nueva y persistente; no se ha
+migrado el estado de la instancia local.
 
-```bash
-oc apply -f openshift/argocd/application.yaml
-```
+## CI y entrega: estado actual
 
-Verifica el sync:
+La Pipeline manual de pruebas pudo clonar GitHub y completó pruebas/lint.
+La Pipeline `forecast-build-push` construye un commit exacto, prueba antes de
+publicar y devuelve un digest; su construcción/publicación real sigue en
+validación. Consultar [`ci/build-push.md`](ci/build-push.md) para ejecutar y
+promover una imagen. Las salidas específicas aprobadas para GitHub, npm y
+`registry.access.redhat.com:443` permiten esas operaciones; no equivalen a
+salida general a Internet.
 
-```bash
-oc get application forecast-dashboard -n openshift-gitops
-oc get pods -n forecast-app
-```
+**Todavía no hay webhook ni promoción automática de extremo a extremo.**
+Los cambios de `codex/openshift-integracion` deben integrarse en `main` antes
+de que Argo pueda consumir esta configuración como fuente oficial.
 
-## 3. Primer build de la imagen del API
+La configuración preparada reutiliza Argo CD central; no crea otra instancia:
 
-El `BuildConfig` dispara solo al crearse (trigger `ConfigChange`), pero si
-quieres forzarlo manualmente o reconstruir después de un cambio:
+- [`argocd/forecast-project.yaml`](argocd/forecast-project.yaml): proyecto limitado al repo y runtime.
+- [`argocd/forecast-application.yaml`](argocd/forecast-application.yaml): rama `main`, ruta `openshift/runtime`.
 
-```bash
-oc start-build forecast-api -n forecast-app --follow
-```
+El usuario o administrador de Argo debe registrar el repositorio privado y
+aplicar esos dos recursos en la instancia central: el intento de alta del repo
+con la cuenta actual fue denegado por permisos. No guardar su token en Git.
+La Application preparada habilita self-heal, conserva prune desactivado e
+ignora únicamente las réplicas de `forecast-n8n` para permitir su backup.
+Confirmar esa excepción antes de habilitar el consentimiento correspondiente
+en el CronJob. Ver [coordinación con Argo](operations/s3-backup.md#coordinación-con-argo).
 
-## 4. Parchear la URL de n8n (paso manual, una vez por despliegue nuevo)
-
-El host de la Route de n8n no se conoce hasta que OpenShift la crea —mismo
-problema que la URL dinámica de ngrok en Podman. Después de que el pod de
-n8n esté `Running`:
-
-```bash
-HOST=$(oc get route forecast-n8n -n forecast-app -o jsonpath='{.spec.host}')
-oc set env deployment/forecast-n8n -n forecast-app \
-  N8N_EDITOR_BASE_URL="https://$HOST/" \
-  WEBHOOK_URL="https://$HOST/"
-```
-
-Esto reinicia el pod de n8n automáticamente (son env vars nuevas).
-
-## 5. Configuración dentro de n8n (manual, vía UI — no está en Git)
-
-Igual que en Podman: la primera vez que abras la Route de n8n te va a pedir
-crear la cuenta owner. Después, a mano:
-
-- Importar `n8n/n8n_nola_completo.json` (**revisa primero cuál versión es la
-  correcta — ver `HANDOFF.md` en el root del repo, sección de archivos
-  duplicados**).
-- Crear la credencial de Postgres: host `forecast-postgres` (nombre del
-  Service, no `localhost` ni `postgres` — en Kubernetes el DNS interno usa el
-  nombre del Service), puerto `5432`, mismas credenciales del secret
-  `postgres-credentials`.
-- Recrear la credencial de Google Drive (OAuth) y la del modelo MaaS — viven
-  encriptadas en el volumen de n8n, no se migran solas desde Podman.
-
-## 6. Verificar
+## Operación y comprobación
 
 ```bash
-oc get route forecast-dashboard -n forecast-app -o jsonpath='{.spec.host}'
+oc get deployments,pods,pvc,route -n nola-consulting-services-tenant--runtime-int
+oc rollout status deployment/forecast-api -n nola-consulting-services-tenant--runtime-int --timeout=180s
+oc get pipelineruns -n nola-consulting-services-tenant--pipeline
+oc get cronjobs,jobs -n nola-consulting-services-tenant--runtime-int
 ```
 
-Abre esa URL — debe verse el dashboard con datos reales. Si da 502 o
-pantalla en blanco, revisa `oc logs deployment/forecast-api -n forecast-app`.
+Comprobar el dashboard, `/health/live` y `/health` en la URL interna después de
+cada entrega. Una prueba del pipeline no demuestra que el rollout o una
+migración hayan terminado correctamente.
 
-## Decisiones tomadas (y por qué)
+Los backups financieros y de n8n/clave están programados cada doce horas hacia
+el bucket corporativo privado, con TLS y SSE-S3. n8n se pausa para copiar SQLite
+con coherencia y luego se restaura su réplica. La verificación de los objetos
+S3 sigue pendiente por un fallo de firma en la primera ejecución; crear el
+CronJob no acredita un respaldo recuperable. Consultar
+[`operations/README.md`](operations/README.md) y
+[`operations/s3-backup.md`](operations/s3-backup.md).
 
-- **Postgres usa `quay.io/sclorg/postgresql-16-c9s`, no `postgres:16-alpine`**
-  (la imagen de Podman) — la oficial de Docker Hub corre como root al
-  arrancar y choca con la política de seguridad por defecto de OpenShift
-  (SCC `restricted-v2`, UID aleatorio no-root). La de sclorg está diseñada
-  para esto.
-- **nginx no se incluye** — en Podman existía como puerta de entrada estable
-  delante de n8n; en OpenShift ese rol lo cumple nativamente la `Route`.
-- **El schema SQL se aplica con un Job** (`jobs/schema-init-job.yaml`), no
-  automáticamente dentro del contenedor de Postgres — así no se arriesga a
-  reventar una base ya cargada en cada sync de Argo CD. Si hace falta
-  reaplicarlo: `oc delete job forecast-postgres-init-schema -n forecast-app`
-  y Argo CD lo vuelve a crear en el próximo sync.
-- **`infra/api/Dockerfile` cambió de contexto** (de `infra/api/` al root del
-  repo) para poder empaquetar el dashboard estático dentro de la imagen —
-  OpenShift no soporta el bind-mount que usaba Podman Compose para montar
-  `index.html`/`js/`/`css/` en caliente. Efecto secundario: en Podman local,
-  un cambio a esos archivos ya **no se refleja al instante** — hay que
-  reconstruir la imagen (`./forecast.sh rebuild`).
+Los objetivos son RPO de 24 horas y RTO de cuatro horas en horario laboral.
+No se ha ensayado una restauración en otra base, conforme a la decisión del
+usuario. Las políticas de red del tenant son aditivas; revisar su efecto real
+antes de afirmar aislamiento entre pods. Las restricciones gestionadas por
+la plataforma no se reemplazan desde estos manifiestos.
 
-## Pendiente / no probado todavía
-
-- No se ha corrido `oc apply` de nada de esto — son manifiestos preparados,
-  no un despliegue confirmado.
-- No se validó que la imagen `quay.io/sclorg/postgresql-16-c9s` lea
-  correctamente el schema de `01_schema.sql` tal cual está escrito (usa
-  `timestamptz`/triggers de PL/pgSQL estándar, debería ser compatible, pero
-  no se ejecutó en esta imagen específica).
-- Separación por entornos (dev/stage) no implementada — solo hay `base/`,
-  pensado para un único ambiente de evaluación.
+El OBC existente está versionado en
+[`operations/s3-bucket/`](operations/s3-bucket/). Sus protecciones
+`Prune=false` y `Delete=false` impiden su eliminación automática desde Argo;
+no protegen frente a un borrado manual. **No borrar el ObjectBucketClaim**:
+la política de reclaim de la plataforma puede eliminar también el bucket y
+sus backups. Estas anotaciones no cambian esa política real.
