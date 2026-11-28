@@ -1,0 +1,137 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: forecast-runtime
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forecast-postgres-data
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+    trident.netapp.io/reclaimPolicy: Retain
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: rh-restricted-iscsi
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: forecast-postgres
+  labels:
+    app: forecast-postgres
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: forecast-postgres
+  template:
+    metadata:
+      labels:
+        app: forecast-postgres
+        app.kubernetes.io/part-of: cloud-forecast
+        paas.redhat.com/appcode: NLFC-001
+    spec:
+      serviceAccountName: forecast-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: registry.redhat.io/rhel9/postgresql-16:1
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-postgres-admin
+                  key: POSTGRESQL_USER
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-postgres-admin
+                  key: POSTGRESQL_PASSWORD
+            - name: POSTGRESQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-postgres-admin
+                  key: POSTGRESQL_DATABASE
+            - name: POSTGRESQL_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-postgres-admin
+                  key: POSTGRESQL_ADMIN_PASSWORD
+            - name: TZ
+              value: America/Bogota
+            - name: PGTZ
+              value: America/Bogota
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+          startupProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U "$POSTGRESQL_USER" -d "$POSTGRESQL_DATABASE"']
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U "$POSTGRESQL_USER" -d "$POSTGRESQL_DATABASE"']
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U "$POSTGRESQL_USER" -d "$POSTGRESQL_DATABASE"']
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: forecast-postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: forecast-postgres
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  selector:
+    app: forecast-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: nola-consulting-services-tenant--runtime-int
+resources:
+  - postgres.yaml
+  - api.yaml
+  - schema-job.yaml
+  - route.yaml

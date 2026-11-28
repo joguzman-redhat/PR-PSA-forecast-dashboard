@@ -1,0 +1,19 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: forecast-dashboard
+  labels:
+    shard: internal
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  host: forecast-nola.apps.prod-scale-spoke1-dc-rdu3.itup.redhat.com
+  to:
+    kind: Service
+    name: forecast-api
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
