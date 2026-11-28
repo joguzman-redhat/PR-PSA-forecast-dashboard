@@ -1,5 +1,18 @@
 # Operación y recuperación
 
+Los CronJobs `forecast-postgres-backup` y `forecast-n8n-backup` están aplicados
+en el runtime y programados cada doce horas hacia el bucket corporativo privado
+`forecast-backups`. Usan HTTPS y solicitan cifrado SSE-S3 (`AES256`); incluyen
+comprobación del objeto y checksum. El backup de n8n incluye su clave y pausa
+la réplica durante la copia coherente de SQLite. Esta interrupción programada
+fue aprobada por el usuario. Ver [operación S3](s3-backup.md) para horarios,
+permisos, coordinación con Argo, límites y comprobación de resultados.
+
+La primera ejecución encontró un fallo de firma S3; la corrección y la
+verificación de subida/lectura siguen en curso. No dar por cumplido el RPO
+hasta obtener evidencia de objetos recuperables de ambos CronJobs. Los
+comandos siguientes se conservan como alternativa manual cifrada con GPG.
+
 Estos comandos usan la sesión autenticada de `oc` y verifican el servidor y el
 namespace oficial. No leen `infra/.env` ni imprimen credenciales. Se ejecutan
 desde el repositorio con Bash, Python 3 y, para respaldar, GPG. El destino es
@@ -121,19 +134,27 @@ el PVC en solo lectura y no sirve como herramienta de restauración.
 ## Objetivos y pendientes operativos
 
 Los objetivos aceptados son RPO de 24 horas y RTO de cuatro horas durante horario
-laboral. Estos scripts son herramientas de ejecución explícita: **no acreditan
-una programación automática ni una copia fuera del dominio de fallo**. Para
-cumplir el objetivo operativo todavía hay que registrar:
+laboral. La programación S3 de doce horas y el destino corporativo independiente
+ya están configurados. Falta confirmar la primera subida y lectura de ambos
+backups después de corregir el fallo de firma, y registrar su fecha, objeto,
+tamaño y checksum. Revisar `lastSuccessfulTime` y los Jobs; el usuario vigila
+los fallos y no se han configurado notificaciones externas.
 
-- Destino corporativo independiente, retención y destinatario de cifrado.
-- Responsable que programa los backups, revisa fallos y custodia las claves.
-- Evidencia de restauración segura, tiempos medidos y comprobación por la API.
+No hay política automática de borrado en S3: los objetos usan nombres únicos y
+se conservan hasta acordar/aplicar retención corporativa. Custodiar las
+credenciales del bucket y la clave de n8n con acceso restringido. SSE-S3 cifra
+los objetos en el servidor; quien pueda descargarlos con autorización obtiene
+el contenido descifrado. Los archivos `.gpg` de los comandos manuales requieren
+además la clave privada de su destinatario.
+
+No se ha ensayado una restauración en otra base por decisión del usuario, ni
+se autoriza sobrescribir la oficial para probarla. El RTO queda como objetivo
+sin tiempo de recuperación demostrado. La importación inicial comprobada no
+sustituye una prueba de recuperación desde el backup programado.
 
 ITUP no incluye backup automático de volúmenes según la guía consultada. No
 interpretar `Retain`, un PVC o un archivo en el mismo clúster como reemplazo de
-un backup independiente. Tampoco afirmar que un backup existe por haber creado
-un CronJob. Si el usuario elige un destino de objetos, añadir envío, retención
-y comprobación efectiva con su mecanismo corporativo antes de cerrar el ticket.
+un backup independiente. Un CronJob aceptado tampoco acredita una subida exitosa.
 
 ## Referencias
 
@@ -146,3 +167,10 @@ y comprobación efectiva con su mecanismo corporativo antes de cerrar el ticket.
 Los scripts de mantenimiento fijan el nombre del contexto validado y el servidor
 explícito en cada llamada mediante `runtime_oc`; cambiar el contexto activo en
 otra terminal no cambia su destino. No crean copias de kubeconfig ni leen `.env`.
+
+El OBC existente está versionado en
+[`s3-bucket/`](s3-bucket/). Sus protecciones
+`Prune=false` y `Delete=false` impiden su eliminación automática desde Argo;
+no protegen frente a un borrado manual. **No borrar el ObjectBucketClaim**:
+la política de reclaim de la plataforma puede eliminar también el bucket y
+sus backups. Estas anotaciones no cambian esa política real.
