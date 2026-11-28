@@ -10,8 +10,8 @@ spec:
   pipelineRef:
     name: forecast-build-push
   params:
-    - name: revision
-      value: 815d9f0d4f979e65bf3cf1b06fe67629708ab975
+  - name: revision
+    value: 815d9f0d4f979e65bf3cf1b06fe67629708ab975
   taskRunTemplate:
     serviceAccountName: pipeline
     podTemplate:
@@ -19,3 +19,8 @@ spec:
       enableServiceLinks: false
   timeouts:
     pipeline: 30m0s
+  taskRunSpecs:
+  - pipelineTaskName: verificar
+    serviceAccountName: forecast-ci-prueba
+  - pipelineTaskName: publicar
+    serviceAccountName: pipeline

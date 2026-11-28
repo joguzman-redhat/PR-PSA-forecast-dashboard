@@ -11,7 +11,8 @@ que construye/publica la imagen, no en el paso que ejecuta las pruebas.
 
 `forecast-build-push` acepta un SHA completo, obtiene exactamente ese commit,
 verifica su SHA y ejecuta pruebas y lint. Solo después construye y publica la
-misma carpeta. Usa un tag con SHA y devuelve como resultados el commit, digest y
+el mismo SHA en un segundo pod y verifica otra vez el commit antes de construir.
+No comparte volúmenes persistentes entre tareas. Usa un tag con SHA y devuelve como resultados el commit, digest y
 referencia inmutable `repositorio@sha256:…`. No despliega nada ni accede a
 Postgres. El trigger automático futuro debe resolver el commit de main y aplicar
 la validación de origen/evento antes de iniciar esta PipelineRun; esta interfaz
@@ -31,7 +32,10 @@ commit que contiene dichos cambios.
 
 ## Seguridad de la construcción
 
-Se reutiliza el ServiceAccount `pipeline`, al que la plataforma ya asignó
+Las pruebas corren en una tarea separada con el ServiceAccount
+`forecast-ci-prueba`, sin Secret del registro y con `RuntimeDefault`, sin
+escalación de privilegios y eliminando capabilities. Para la publicación se
+reutiliza el ServiceAccount `pipeline`, al que la plataforma ya asignó
 `pipelines-scc-clusterrole`. No se crean SCC, ClusterRole ni RoleBinding nuevos;
 no se monta un token de API en el pod. El builder usa el digest de imagen y
 `SETFCAP` de la Task `buildah` instalada en `openshift-pipelines` al inspeccionarla.
@@ -41,6 +45,14 @@ se configuran aparte y no heredan esos permisos. No presentar esta variante
 como rootless. La admisión y construcción reales aún deben validarse en el
 clúster: un fallo no autoriza habilitar un contenedor privilegiado ni modificar
 la SCC automáticamente.
+
+La primera ejecución fue rechazada porque el perfil seccomp explícito del paso
+de pruebas no es admitido por la SCC legacy del builder. La separación mantiene
+ese perfil en el pod de pruebas. El pod de publicación sigue el patrón de la Task
+`buildah` instalada y no solicita un perfil seccomp que esa SCC rechaza. Su paso
+de descarga corre como usuario no root, sin escalación ni capabilities; solo el
+paso Buildah utiliza root/SETFCAP. Esta compatibilidad no acredita seccomp en el
+pod del builder y no altera la SCC existente.
 
 El contexto Docker utiliza la lista blanca existente y no incluye secretos,
 volúmenes, dumps, datos financieros ni dependencias generadas. La autenticación
