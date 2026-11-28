@@ -12,11 +12,21 @@ Los criterios operativos requieren evidencia del clúster; preparar código no l
 
 - Mantener configuración local del tracker y los ADR vigentes.
 - Validar por pipeline y dashboard/API, sin nueva base temporal.
+- AppCode aportado por el usuario: `NLFC-001`; validación de CMDB/admisión pendiente.
+- [Diagnóstico y evidencia de plataforma](../../openshift/PRERREQUISITOS.md):
+  sesión corporativa autenticada y preflight corregido ejecutado; cero permisos
+  denegados, salida 3 porque no acredita preparación operativa.
+- TenantNamespace build/runtime con zona internal y Ready; confirmar acceso
+  efectivo de ingress además de la configuración declarada.
 
 ## Fog
 
-- Webhook corporativo y permisos efectivos por comprobar.
-- Destino de backups, origen del histórico y responsable por confirmar.
+- Webhook corporativo sin integración configurada; Repositories de Pipelines as Code vacío.
+- Identidad de build, repositorio y push/pull de registro; AppCode y admisión de almacenamiento.
+- Método soportado para refinar `internal-1`: las políticas son aditivas y la
+  base permite tráfico amplio. No modificar/borrar esa política por cuenta propia.
+- Destino de backups de aplicación (sin backups de volumen de plataforma ITUP),
+  origen del histórico y responsable por confirmar.
 
 ## Tickets
 
