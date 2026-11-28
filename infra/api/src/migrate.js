@@ -122,6 +122,11 @@ async function provisionRoles() {
   await client.query('ALTER DEFAULT PRIVILEGES FOR ROLE forecast_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO forecast_writer');
   await client.query('ALTER DEFAULT PRIVILEGES FOR ROLE forecast_owner IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO forecast_writer');
   await client.query('REVOKE CREATE ON SCHEMA public FROM PUBLIC');
+  // El propietario necesita leer el historial para incluirlo en pg_dump.
+  // Estos permisos no permiten modificarlo ni se conceden al lector o al ETL.
+  await client.query('GRANT USAGE ON SCHEMA forecast_ops TO forecast_owner');
+  await client.query('GRANT SELECT ON ALL TABLES IN SCHEMA forecast_ops TO forecast_owner');
+  await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA forecast_ops GRANT SELECT ON TABLES TO forecast_owner');
 }
 
 async function main() {

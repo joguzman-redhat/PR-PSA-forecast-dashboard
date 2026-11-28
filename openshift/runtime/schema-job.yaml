@@ -26,6 +26,26 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: wait-postgres
+          image: registry.redhat.io/rhel9/postgresql-16:1
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              until pg_isready -h forecast-postgres -p 5432 -t 3; do
+                sleep 3
+              done
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
       containers:
         - name: migrate
           image: images.paas.redhat.com/nola-consulting-services-tenant/forecast-api:pending
