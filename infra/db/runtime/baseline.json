@@ -1,0 +1,25 @@
+{
+  "schemaSha256": "472e66b0aaa5b3e1f9bd8b177d43ac3126d0ef3a3e2f05a10795ef6aec31ee48",
+  "migrations": [
+    {
+      "name": "2026-10-22_watchlist_status.sql",
+      "sha256": "a19a877805f5aaf2d1e8542516532fa28761fe3ea03ddba1feb70ad7a3ec8496"
+    },
+    {
+      "name": "2026-11-14_forecast_por_anio.sql",
+      "sha256": "e7fd3e4bf25720169f047cc3cdd8b8c57ede12dc7fc3caec09a9af8f0bdcbdc8"
+    },
+    {
+      "name": "2026-11-22_timeline.sql",
+      "sha256": "2f437a5451315a8031ca5b8c292929e9a95e209ce924ce95f5c93c02f3546164"
+    },
+    {
+      "name": "2026-11-24_cortes_consolidados.sql",
+      "sha256": "373dbc737b61eeb73740d716db79b7dd8045e1f9b0dd6e9fe306a8e1bb4339c0"
+    },
+    {
+      "name": "2026-11-26_identidad_project_id.sql",
+      "sha256": "28092e6928b5e4e16c07f6094fe57712a53d5d151e0db0096356e92fb474ce21"
+    }
+  ]
+}

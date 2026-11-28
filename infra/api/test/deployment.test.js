@@ -8,13 +8,13 @@ const { spawn } = require('node:child_process');
 const { crearApp } = require('../src/server');
 const { pool } = require('../src/db');
 
-async function iniciar(t, rutaBase, demo = false) {
+async function iniciar(t, rutaBase, demo = false, opciones = {}) {
   const publicDir = await fs.mkdtemp(path.join(os.tmpdir(), 'forecast-public-'));
   const root = path.resolve(__dirname, '../../..');
   for (const file of ['index.html', 'css', 'js', 'vendor']) {
     await fs.cp(path.join(root, file), path.join(publicDir, file), { recursive: true });
   }
-  const server = crearApp({ rutaBase, publicDir, demo }).listen(0, '127.0.0.1');
+  const server = crearApp({ rutaBase, publicDir, demo, ...opciones }).listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(async () => {
     server.closeAllConnections();
@@ -139,4 +139,16 @@ test('el proceso finaliza limpiamente cuando el contenedor recibe SIGTERM', { ti
   const terminado = once(proceso, 'exit');
   proceso.kill('SIGTERM');
   assert.deepEqual(await terminado, [0, null]);
+});
+
+
+test('el dashboard de solo lectura no publica la operacion administrativa de recarga', async (t) => {
+  const origen = await iniciar(t, '/cloud-forecast', false, { soloLectura: true });
+  for (const prefijo of ['', '/cloud-forecast']) {
+    assert.equal((await fetch(`${origen}${prefijo}/`)).status, 200);
+    assert.equal((await fetch(`${origen}${prefijo}/health/live`)).status, 200);
+    const recarga = await fetch(`${origen}${prefijo}/api/reload`, { method: 'POST' });
+    assert.equal(recarga.status, 404);
+    assert.deepEqual(await recarga.json(), { error: 'Endpoint no encontrado' });
+  }
 });

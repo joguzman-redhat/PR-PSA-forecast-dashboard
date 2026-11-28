@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forecast-api
+  labels:
+    app: forecast-api
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: forecast-api
+  template:
+    metadata:
+      labels:
+        app: forecast-api
+        app.kubernetes.io/part-of: cloud-forecast
+        paas.redhat.com/appcode: NLFC-001
+    spec:
+      serviceAccountName: forecast-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: images.paas.redhat.com/nola-consulting-services-tenant/forecast-api:pending
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: PGHOST
+              value: forecast-postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-api-reader
+                  key: PGUSER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-api-reader
+                  key: PGPASSWORD
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-api-reader
+                  key: PGDATABASE
+            - name: PGOPTIONS
+              value: '-c default_transaction_read_only=on -c timezone=America/Bogota'
+            - name: PUBLIC_DIR
+              value: /app/public
+            - name: FORECAST_READ_ONLY
+              value: "true"
+            - name: FORECAST_DEMO
+              value: "false"
+            - name: PORT
+              value: "3000"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forecast-api
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+spec:
+  selector:
+    app: forecast-api
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

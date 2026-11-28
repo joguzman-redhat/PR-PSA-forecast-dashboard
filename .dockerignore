@@ -57,3 +57,13 @@
 **/test-results/**
 **/playwright-report/**
 **/*.log
+
+# SQL canonico y migraciones versionadas para el Job; nunca dumps/datos.
+!infra/db/
+!infra/db/init/
+!infra/db/init/01_schema.sql
+!infra/db/migraciones/
+!infra/db/migraciones/*.sql
+!infra/db/runtime/
+!infra/db/runtime/baseline.json
+!infra/db/runtime/fingerprint.sql

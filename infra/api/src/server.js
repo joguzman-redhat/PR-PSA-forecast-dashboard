@@ -14,6 +14,7 @@ function crearApp({
   rutaBase = process.env.APP_BASE_PATH || '',
   publicDir = process.env.PUBLIC_DIR || path.join(__dirname, '..', 'public'),
   demo = process.env.FORECAST_DEMO === 'true',
+  soloLectura = process.env.FORECAST_READ_ONLY === 'true',
 } = {}) {
   const prefijo = normalizarRutaBase(rutaBase);
   const datosDemo = demo ? require('./preview').crearDatosDemo() : null;
@@ -116,11 +117,13 @@ function crearApp({
     rutas.use('/api/backlog', require('./routes/backlog'));
     const { router: historia, invalidarCache } = require('./routes/historia');
     rutas.use('/api/historia', historia);
-    // n8n lo llama despues de cada carga para que la historia se reconstruya.
-    rutas.post('/api/reload', (_req, res) => {
-      invalidarCache();
-      res.json({ ok: true });
-    });
+    // La ruta publica del dashboard puede omitir todas las operaciones administrativas.
+    if (!soloLectura) {
+      rutas.post('/api/reload', (_req, res) => {
+        invalidarCache();
+        res.json({ ok: true });
+      });
+    }
   }
   rutas.use('/api', (_req, res) => res.status(404).json({ error: 'Endpoint no encontrado' }));
 

@@ -1,0 +1,70 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: forecast-schema
+  labels:
+    app.kubernetes.io/part-of: cloud-forecast
+    paas.redhat.com/appcode: NLFC-001
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: forecast-schema
+        app.kubernetes.io/part-of: cloud-forecast
+        paas.redhat.com/appcode: NLFC-001
+    spec:
+      restartPolicy: Never
+      serviceAccountName: forecast-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: images.paas.redhat.com/nola-consulting-services-tenant/forecast-api:pending
+          command: [node, src/migrate.js, --migrate]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: PGHOST
+              value: forecast-postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-postgres-admin
+                  key: POSTGRESQL_ADMIN_PASSWORD
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-postgres-admin
+                  key: POSTGRESQL_DATABASE
+            - name: FORECAST_READER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-api-reader
+                  key: PGPASSWORD
+            - name: FORECAST_WRITER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: forecast-etl-writer
+                  key: PGPASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
